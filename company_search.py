@@ -698,7 +698,8 @@ def build_card_html(rec, xml, lang="ru"):
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<title>%s</title><style>"
-        "body{font-family:-apple-system,Segoe UI,Arial,sans-serif;margin:24px;color:#222}"
+        "body{font-family:-apple-system,Segoe UI,Arial,sans-serif;margin:24px;"
+        "color:#222;background:#fff}"
         "h2{margin:0 0 4px} .ok{color:#0a7d28;font-weight:600;margin-bottom:12px}"
         "table{border-collapse:collapse;margin:8px 0;max-width:900px;width:100%%}"
         "th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}"
