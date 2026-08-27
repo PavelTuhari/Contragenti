@@ -1,0 +1,38 @@
+<div id="requestForm" class=""><form role="form" id="alpaca3" data-alpaca-form-id="alpaca3" class="alpaca-form">
+
+        <div class="alpaca-field alpaca-field-object alpaca-optional alpaca-edit alpaca-top alpaca-field-valid" data-alpaca-field-id="alpaca2" data-alpaca-field-path="/" data-alpaca-field-name="">
+
+
+
+        <div class="alpaca-container alpaca-vertical alpaca-container-has-items" data-alpaca-container-item-count="1">
+
+
+            <div class="alpaca-container-item alpaca-container-item-first alpaca-container-item-last" data-alpaca-container-item-index="0" data-alpaca-container-item-name="q" data-alpaca-container-item-parent-field-id="alpaca2">
+
+        <div class="form-group alpaca-field alpaca-field-text alpaca-required alpaca-autocomplete alpaca-field-valid" data-alpaca-field-id="alpaca4" data-alpaca-field-path="/q" data-alpaca-field-name="q">
+
+        <label class="control-label alpaca-control-label" for="alpaca4">Criteriu de căutare *</label>
+
+
+        <input type="text" id="alpaca4" name="q" class="alpaca-control form-control" autocomplete="off">
+
+
+
+    </div>
+
+    </div>
+
+
+    </div>
+
+
+    </div>
+
+        <div class="alpaca-form-buttons-container">
+                    <button data-key="access" type="button" id="access-service" class="alpaca-form-button alpaca-form-button-access btn btn-primary alpaca-form-button-submit" button-pushed="true">Accesează</button>
+                    <button data-key="download" type="button" id="download-page-pdf" class="alpaca-form-button alpaca-form-button-download btn btn-default alpaca-form-button-submit"><svg class="fod-icon" width="14" height="14" viewBox="0 0 25 24" aria-hidden="true" focusable="false"><use href="/Icons/sprite.svg#icon-download" width="100%" height="100%"></use></svg> Descarcă PDF</button>
+                    <button data-key="downloadXml" type="button" id="download-page-xml" class="alpaca-form-button alpaca-form-button-downloadXml btn btn-default alpaca-form-button-submit"><svg class="fod-icon" width="14" height="14" viewBox="0 0 25 24" aria-hidden="true" focusable="false"><use href="/Icons/sprite.svg#icon-download" width="100%" height="100%"></use></svg> Descarcă XML</button>
+                    <button data-key="downloadCsv" type="button" id="download-page-csv" class="alpaca-form-button alpaca-form-button-downloadCsv btn btn-default alpaca-form-button-submit"><svg class="fod-icon" width="14" height="14" viewBox="0 0 25 24" aria-hidden="true" focusable="false"><use href="/Icons/sprite.svg#icon-download" width="100%" height="100%"></use></svg> Descarcă CSV</button>
+        </div>
+
+    </form></div>

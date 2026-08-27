@@ -1,0 +1,32 @@
+# Виртуальное окружение
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Локальная база данных пользователя (не выкладывается)
+companies.db
+companies.db-journal
+
+# Экспортированные данные
+*.xlsx
+*.csv
+card.xml
+export/
+
+# macOS
+.DS_Store
+
+# Видео-презентации (хранятся локально, вне репозитория)
+*.mov
+*.mp4
+
+# Локальные настройки инструментов
+.claude/settings.local.json
+
+# Архивы и временные файлы
+*.zip
+*.log

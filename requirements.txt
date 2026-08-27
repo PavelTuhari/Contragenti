@@ -1,0 +1,8 @@
+# Contragenti — зависимости (Python 3.12)
+# tkinter входит в стандартную библиотеку, но в macOS/Homebrew ставится
+# отдельным пакетом python-tk (см. README).
+
+selenium==4.47.0
+openpyxl==3.1.5
+pillow==12.3.0
+pystray==0.19.5
