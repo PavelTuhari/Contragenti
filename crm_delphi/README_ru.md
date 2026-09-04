@@ -15,6 +15,10 @@ CRM  ◄──── XML карточки ────────────�
 Так CRM не знает ничего о reCAPTCHA, Selenium и структуре портала — вся эта
 работа остаётся внутри Contragenti, а наружу отдаётся простой XML-контракт.
 
+Пошаговая установка Demo CRM и Contragenti на Windows:
+**[INSTALL_WINDOWS_ru.md](../INSTALL_WINDOWS_ru.md)**
+([HTML](../docs/ustanovka-demo-crm-windows.html)).
+
 ---
 
 ## Интерфейс — как у бесплатной EspoCRM
