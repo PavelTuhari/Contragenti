@@ -17,7 +17,7 @@ CRM  ◄──── XML карточки ────────────�
 
 Пошаговая установка Demo CRM и Contragenti на Windows:
 **[INSTALL_WINDOWS_ru.md](../INSTALL_WINDOWS_ru.md)**
-([HTML](../docs/ustanovka-demo-crm-windows.html)).
+([открыть HTML как страницу](https://cdn.jsdelivr.net/gh/PavelTuhari/Contragenti@main/docs/ustanovka-demo-crm-windows.html)).
 
 ---
 
