@@ -80,14 +80,14 @@ cd Contragenti
 
 ```powershell
 py -3.12 -m venv .venv
-.\.вenv\Scripts\python.exe -m pip install -U pip
-.\.вenv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -U pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 Проверка импорта:
 
 ```powershell
-.\.вenv\Scripts\python.exe -c "import selenium, openpyxl, PIL, pystray; print('ok', selenium.__version__)"
+.\.venv\Scripts\python.exe -c "import selenium, openpyxl, PIL, pystray; print('ok', selenium.__version__)"
 ```
 
 ---
@@ -97,7 +97,7 @@ py -3.12 -m venv .venv
 Утилита:
 
 ```powershell
-.\.вenv\Scripts\python.exe company_search.py --selftest
+.\.venv\Scripts\python.exe company_search.py --selftest
 ```
 
 Ожидается `Contragenti self-test: PASS` (база, i18n, XML, сокет, парсеры).
