@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Установка демо-программы и утилиты получения атрибутов контрагентов на Windows</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=Public+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ink:#12222f; --ink-soft:#3d5162; --mute:#69808f;
+  --paper:#f6f7f5; --card:#ffffff; --rule:#d7dde0; --rule-soft:#e6eaec;
+  --accent:#0b6e5f; --accent-soft:#e3efec; --accent-line:#c9e0da;
+  --stamp:#a63a2b; --stamp-soft:#f6e7e4; --stamp-line:#e8ccc6;
+  --shadow:0 1px 2px rgba(18,34,47,.05),0 8px 22px rgba(18,34,47,.06);
+  --code-bg:#12222f; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e6edf1; --ink-soft:#b3c2cc; --mute:#8399a6;
+    --paper:#0e1a23; --card:#152532; --rule:#263a49; --rule-soft:#1d2f3c;
+    --accent:#4fc0aa; --accent-soft:#12332e; --accent-line:#1c4a42;
+    --stamp:#e08574; --stamp-soft:#3a201b; --stamp-line:#5a2e26;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.35);
+    --code-bg:#0a1620; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:840px;margin:0 auto;padding:0 24px 96px}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace}
+p{max-width:66ch}
+header{padding:72px 0 38px;border-bottom:2px solid var(--ink)}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+  font-weight:700;margin:0 0 16px}
+h1{font-family:Spectral,Georgia,serif;font-weight:600;font-size:clamp(32px,5.4vw,52px);
+  line-height:1.08;margin:0;letter-spacing:-.015em;text-wrap:balance}
+.lede{font-family:Spectral,Georgia,serif;font-size:20px;line-height:1.5;color:var(--ink-soft);
+  margin:18px 0 0;max-width:60ch}
+.meta{display:flex;flex-wrap:wrap;gap:6px 26px;margin:26px 0 0;font-size:13px;color:var(--mute)}
+.meta b{color:var(--ink-soft);font-weight:500}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin:34px 0 0;border-radius:3px;overflow:hidden}
+.tile{background:var(--card);padding:16px 18px}
+.tile .k{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);
+  font-weight:700;margin:0 0 7px}
+.tile .v{font-family:Spectral,Georgia,serif;font-size:27px;font-weight:600;line-height:1;
+  margin:0;font-variant-numeric:tabular-nums}
+.tile .v.ok{color:var(--accent)}
+.tile .n{font-size:12px;color:var(--mute);margin:6px 0 0;line-height:1.4}
+section{padding:56px 0 0}
+h2{font-family:Spectral,Georgia,serif;font-weight:600;font-size:28px;margin:0 0 8px;
+  letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--mute);font-size:15px;margin:0 0 26px;max-width:64ch}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:3px;padding:18px 20px;
+  box-shadow:var(--shadow)}
+.card h4{margin:0 0 4px;font-size:15.5px;font-weight:700}
+.card .tag{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--stamp);
+  display:block;margin:0 0 9px}
+.card p{margin:0;font-size:13.5px;color:var(--ink-soft);line-height:1.55}
+.step{display:grid;grid-template-columns:36px 1fr;gap:18px;padding:16px 0;
+  border-top:1px solid var(--rule-soft)}
+.step:first-of-type{border-top:none}
+.num{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;color:var(--accent);
+  border:1px solid var(--rule);border-radius:50%;width:32px;height:32px;display:flex;
+  align-items:center;justify-content:center;background:var(--card);flex-shrink:0}
+.step h4{margin:4px 0 6px;font-size:15.5px;font-weight:700}
+.step p{margin:0;color:var(--ink-soft);font-size:14.5px}
+.note,.warn{border-radius:3px;padding:16px 20px;margin:22px 0 0;font-size:14.5px}
+.note{background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--ink-soft)}
+.warn{background:var(--stamp-soft);border:1px solid var(--stamp-line);color:var(--ink-soft)}
+.note b{color:var(--accent)} .warn b{color:var(--stamp)}
+.note p,.warn p{margin:0;max-width:none}
+pre{background:var(--code-bg);color:var(--code-fg);border-radius:3px;padding:15px 18px;
+  overflow-x:auto;font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.65;margin:16px 0 0}
+code.inl{background:var(--accent-soft);color:var(--accent);padding:1px 5px;border-radius:2px;font-size:12.5px}
+figure{margin:22px 0 0}
+figure img{display:block;width:100%;height:auto;border:1px solid var(--rule);border-radius:3px;
+  box-shadow:var(--shadow);background:var(--card)}
+figure svg{display:block;width:100%;height:auto}
+figcaption{font-size:12.5px;color:var(--mute);margin:10px 0 0}
+.tblwrap{overflow-x:auto;margin:18px 0 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--card)}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);font-weight:700}
+td.mono-c{font-family:"IBM Plex Mono",monospace;font-size:12.5px}
+footer{margin:60px 0 0;padding:22px 0 0;border-top:1px solid var(--rule);font-size:13px;color:var(--mute)}
+a{color:var(--accent)}
+@media (max-width:560px){header{padding:44px 0 28px}.step{grid-template-columns:1fr;gap:8px}.num{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <p class="eyebrow">Windows 10/11 · Python 3.12 · Chrome · Demo CRM</p>
+  <h1>Установка демо-программы и утилиты получения атрибутов контрагентов на Windows</h1>
+  <p class="lede">Как на обычном ПК поставить Demo CRM и Contragenti, связать их через
+  XML-карточку и получить с date.gov.md IDNO, адрес, руководителей, учредителей
+  и задолженность перед бюджетом — без ручного перенабора.</p>
+  <div class="meta">
+    <span><b>Репозиторий</b> <a href="https://github.com/PavelTuhari/Contragenti">PavelTuhari/Contragenti</a></span>
+    <span><b>Markdown</b> <a href="../INSTALL_WINDOWS_ru.md">INSTALL_WINDOWS_ru.md</a></span>
+    <span><b>Проверено</b> Windows 10 · Python 3.12.10 · Chrome</span>
+  </div>
+  <div class="tiles">
+    <div class="tile"><p class="k">Программ</p><p class="v ok">2</p><p class="n">утилита + демо-CRM</p></div>
+    <div class="tile"><p class="k">Python</p><p class="v">3.12</p><p class="n">venv + Tkinter</p></div>
+    <div class="tile"><p class="k">API</p><p class="v">9393</p><p class="n">только 127.0.0.1</p></div>
+    <div class="tile"><p class="k">RAD Studio</p><p class="v ok">нет</p><p class="n">exe уже в репозитории</p></div>
+  </div>
+</header>
+<section>
+  <h2>Зачем две программы</h2>
+  <p class="sub">CRM не ходит на портал и не решает капчу. Утилита забирает карточку
+  с date.gov.md и отдаёт XML. Демо-CRM только вызывает утилиту и пишет клиента в свою базу.</p>
+  <div class="cards">
+    <div class="card">
+      <span class="tag">company_search.py</span>
+      <h4>Contragenti</h4>
+      <p>Поиск на date.gov.md через настоящий Chrome, локальная SQLite
+      <code class="inl">companies.db</code>, карточка с учредителями и долгами, HTTP-API и режим
+      <code class="inl">--pick</code>.</p>
+    </div>
+    <div class="card">
+      <span class="tag">crm_delphi/ContragentiCRM.exe</span>
+      <h4>Demo CRM</h4>
+      <p>Окно в стиле EspoCRM, своя база <code class="inl">clients.db</code>.
+      Кнопка «из реестра» запускает Contragenti и сохраняет выбранную карточку
+      с дедупликацией по IDNO.</p>
+    </div>
+  </div>
+  <div class="warn">
+    <p><b>Капча.</b> Не включайте «Скрытый браузер». В headless-режиме Google почти всегда
+    требует ручную проверку, и поиск завершается по таймауту.</p>
+  </div>
+</section>
+<section>
+  <h2>Шесть шагов установки</h2>
+  <p class="sub">Команды — для PowerShell. Каталог клона может быть любым.</p>
+  <div class="step"><div class="num">1</div><div><h4>Клонировать репозиторий</h4>
+  <pre>&amp; "C:\Program Files\Git\cmd\git.exe" clone https://github.com/PavelTuhari/Contragenti.git
+cd Contragenti</pre></div></div>
+  <div class="step"><div class="num">2</div><div><h4>Виртуальное окружение</h4>
+  <pre>py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt</pre></div></div>
+  <div class="step"><div class="num">3</div><div><h4>Самопроверка</h4>
+  <pre>.\.venv\Scripts\python.exe company_search.py --selftest
+.\crm_delphi\ContragentiCRM.exe --selftest</pre></div></div>
+  <div class="step"><div class="num">4</div><div><h4>Связать CRM с утилитой</h4>
+  <p>Файл <code class="inl">crm_delphi\crm.ini</code>:</p>
+  <pre>[contragenti]
+launcher=C:\Contragenti\company_search.py
+lang=ru</pre></div></div>
+  <div class="step"><div class="num">5</div><div><h4>Запустить оба окна</h4>
+  <pre>start-contragenti.bat
+start-demo-crm.bat</pre>
+  <p style="margin-top:10px">API: <a href="http://127.0.0.1:9393/health">http://127.0.0.1:9393/health</a></p></div></div>
+  <div class="step"><div class="num">6</div><div><h4>Первый контрагент с портала</h4>
+  <p>В Demo CRM: <b>Клиенты</b> → добавить из реестра. Выберите компанию в Contragenti.
+  XML-карточка вернётся в CRM.</p></div></div>
+</section>
+<section>
+  <h2>Какие атрибуты приходят в карточке</h2>
+  <pre>&lt;counterparty source="date.gov.md" idno="1003600116460"&gt;
+  &lt;idno&gt;1003600116460&lt;/idno&gt;
+  &lt;denumire&gt;...&lt;/denumire&gt;
+  &lt;adresa&gt;...&lt;/adresa&gt;
+  &lt;administratori&gt;...&lt;/administratori&gt;
+  &lt;founders&gt;&lt;founder name="..." share="..."/&gt;&lt;/founders&gt;
+  &lt;debts currency="MDL"&gt;&lt;debt nr="1" type="..." sum="..."/&gt;&lt;/debts&gt;
+&lt;/counterparty&gt;</pre>
+  <figure>
+    <img src="screenshots/01_online_ru.png" alt="Окно Contragenti: онлайн-поиск компаний на date.gov.md">
+    <figcaption>Вкладка «Онлайн-поиск» утилиты Contragenti.</figcaption>
+  </figure>
+</section>
+<footer>
+  Полный текст: <a href="../INSTALL_WINDOWS_ru.md">INSTALL_WINDOWS_ru.md</a>.
+  Данные: портал открытых данных Правительства Республики Молдова (date.gov.md).
+</footer>
+</div>
+</body>
+</html>
