@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<counterparty source="date.gov.md" idno="1003600116460" updated="2026-09-01 10:00">
+  <idno>1003600116460</idno>
+  <denumire>CENTRUL DE ELABORARE UNISIM-SOFT S.R.L.</denumire>
+  <inregistrare>30.03.2001</inregistrare>
+  <forma_juridica>Societate cu raspundere limitata</forma_juridica>
+  <lichidata>Nu</lichidata>
+  <adresa>mun. Chisinau, str. Alba-Iulia 75/B</adresa>
+  <administratori>TUHARI PAVEL [Administrator]</administratori>
+  <founders>
+    <founder name="TUHARI PAVEL" share="100,00" />
+  </founders>
+  <debts currency="MDL">
+    <debt nr="1" type="Bugetul de stat" sum="0,98" />
+  </debts>
+  <details_text>=== Date de baza ===
+IDNO: 1003600116460</details_text>
+</counterparty>

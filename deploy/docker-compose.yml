@@ -1,0 +1,29 @@
+# Хаб справочника контрагентов una.md
+#
+#   docker compose up -d
+#
+# Хаб слушает только петлю контейнера, наружу его выставляет reverse-proxy
+# с TLS (см. deploy/README_ru.md). Пароль Oracle и ключи клиентов берутся из
+# .env и hub_config.json — в образ они не попадают.
+
+services:
+  hub:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: una-hub
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8800:8800"
+    volumes:
+      - hub_data:/data
+      - ./hub_config.json:/app/hub_config.json:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  hub_data:

@@ -6,3 +6,11 @@ selenium==4.47.0
 openpyxl==3.1.5
 pillow==12.3.0
 pystray==0.19.5
+# Интеграция с ERP una.md (Oracle). Для сервера 11.2 нужен thick-режим —
+# установите 64-битный Oracle Instant Client и укажите путь в настройках.
+oracledb==4.0.2
+
+# Хаб сбора баз (hub/) — нужен только на стороне сервера, не на рабочих местах.
+fastapi==0.141.1
+uvicorn==0.52.4
+python-multipart==0.0.32

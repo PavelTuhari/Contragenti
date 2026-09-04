@@ -1,0 +1,326 @@
+<title>Delphi CRM и Contragenti</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=Public+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ink:#12222f; --ink-soft:#3d5162; --mute:#69808f;
+  --paper:#f6f7f5; --card:#ffffff; --rule:#d7dde0; --rule-soft:#e6eaec;
+  --accent:#0b6e5f; --accent-soft:#e3efec; --accent-line:#c9e0da;
+  --stamp:#a63a2b; --stamp-soft:#f6e7e4; --stamp-line:#e8ccc6;
+  --shadow:0 1px 2px rgba(18,34,47,.05),0 8px 22px rgba(18,34,47,.06);
+  --code-bg:#12222f; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e6edf1; --ink-soft:#b3c2cc; --mute:#8399a6;
+    --paper:#0e1a23; --card:#152532; --rule:#263a49; --rule-soft:#1d2f3c;
+    --accent:#4fc0aa; --accent-soft:#12332e; --accent-line:#1c4a42;
+    --stamp:#e08574; --stamp-soft:#3a201b; --stamp-line:#5a2e26;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.35);
+    --code-bg:#0a1620; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e6edf1; --ink-soft:#b3c2cc; --mute:#8399a6;
+  --paper:#0e1a23; --card:#152532; --rule:#263a49; --rule-soft:#1d2f3c;
+  --accent:#4fc0aa; --accent-soft:#12332e; --accent-line:#1c4a42;
+  --stamp:#e08574; --stamp-soft:#3a201b; --stamp-line:#5a2e26;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.35);
+  --code-bg:#0a1620; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:840px;margin:0 auto;padding:0 24px 96px}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace}
+p{max-width:66ch}
+header{padding:72px 0 38px;border-bottom:2px solid var(--ink)}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+  font-weight:700;margin:0 0 16px}
+h1{font-family:Spectral,Georgia,serif;font-weight:600;font-size:clamp(36px,6vw,56px);
+  line-height:1.05;margin:0;letter-spacing:-.015em;text-wrap:balance}
+.lede{font-family:Spectral,Georgia,serif;font-size:20px;line-height:1.5;color:var(--ink-soft);
+  margin:18px 0 0;max-width:60ch}
+.meta{display:flex;flex-wrap:wrap;gap:6px 26px;margin:26px 0 0;font-size:13px;color:var(--mute)}
+.meta b{color:var(--ink-soft);font-weight:500}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin:34px 0 0;border-radius:3px;overflow:hidden}
+.tile{background:var(--card);padding:16px 18px}
+.tile .k{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);
+  font-weight:700;margin:0 0 7px}
+.tile .v{font-family:Spectral,Georgia,serif;font-size:27px;font-weight:600;line-height:1;
+  margin:0;font-variant-numeric:tabular-nums}
+.tile .v.ok{color:var(--accent)}
+.tile .n{font-size:12px;color:var(--mute);margin:6px 0 0;line-height:1.4}
+section{padding:56px 0 0}
+h2{font-family:Spectral,Georgia,serif;font-weight:600;font-size:28px;margin:0 0 8px;
+  letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--mute);font-size:15px;margin:0 0 26px;max-width:64ch}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:3px;padding:18px 20px;
+  box-shadow:var(--shadow)}
+.card h4{margin:0 0 4px;font-size:15.5px;font-weight:700}
+.card .tag{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--stamp);
+  display:block;margin:0 0 9px}
+.card p{margin:0;font-size:13.5px;color:var(--ink-soft);line-height:1.55}
+.step{display:grid;grid-template-columns:36px 1fr;gap:18px;padding:16px 0;
+  border-top:1px solid var(--rule-soft)}
+.step:first-of-type{border-top:none}
+.num{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;color:var(--accent);
+  border:1px solid var(--rule);border-radius:50%;width:32px;height:32px;display:flex;
+  align-items:center;justify-content:center;background:var(--card)}
+.step h4{margin:4px 0 6px;font-size:15.5px;font-weight:700}
+.step h4 span{font-family:"IBM Plex Mono",monospace;font-size:11px;padding:2px 8px;
+  border-radius:2px;margin-left:10px;font-weight:700}
+.ok{background:var(--accent-soft);color:var(--accent)}
+.no{background:var(--stamp-soft);color:var(--stamp)}
+code.out{display:block;background:var(--card);border:1px solid var(--rule);
+  border-left:3px solid var(--accent);border-radius:2px;padding:8px 12px;font-size:12.5px;
+  color:var(--ink-soft);overflow-x:auto;white-space:pre}
+.note,.warn{border-radius:3px;padding:16px 20px;margin:22px 0 0;font-size:14.5px}
+.note{background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--ink-soft)}
+.warn{background:var(--stamp-soft);border:1px solid var(--stamp-line);color:var(--ink-soft)}
+.note b{color:var(--accent)} .warn b{color:var(--stamp)}
+.note p,.warn p{margin:0;max-width:none}
+pre{background:var(--code-bg);color:var(--code-fg);border-radius:3px;padding:15px 18px;
+  overflow-x:auto;font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.65;margin:16px 0 0}
+pre .c{color:var(--code-dim)} pre .g{color:var(--code-hi)}
+code.inl{background:var(--accent-soft);color:var(--accent);padding:1px 5px;border-radius:2px;font-size:12.5px}
+figure{margin:22px 0 0}
+figure img{display:block;width:100%;height:auto;border:1px solid var(--rule);border-radius:3px;
+  box-shadow:var(--shadow);background:var(--card)}
+figure svg{display:block;width:100%;height:auto}
+figcaption{font-size:12.5px;color:var(--mute);margin:10px 0 0}
+.tblwrap{overflow-x:auto;margin:18px 0 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--card)}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule)}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);font-weight:700}
+td.mono-c{font-family:"IBM Plex Mono",monospace;font-size:12.5px}
+footer{margin:60px 0 0;padding:22px 0 0;border-top:1px solid var(--rule);font-size:13px;color:var(--mute)}
+@media (max-width:560px){header{padding:44px 0 28px}.step{grid-template-columns:1fr;gap:8px}.num{display:none}}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Delphi 10.2 Tokyo · VCL · FireDAC/SQLite</p>
+  <h1>Delphi CRM и Contragenti</h1>
+  <p class="lede">Демо-CRM с личной базой клиентов, которая заводит контрагентов из
+  государственного реестра, вызывая Contragenti как внешний сервис — и SDK-модуль,
+  с которым эту связку повторит любое Delphi-приложение.</p>
+  <div class="meta">
+    <span><b>Компилятор</b> dcc32 32.0 · RAD Studio 10.2</span>
+    <span><b>База</b> SQLite через FireDAC, статическая линковка</span>
+    <span><b>Контракт</b> Contragenti <code>--pick --out</code> → XML</span>
+  </div>
+  <div class="tiles">
+    <div class="tile"><p class="k">Цикл тестов</p><p class="v ok">9/9</p><p class="n">шагов пройдено</p></div>
+    <div class="tile"><p class="k">Клиентов в базе</p><p class="v">2</p><p class="n">после импорта</p></div>
+    <div class="tile"><p class="k">Дубликат</p><p class="v ok">0</p><p class="n">повторный импорт отбит</p></div>
+    <div class="tile"><p class="k">Багов компилятора</p><p class="v">5</p><p class="n">поймано сборкой</p></div>
+  </div>
+</header>
+
+<section>
+  <h2>Как связаны CRM и Contragenti</h2>
+  <p class="sub">CRM ничего не знает о reCAPTCHA, Selenium и структуре портала. Вся эта
+  работа остаётся внутри Contragenti, наружу отдаётся простой XML-контракт.</p>
+  <figure>
+    <svg viewBox="0 0 800 150" role="img" aria-label="CRM запускает Contragenti с фильтром, получает XML карточки и пишет в SQLite">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.25" color="var(--mute)" marker-end="url(#ar)">
+        <path d="M212,55 L296,55"/><path d="M504,75 L588,75"/><path d="M296,95 L212,95"/>
+      </g>
+      <g font-family="Public Sans,sans-serif" font-size="12.5">
+        <rect x="18" y="30" width="194" height="90" rx="3" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+        <text x="115" y="60" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="700">Demo CRM (Delphi)</text>
+        <text x="115" y="78" text-anchor="middle" fill="var(--mute)" font-size="10.5">uContragenti · uClientsDB</text>
+        <text x="115" y="94" text-anchor="middle" fill="var(--mute)" font-family="IBM Plex Mono,monospace" font-size="10.5">clients.db</text>
+        <rect x="298" y="30" width="206" height="90" rx="3" fill="var(--card)" stroke="var(--rule)"/>
+        <text x="401" y="60" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">Contragenti</text>
+        <text x="401" y="78" text-anchor="middle" fill="var(--mute)" font-size="10.5">Chrome · date.gov.md</text>
+        <text x="401" y="94" text-anchor="middle" fill="var(--mute)" font-family="IBM Plex Mono,monospace" font-size="10.5">--pick --out card.xml</text>
+        <rect x="590" y="30" width="192" height="90" rx="3" fill="var(--card)" stroke="var(--rule)"/>
+        <text x="686" y="66" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">date.gov.md</text>
+        <text x="686" y="84" text-anchor="middle" fill="var(--mute)" font-size="10.5">госреестр</text>
+        <text x="254" y="45" text-anchor="middle" fill="var(--mute)" font-size="10.5">фильтр</text>
+        <text x="254" y="112" text-anchor="middle" fill="var(--mute)" font-size="10.5">XML</text>
+      </g>
+    </svg>
+    <figcaption>CRM запускает Contragenti с начальным фильтром и ждёт закрытия; после выбора
+    пользователем Contragenti пишет XML карточки и завершается — CRM его разбирает и сохраняет.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>SDK-модуль: три строки на стороне CRM</h2>
+  <p class="sub">Всё, что нужно приложению — класс <code class="inl">TContragentiClient</code>
+  из <code class="inl">uContragenti.pas</code>. Он не зависит от VCL и годится для консольных утилит.</p>
+<pre><span class="c">uses uContragenti;</span>
+
+Cli := TContragentiClient.Create;
+try
+  Cli.LauncherExe := 'C:\...\Contragenti.exe';
+  <span class="g">if Cli.Pick('UNISIM', Card) then</span>
+    <span class="c">// Card.Idno, Card.Denumire, Card.Adresa, Card.Administratori,</span>
+    <span class="c">// Card.Founders[], Card.Debts[] — готово к записи в свою базу</span>
+  else
+    ShowMessage('Отменено: ' + Cli.LastError);
+finally
+  Cli.Free;
+end;</pre>
+  <p style="margin-top:18px">Под капотом: <code class="inl">CreateProcess</code> с аргументами
+  <code class="inl">--pick --out «временный файл»</code>, ожидание завершения с таймаутом, разбор
+  файла через <code class="inl">IXMLDocument</code>. Если пользователь закрыл окно без выбора —
+  файла не будет, и <code class="inl">Pick</code> честно вернёт <code class="inl">False</code>.</p>
+</section>
+
+<section>
+  <h2>Контракт XML</h2>
+  <p class="sub">Так выглядит карточка, которую Contragenti отдаёт наружу. Эталон ниже получен из
+  той же функции <code class="inl">build_card_xml</code>, что работает в бою.</p>
+<pre>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;counterparty source="date.gov.md" idno="1003600116460" updated="2026-09-01 10:00"&gt;
+  &lt;idno&gt;1003600116460&lt;/idno&gt;
+  &lt;denumire&gt;CENTRUL DE ELABORARE UNISIM-SOFT S.R.L.&lt;/denumire&gt;
+  &lt;inregistrare&gt;30.03.2001&lt;/inregistrare&gt;
+  &lt;forma_juridica&gt;Societate cu raspundere limitata&lt;/forma_juridica&gt;
+  &lt;lichidata&gt;Nu&lt;/lichidata&gt;
+  &lt;adresa&gt;mun. Chisinau, str. Alba-Iulia 75/B&lt;/adresa&gt;
+  &lt;administratori&gt;TUHARI PAVEL [Administrator]&lt;/administratori&gt;
+  &lt;founders&gt;
+    &lt;founder name="TUHARI PAVEL" share="100,00" /&gt;
+  &lt;/founders&gt;
+  &lt;debts currency="MDL"&gt;
+    &lt;debt nr="1" type="Bugetul de stat" sum="0,98" /&gt;
+  &lt;/debts&gt;
+  &lt;details_text&gt;=== Date de baza ===
+IDNO: 1003600116460&lt;/details_text&gt;
+&lt;/counterparty&gt;</pre>
+</section>
+
+<section>
+  <h2>Полный цикл тестирования</h2>
+  <p class="sub">Порядок здесь настоящий: каждый шаг опирается на результат предыдущего. Вывод —
+  дословный, с собранного exe.</p>
+  
+  <div class="step"><div class="num">01</div><div>
+    <h4>самопроверка (--selftest) <span class="ok">OK</span></h4>
+    <code class="out">код 0</code>
+  </div></div>
+  <div class="step"><div class="num">02</div><div>
+    <h4>эталонные XML сгенерированы build_card_xml <span class="ok">OK</span></h4>
+    <code class="out">unisim.xml, alfavis.xml</code>
+  </div></div>
+  <div class="step"><div class="num">03</div><div>
+    <h4>импорт unisim.xml <span class="ok">OK</span></h4>
+    <code class="out">OK: добавлен клиент #1 — CENTRUL DE ELABORARE UNISIM-SOFT S.R.L. (IDNO</code>
+  </div></div>
+  <div class="step"><div class="num">04</div><div>
+    <h4>повторный импорт → DUP <span class="ok">OK</span></h4>
+    <code class="out">DUP: уже в базе — CENTRUL DE ELABORARE UNISIM-SOFT S.R.L. (IDNO 100360</code>
+  </div></div>
+  <div class="step"><div class="num">05</div><div>
+    <h4>импорт alfavis.xml <span class="ok">OK</span></h4>
+    <code class="out">OK: добавлен клиент #2 — Societatea cu Raspundere Limitata ALFA-VIS CO</code>
+  </div></div>
+  <div class="step"><div class="num">06</div><div>
+    <h4>SQLite: 2 клиента, IDNO уникальны <span class="ok">OK</span></h4>
+    <code class="out">строк 2, уникальных IDNO 2</code>
+  </div></div>
+  <div class="step"><div class="num">07</div><div>
+    <h4>GUI: окно создано <span class="ok">OK</span></h4>
+    
+  </div></div>
+  <div class="step"><div class="num">08</div><div>
+    <h4>скриншот главного окна <span class="ok">OK</span></h4>
+    
+  </div></div>
+  <div class="step"><div class="num">09</div><div>
+    <h4>после работы GUI записей по-прежнему 2 <span class="ok">OK</span></h4>
+    <code class="out">строк 2</code>
+  </div></div>
+  <figure>
+    <img src="data:image/png;base64,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" alt="Главное окно Demo CRM с двумя клиентами из реестра">
+    <figcaption>Шаг 08: главное окно после импорта — ALFA-VIS COM и UNISIM-SOFT из реестра
+    date.gov.md, в статусе «записей: 2». Снято через <code>PrintWindow</code>: окно рисует себя
+    в память, дисплей сессии сборки недоступен.</figcaption>
+  </figure>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>#</th><th>IDNO</th><th>Название</th><th>Руководитель</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td class="mono-c">1003600116460</td><td>CENTRUL DE ELABORARE UNISIM-SOFT S.R.L.</td><td>TUHARI PAVEL [Administrator]</td></tr><tr><td>2</td><td class="mono-c">1017600018242</td><td>Societatea cu Raspundere Limitata ALFA-VIS COM</td><td>BUBIS YEVGENY [Administrator]</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:12px;font-size:13px;color:var(--mute)">Содержимое <code class="inl">clients.db</code>,
+  прочитанное независимо — не через CRM, а напрямую из файла SQLite.</p>
+</section>
+
+<section>
+  <h2>Что поймал компилятор</h2>
+  <p class="sub">Код собирался настоящим <code class="inl">dcc32</code>, и каждый из этих дефектов
+  всплыл только при сборке или запуске. На «написанном, но не собранном» коде их не видно.</p>
+  <div class="cards">
+    <div class="card"><h4>Inline-переменные</h4><span class="tag">E2029 · синтаксис</span>
+      <p><code class="inl">var Form := …</code> появились в 10.3 Rio. Tokyo их не знает — переписано
+      классическими блоками <code class="inl">var</code>.</p></div>
+    <div class="card"><h4>Несуществующий юнит</h4><span class="tag">F2613 · FireDAC</span>
+      <p><code class="inl">FireDAC.Phys.SQLiteWrapper.Stat</code> — из более поздних версий. В Tokyo
+      SQLite линкуется статически уже через <code class="inl">FireDAC.Phys.SQLite</code>.</p></div>
+    <div class="card"><h4>Модальный диалог FireDAC</h4><span class="tag">зависание · headless</span>
+      <p>Без зарегистрированного wait-cursor FireDAC ждёт GUI и виснет в консольном режиме. Создан
+      <code class="inl">TFDGUIxWaitCursor</code> с провайдером Console — работает и в GUI, и в headless.</p></div>
+    <div class="card"><h4>Мгновенный выход из GUI</h4><span class="tag">Application.Run</span>
+      <p>Цикл сообщений крутится только с зарегистрированной MainForm, а <code class="inl">CreateNew</code>
+      её не регистрирует. Цикл <code class="inl">HandleMessage</code> запущен вручную до закрытия окна.</p></div>
+    <div class="card"><h4>Кириллица в мусор</h4><span class="tag">кодировка исходников</span>
+      <p><code class="inl">dcc32</code> без BOM читает <code class="inl">.pas</code> как ANSI и портит
+      русские литералы. Ко всем исходникам добавлен UTF-8 BOM.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Границы проверки</h2>
+  <p class="sub">Честно о том, что проверено не до конца.</p>
+  <div class="warn">
+    <p><b>Живой выбор в окне Contragenti не автоматизирован.</b> Полный путь «кнопка → окно
+    Contragenti → выбор → XML» требует интерактивного действия пользователя. Контракт проверен
+    с обеих сторон: Contragenti пишет XML этого формата (<code class="inl">--pick --out</code>,
+    функция <code class="inl">build_card_xml</code>), CRM его разбирает — эталон получен ровно из неё.</p>
+  </div>
+  <div class="warn">
+    <p><b>Управление живым GUI извне снято с теста.</b> Попытка задать фильтр через
+    <code class="inl">WM_SETTEXT</code> из другого процесса подвешивала цикл; после двух подходов
+    решено не доводить хрупкую автоматизацию, а ограничиться снимком главного окна. Фильтр
+    проверен логикой <code class="inl">TClientsDB.List</code>, а не кликами.</p>
+  </div>
+  <div class="note">
+    <p><b>GUI-exe не пишет в pipe.</b> Побочная находка цикла: приложение с
+    <code class="inl">{$APPTYPE GUI}</code> исправно пишет вывод в файл, но при перенаправлении
+    в pipe (bash, <code class="inl">subprocess.PIPE</code>) не пишет и зависает. Все headless-запуски
+    в тесте идут через файл.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Из чего собрано</h2>
+  <div class="tblwrap"><table>
+    <thead><tr><th>Файл</th><th>Назначение</th></tr></thead>
+    <tbody>
+      <tr><td class="mono-c">uContragenti.pas</td><td>SDK: запуск Contragenti, ожидание, разбор XML в <code>TCounterpartyCard</code></td></tr>
+      <tr><td class="mono-c">uClientsDB.pas</td><td>личная база SQLite через FireDAC, дедупликация по IDNO</td></tr>
+      <tr><td class="mono-c">uMainForm.pas</td><td>окно списка клиентов; интерфейс строится в коде, без .dfm</td></tr>
+      <tr><td class="mono-c">ContragentiCRM.dpr</td><td>точка входа: GUI, <code>--import</code>, <code>--selftest</code></td></tr>
+      <tr><td class="mono-c">build.bat</td><td>сборка консольным dcc32 без открытия IDE</td></tr>
+      <tr><td class="mono-c">sample_card.xml</td><td>эталонная карточка для проверки без GUI</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>Данные — портал открытых данных Правительства Республики Молдова (date.gov.md).
+Contragenti работает с публичной формой портала штатным способом, как обычный пользователь в браузере.</footer>
+</div>

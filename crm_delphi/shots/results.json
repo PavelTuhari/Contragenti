@@ -1,0 +1,71 @@
+{
+  "steps": [
+    {
+      "name": "самопроверка (--selftest)",
+      "ok": true,
+      "detail": "код 0"
+    },
+    {
+      "name": "эталонные XML сгенерированы build_card_xml",
+      "ok": true,
+      "detail": "unisim.xml, alfavis.xml"
+    },
+    {
+      "name": "импорт unisim.xml",
+      "ok": true,
+      "detail": "OK: добавлен клиент #1 — CENTRUL DE ELABORARE UNISIM-SOFT S.R.L. (IDNO"
+    },
+    {
+      "name": "повторный импорт → DUP",
+      "ok": true,
+      "detail": "DUP: уже в базе — CENTRUL DE ELABORARE UNISIM-SOFT S.R.L. (IDNO 100360"
+    },
+    {
+      "name": "импорт alfavis.xml",
+      "ok": true,
+      "detail": "OK: добавлен клиент #2 — Societatea cu Raspundere Limitata ALFA-VIS CO"
+    },
+    {
+      "name": "SQLite: 2 клиента, IDNO уникальны",
+      "ok": true,
+      "detail": "строк 2, уникальных IDNO 2"
+    },
+    {
+      "name": "GUI: окно создано",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "скриншот главного окна",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "после работы GUI записей по-прежнему 2",
+      "ok": true,
+      "detail": "строк 2"
+    }
+  ],
+  "selftest": "[OK]   разбор XML: SELFTEST SRL / 1234567890123 / учредителей 1 / долгов 1\r\n[OK]   SQLite: добавление и дедупликация по IDNO\r\n\r\nCRM self-test: True",
+  "import1": "OK: добавлен клиент #1 — CENTRUL DE ELABORARE UNISIM-SOFT S.R.L. (IDNO 1003600116460)\r\nВсего в базе: 1",
+  "import_dup": "DUP: уже в базе — CENTRUL DE ELABORARE UNISIM-SOFT S.R.L. (IDNO 1003600116460)\r\nВсего в базе: 1",
+  "import2": "OK: добавлен клиент #2 — Societatea cu Raspundere Limitata ALFA-VIS COM (IDNO 1017600018242)\r\nВсего в базе: 2",
+  "db_rows": [
+    {
+      "id": 1,
+      "idno": "1003600116460",
+      "denumire": "CENTRUL DE ELABORARE UNISIM-SOFT S.R.L.",
+      "adresa": "mun. Chisinau, str. Alba-Iulia 75/B",
+      "administrator": "TUHARI PAVEL [Administrator]"
+    },
+    {
+      "id": 2,
+      "idno": "1017600018242",
+      "denumire": "Societatea cu Raspundere Limitata ALFA-VIS COM",
+      "adresa": "mun. Chisinau, sec. Centru, str. Alecsandri Vasile, 80",
+      "administrator": "BUBIS YEVGENY [Administrator]"
+    }
+  ],
+  "passed": 9,
+  "total": 9
+}

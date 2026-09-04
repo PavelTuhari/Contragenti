@@ -1,0 +1,517 @@
+<title>Архитектура Contragenti</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=Public+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ink:#12222f; --ink-soft:#3d5162; --mute:#69808f;
+  --paper:#f6f7f5; --card:#ffffff; --rule:#d7dde0; --rule-soft:#e6eaec;
+  --accent:#0b6e5f; --accent-soft:#e3efec; --accent-line:#c9e0da;
+  --stamp:#a63a2b; --stamp-soft:#f6e7e4; --stamp-line:#e8ccc6;
+  --shadow:0 1px 2px rgba(18,34,47,.05),0 8px 22px rgba(18,34,47,.06);
+  /* блок кода остаётся тёмным в обеих темах — это его собственная роль,
+     а не производная от цвета текста страницы */
+  --code-bg:#12222f; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e6edf1; --ink-soft:#b3c2cc; --mute:#8399a6;
+    --paper:#0e1a23; --card:#152532; --rule:#263a49; --rule-soft:#1d2f3c;
+    --accent:#4fc0aa; --accent-soft:#12332e; --accent-line:#1c4a42;
+    --stamp:#e08574; --stamp-soft:#3a201b; --stamp-line:#5a2e26;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.35);
+    --code-bg:#0a1620; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e6edf1; --ink-soft:#b3c2cc; --mute:#8399a6;
+  --paper:#0e1a23; --card:#152532; --rule:#263a49; --rule-soft:#1d2f3c;
+  --accent:#4fc0aa; --accent-soft:#12332e; --accent-line:#1c4a42;
+  --stamp:#e08574; --stamp-soft:#3a201b; --stamp-line:#5a2e26;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.35);
+  --code-bg:#0a1620; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:840px;margin:0 auto;padding:0 24px 96px}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace}
+p{max-width:66ch}
+
+/* ── шапка ── */
+header{padding:72px 0 38px;border-bottom:2px solid var(--ink)}
+.eyebrow{
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);font-weight:700;margin:0 0 16px
+}
+h1{
+  font-family:Spectral,Georgia,serif;font-weight:600;
+  font-size:clamp(36px,6vw,56px);line-height:1.05;margin:0;
+  letter-spacing:-.015em;text-wrap:balance
+}
+.lede{
+  font-family:Spectral,Georgia,serif;font-size:20px;line-height:1.5;
+  color:var(--ink-soft);margin:18px 0 0;max-width:60ch
+}
+.meta{display:flex;flex-wrap:wrap;gap:6px 26px;margin:26px 0 0;font-size:13px;color:var(--mute)}
+.meta b{color:var(--ink-soft);font-weight:500}
+
+/* ── плитки ── */
+.tiles{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);
+  margin:34px 0 0;border-radius:3px;overflow:hidden
+}
+.tile{background:var(--card);padding:16px 18px}
+.tile .k{font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+         color:var(--mute);font-weight:700;margin:0 0 7px}
+.tile .v{font-family:Spectral,Georgia,serif;font-size:27px;font-weight:600;
+         line-height:1;margin:0;font-variant-numeric:tabular-nums}
+.tile .v.ok{color:var(--accent)}
+.tile .n{font-size:12px;color:var(--mute);margin:6px 0 0;line-height:1.4}
+
+section{padding:56px 0 0}
+h2{font-family:Spectral,Georgia,serif;font-weight:600;font-size:28px;
+   margin:0 0 8px;letter-spacing:-.01em;text-wrap:balance}
+h3{font-size:17px;margin:26px 0 8px;font-weight:700}
+.sub{color:var(--mute);font-size:15px;margin:0 0 26px;max-width:64ch}
+
+/* ── карточки ── */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:3px;
+      padding:18px 20px;box-shadow:var(--shadow)}
+.card h4{margin:0 0 4px;font-size:15.5px;font-weight:700}
+.card .tag{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--accent);
+           display:block;margin:0 0 9px}
+.card p{margin:0;font-size:13.5px;color:var(--ink-soft);line-height:1.55}
+
+/* ── шаги (настоящая последовательность) ── */
+.step{display:grid;grid-template-columns:36px 1fr;gap:18px;padding:20px 0;
+      border-top:1px solid var(--rule-soft)}
+.step:first-of-type{border-top:none}
+.num{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+     color:var(--accent);border:1px solid var(--rule);border-radius:50%;
+     width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+     background:var(--card)}
+.step h4{margin:4px 0 5px;font-size:16px;font-weight:700}
+.step h4 span{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--accent);
+              font-weight:500;margin-left:8px}
+.step p{margin:0;font-size:14.5px;color:var(--ink-soft)}
+
+/* ── врезки ── */
+.note,.warn{border-radius:3px;padding:16px 20px;margin:22px 0 0;font-size:14.5px}
+.note{background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--ink-soft)}
+.warn{background:var(--stamp-soft);border:1px solid var(--stamp-line);color:var(--ink-soft)}
+.note b{color:var(--accent)} .warn b{color:var(--stamp)}
+.note p,.warn p{margin:0;max-width:none}
+
+/* ── код ── */
+pre{background:var(--code-bg);color:var(--code-fg);border-radius:3px;padding:15px 18px;
+    overflow-x:auto;font-family:"IBM Plex Mono",monospace;font-size:12.5px;
+    line-height:1.65;margin:16px 0 0}
+pre .c{color:var(--code-dim)}
+pre .g{color:var(--code-hi)}
+code.inl{background:var(--accent-soft);color:var(--accent);padding:1px 5px;
+         border-radius:2px;font-size:12.5px}
+
+/* ── таблицы ── */
+.tblwrap{overflow-x:auto;margin:18px 0 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--card)}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule)}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);font-weight:700}
+td.num-c{text-align:right;font-family:"IBM Plex Mono",monospace;
+         font-variant-numeric:tabular-nums}
+td.mono-c{font-family:"IBM Plex Mono",monospace;font-size:12.5px}
+.ok{color:var(--accent);font-weight:600}
+.no{color:var(--stamp);font-weight:600}
+
+/* ── схема ── */
+figure{margin:22px 0 0}
+figure svg{display:block;width:100%;height:auto}
+figcaption{font-size:12.5px;color:var(--mute);margin:10px 0 0}
+
+footer{margin:60px 0 0;padding:22px 0 0;border-top:1px solid var(--rule);
+       font-size:13px;color:var(--mute)}
+@media (max-width:560px){
+  header{padding:44px 0 28px}
+  .step{grid-template-columns:1fr;gap:8px}
+  .num{display:none}
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Открытые данные → ERP · Молдова</p>
+  <h1>Архитектура Contragenti</h1>
+  <p class="lede">Настольная утилита, которая забирает карточки юридических лиц
+  из государственного реестра и раскладывает их по справочникам ERP —
+  без перенабора вручную и промежуточных выгрузок.</p>
+  <div class="meta">
+    <span><b>Клиент</b> Python 3.12 · Tkinter · SQLite</span>
+    <span><b>Приёмник</b> Oracle 11.2 · схемы TMS</span>
+    <span><b>Хаб</b> FastAPI · асинхронная очередь</span>
+    <span><b>Языки</b> Română · Русский · English</span>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><p class="k">Источник</p><p class="v">date.gov.md</p>
+      <p class="n">госреестр через реальный Chrome</p></div>
+    <div class="tile"><p class="k">Схем проверено</p><p class="v">6</p>
+      <p class="n">одна структура TMS у всех</p></div>
+    <div class="tile"><p class="k">Скорость записи</p><p class="v ok">285/с</p>
+      <p class="n">три клиента параллельно</p></div>
+    <div class="tile"><p class="k">Дедупликация</p><p class="v ok">3000 → 1000</p>
+      <p class="n">попыток → строк, без дублей</p></div>
+  </div>
+</header>
+
+<section>
+  <h2>Почему настольное приложение, а не скрапер</h2>
+  <p class="sub">Два ограничения задали всю архитектуру — и оба неустранимы
+  со стороны сервера.</p>
+
+  <div class="cards">
+    <div class="card">
+      <h4>Невидимая reCAPTCHA</h4>
+      <span class="tag">портал отдаёт HTTP 400 без токена</span>
+      <p>Форма реестра защищена невидимой проверкой: серверный скрипт или
+      <code class="inl">curl</code> получают отказ. Токен выдаётся только настоящему
+      браузеру, поэтому утилита запускает Chrome и проходит форму так же, как
+      живой человек. Это не обход защиты, а работа с публичной формой штатным
+      способом.</p>
+    </div>
+    <div class="card">
+      <h4>Запись прямо в базу</h4>
+      <span class="tag">без CSV между системами</span>
+      <p>Найденное сразу ложится и в локальную SQLite, и в справочники ERP.
+      Отсюда всё остальное: код исполняется на машине пользователя, окно рисует
+      оконный менеджер, серверной части у клиента нет.</p>
+    </div>
+  </div>
+
+  <div class="warn">
+    <p><b>Цена решения.</b> Портал — государственный сервис, и он это замечает:
+    после десятка автоматических запросов подряд проверка переходит в ручной
+    режим. Поэтому во всех фоновых сценариях заложены паузы, а при отказе —
+    снижение темпа, а не повторные попытки в лоб.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Как устроен обмен</h2>
+  <p class="sub">Клиент пишет напрямую в две схемы; параллельно копия базы
+  уходит на хаб, который собирает сводный справочник.</p>
+
+  <figure>
+    <svg viewBox="0 0 800 260" role="img" aria-label="Схема обмена: портал, клиенты, схемы ERP и хаб">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6"
+                markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.25"
+         color="var(--mute)" marker-end="url(#ar)">
+        <path d="M150,52 L246,52"/>
+        <path d="M356,52 L356,96"/>
+        <path d="M356,150 L356,196"/>
+        <path d="M466,123 L596,123"/>
+        <path d="M676,150 L676,196"/>
+      </g>
+      <g font-family="Public Sans,sans-serif" font-size="12.5">
+        <rect x="18" y="30" width="130" height="44" rx="3"
+              fill="var(--card)" stroke="var(--rule)"/>
+        <text x="83" y="49" text-anchor="middle" fill="var(--ink)"
+              font-size="13" font-weight="700">date.gov.md</text>
+        <text x="83" y="65" text-anchor="middle" fill="var(--mute)"
+              font-size="11">госреестр</text>
+
+        <rect x="248" y="30" width="216" height="44" rx="3"
+              fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+        <text x="356" y="49" text-anchor="middle" fill="var(--accent)"
+              font-size="13" font-weight="700">Contragenti</text>
+        <text x="356" y="65" text-anchor="middle" fill="var(--mute)"
+              font-size="11">Chrome · SQLite · нормализация</text>
+
+        <rect x="248" y="98" width="216" height="50" rx="3"
+              fill="var(--card)" stroke="var(--rule)"/>
+        <text x="356" y="117" text-anchor="middle" fill="var(--ink)"
+              font-size="12.5" font-weight="700">своя схема ERP</text>
+        <text x="356" y="134" text-anchor="middle" fill="var(--mute)"
+              font-family="IBM Plex Mono,monospace" font-size="10.5">ARTIMA · DTP2016 · …</text>
+
+        <rect x="248" y="198" width="216" height="44" rx="3"
+              fill="var(--card)" stroke="var(--rule)"/>
+        <text x="356" y="217" text-anchor="middle" fill="var(--ink)"
+              font-size="12.5" font-weight="700">сводная схема</text>
+        <text x="356" y="233" text-anchor="middle" fill="var(--mute)"
+              font-family="IBM Plex Mono,monospace" font-size="10.5">PARALAX</text>
+
+        <rect x="598" y="98" width="184" height="50" rx="3"
+              fill="var(--card)" stroke="var(--rule)"/>
+        <text x="690" y="117" text-anchor="middle" fill="var(--ink)"
+              font-size="12.5" font-weight="700">хаб</text>
+        <text x="690" y="134" text-anchor="middle" fill="var(--mute)"
+              font-size="10.5">приём gzip · очередь</text>
+
+        <rect x="598" y="198" width="184" height="44" rx="3"
+              fill="var(--card)" stroke="var(--rule)"/>
+        <text x="690" y="224" text-anchor="middle" fill="var(--ink)"
+              font-size="12.5" font-weight="700">единый справочник</text>
+
+        <text x="530" y="116" text-anchor="middle" fill="var(--mute)"
+              font-size="10.5">копия базы</text>
+      </g>
+    </svg>
+    <figcaption>Прямая запись идёт в обе схемы сразу; хаб — независимый путь,
+    он переживает недоступность Oracle и досылает накопленное позже.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>Организация как три связанных блока</h2>
+  <p class="sub">Порядок здесь настоящий: код, полученный на первом шаге,
+  связывает остальные. Каждый блок фиксируется своей транзакцией — сбой на
+  счетах не откатывает уже созданную организацию.</p>
+
+  <div class="step"><div class="num">01</div><div>
+    <h4>Справочная запись <span>TMS_UNIVERS</span></h4>
+    <p>Сокращённое название, оригинал с портала в <code class="inl">NAMERUS</code>,
+    <code class="inl">TIP='O'</code>. Код берётся из последовательности явно —
+    в части схем собственные триггеры подставляют его в динамический SQL и на
+    пустом значении ломаются.</p>
+  </div></div>
+
+  <div class="step"><div class="num">02</div><div>
+    <h4>Реквизиты <span>TMS_ORG</span></h4>
+    <p>IDNO, юридический адрес, руководитель. Записывается upsert’ом: в одной
+    из схем триггер заводит эту строку сам, и слепая вставка ловила бы
+    нарушение первичного ключа.</p>
+  </div></div>
+
+  <div class="step"><div class="num">03</div><div>
+    <h4>Банковские счета <span>TMS_ORG_ACCOUNTS</span></h4>
+    <p>По записи на счёт. Банк определяется из IBAN: ведущая буквенная часть
+    сопоставляется с BIC в справочнике из 103 банков —
+    <code class="inl">MD24AG…</code> → <code class="inl">AGRNMD2X</code>,
+    Moldova-Agroindbank.</p>
+  </div></div>
+
+  <div class="step"><div class="num">04</div><div>
+    <h4>Тип и форма <span>TMS_ORG26</span></h4>
+    <p>Расширение поверх штатной схемы. У арендаторов его может не быть —
+    наличие определяется при подключении, и блок молча пропускается.</p>
+  </div></div>
+
+  <div class="note">
+    <p><b>Дедупликация опирается на соглашение самой ERP.</b> Для организаций с
+    <code class="inl">GR1='E'</code> поле <code class="inl">CODVECHI</code>
+    трактуется как фискальный код, и база сама следит за его уникальностью.
+    Проверка в коде осталась как быстрый путь, но последнее слово — за базой:
+    так защита не зависит от того, сколько клиентов пишут одновременно.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Разбор наименований</h2>
+  <p class="sub">Портал отдаёт название вместе с правовой формой одной строкой
+  и в разном написании. Признаки разносятся по независимым полям — иначе
+  комбинированные формы теряются.</p>
+
+<pre><span class="c">Intreprinderea cu Capital Strain ZALMOXIS GRUP S.R.L.</span>
+        │
+        ├─ тип     <span class="g">ICS</span>   предприятие с иностранным капиталом
+        ├─ форма   <span class="g">SRL</span>   общество с ограниченной ответственностью
+        └─ имя     <span class="g">ZALMOXIS GRUP</span>
+
+DENUMIREA = <span class="g">ICS ZALMOXIS GRUP SRL</span>     NAMERUS = исходная строка</pre>
+
+  <p style="margin-top:18px">Признаки независимы: <code class="inl">ICS</code> и
+  <code class="inl">SRL</code> — это одновременно предприятие с иностранным
+  капиталом и ООО, одним кодом их не описать. Поддержаны формы, реально
+  встреченные в данных: SRL, SA, ICS, IM, II, OCN, OMF, CP, CI, CA, GT, CSV,
+  LOMB, SUC, FIL. На тысяче реальных наименований — распознавание без промахов.</p>
+
+  <div class="warn">
+    <p><b>Кодировка базы CL8MSWIN1251.</b> Румынских диакритик в ней нет.
+    Неявное преобразование средствами Oracle-клиента даёт то транслитерацию,
+    то знаки вопроса — в зависимости от настроек рабочей станции. Поэтому
+    транслитерация вынесена в код и стала предсказуемой: ă→a, ş→s, ţ→t,
+    кириллица не затрагивается.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Хаб сбора баз</h2>
+  <p class="sub">Второй путь доставки: рабочие места присылают свои базы,
+  хаб постепенно собирает из них единый справочник.</p>
+
+  <div class="cards">
+    <div class="card">
+      <h4>Приём отделён от импорта</h4>
+      <span class="tag">POST /api/v1/batches</span>
+      <p>Тело запроса — <code class="inl">gzip(sqlite)</code>. Хаб отвечает сразу
+      после сохранения, импорт идёт в фоне. Пакет принимается и переживает
+      перезапуск, даже когда Oracle недоступна.</p>
+    </div>
+    <div class="card">
+      <h4>Ключи обязательны снаружи</h4>
+      <span class="tag">X-Api-Key</span>
+      <p>Без ключа приём работает только на петлевом адресе. Если хаб слушает
+      внешний интерфейс с пустым списком клиентов, он отвечает отказом — чтобы
+      в общий справочник не мог писать любой, кто знает адрес.</p>
+    </div>
+    <div class="card">
+      <h4>Повторы не переваривает дважды</h4>
+      <span class="tag">SHA-256 содержимого</span>
+      <p>Клиент шлёт базу по расписанию; если она не менялась, архив тот же.
+      Такой пакет помечается дубликатом и импорт не запускается.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Самопроверка и самопрезентация</h2>
+  <p class="sub">Программа умеет проверить себя и показать себя — обе функции
+  доступны и из интерфейса, и из командной строки.</p>
+
+<pre>Contragenti.exe --selftest        <span class="c">код возврата 0 при успехе — годится для CI</span>
+Contragenti.exe --demo            <span class="c">проходит все экраны и сохраняет снимки</span></pre>
+
+  <p style="margin-top:18px">Снимки экрана программа делает сама — через WinAPI
+  <code class="inl">PrintWindow</code>: окно рисует себя в память, минуя
+  дисплей. Обычный захват падает там, где нет рабочего стола, а этот способ
+  работает в отключённых сессиях, у служб и в CI.</p>
+
+  <div class="note">
+    <p><b>Самопроверка окупилась сразу.</b> Первым, что она нашла, была
+    собственная ошибка сборки: в собранном exe путь к базе вычислялся от
+    <code class="inl">__file__</code>, который cx_Freeze прячет внутрь
+    <code class="inl">library.zip</code>. В исходниках всё работало, в
+    установленной программе база не открывалась.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Что показала проверка</h2>
+  <p class="sub">Цифры измерены на живой базе: три клиента в параллельных
+  потоках, словарь из тысячи корневых названий, собранный из реальных данных
+  справочника.</p>
+
+  <div class="tblwrap">
+    <table>
+      <caption class="sub" style="margin:0 0 10px">Нагрузка: 1000 названий × 3 клиента</caption>
+      <thead><tr><th>Клиент</th><th>Схемы</th><th class="num-c">Медиана</th>
+      <th class="num-c">p95</th><th class="num-c">Ошибок</th></tr></thead>
+      <tbody>
+        <tr><td>Клиент-1</td><td class="mono-c">ARTIMA + PARALAX</td>
+            <td class="num-c">21 мс</td><td class="num-c">24 мс</td><td class="num-c ok">0</td></tr>
+        <tr><td>Клиент-2</td><td class="mono-c">DIRLOC2016 + PARALAX</td>
+            <td class="num-c">17 мс</td><td class="num-c">19 мс</td><td class="num-c ok">0</td></tr>
+        <tr><td>Клиент-3</td><td class="mono-c">DTP2016 + PARALAX</td>
+            <td class="num-c">17 мс</td><td class="num-c">19 мс</td><td class="num-c ok">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Дедупликация под конкуренцией</h3>
+  <p>Три клиента одновременно пишут <b>один и тот же</b> набор из 1000
+  контрагентов. Это единственный способ проверить дедупликацию по-настоящему:
+  при откате транзакций клиенты не видят строк друг друга.</p>
+
+<pre>3000 попыток записи на схему  →  <span class="g">1000 строк, дублей нет, ошибок 0</span>
+создано 1000 · дублей 2000 · сумма сходится: 3000 = 3 × 1000</pre>
+
+  <p style="margin-top:18px">Около двух третей «дублей» — настоящие гонки, когда
+  два клиента одновременно взялись за одну организацию. База отбивает второго,
+  приложение перепроверяет и честно помечает результат дубликатом, а не сбоем.</p>
+
+  <div class="warn">
+    <p><b>Тонкость, которую видно только под нагрузкой.</b> Блоки фиксируются
+    раздельно, поэтому есть момент, когда справочная запись уже зафиксирована,
+    а реквизиты — ещё нет. Перепроверка искала по таблице реквизитов и в это
+    окно принимала чужую запись за сбой: 18 ложных ошибок из 3000. На сорока
+    записях эффекта не было. Теперь поиск идёт сначала по справочнику.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Границы применимости</h2>
+  <p class="sub">Честный перечень того, что работает не везде и почему.</p>
+
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Схема</th><th class="num-c">Организаций</th>
+      <th>Запись</th><th>Замечание</th></tr></thead>
+      <tbody>
+        <tr><td class="mono-c">PARALAX</td><td class="num-c">616</td>
+            <td class="ok">да</td><td>сводная схема, есть TMS_ORG26</td></tr>
+        <tr><td class="mono-c">ARTIMA</td><td class="num-c">1910</td>
+            <td class="ok">да</td><td>потребовался явный код записи</td></tr>
+        <tr><td class="mono-c">DIRLOC2016</td><td class="num-c">843</td>
+            <td class="ok">да</td><td>реквизиты создаёт триггер — нужен upsert</td></tr>
+        <tr><td class="mono-c">DTP2016</td><td class="num-c">2210</td>
+            <td class="ok">да</td><td>удаление закрыто для не-администратора</td></tr>
+        <tr><td class="mono-c">DRAEXLMAIER</td><td class="num-c">23</td>
+            <td class="no">нет</td><td>собственный контроль прав</td></tr>
+        <tr><td class="mono-c">DULCINELLA</td><td class="num-c">5650</td>
+            <td class="no">нет</td><td>справочник заперт триггером</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:20px">Отказы двух последних схем — не поломка, а
+  осознанные блокировки их владельцев. Снять их может только администратор
+  схемы; обходить такие ограничения интеграция не должна.</p>
+
+  <div class="warn">
+    <p><b>Прямая запись в сводную схему требует пароля на каждом рабочем
+    месте.</b> Это осознанный выбор в пользу простоты, но риск стоит назвать:
+    отозвать такой пароль можно только сменив его для всех сразу. Более узкий
+    вариант — отдельный пользователь с правом записи только в три таблицы.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Из чего собрано</h2>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Компонент</th><th>Назначение</th></tr></thead>
+      <tbody>
+        <tr><td class="mono-c">company_search.py</td>
+            <td>приложение: поиск, локальная база, HTTP-API, экспорт, интерфейс на трёх языках</td></tr>
+        <tr><td class="mono-c">legal_forms.py</td>
+            <td>разбор наименования на тип, форму и имя</td></tr>
+        <tr><td class="mono-c">tms_export.py</td>
+            <td>запись организации блоками, дедупликация, матчинг банка по IBAN</td></tr>
+        <tr><td class="mono-c">tms_multi.py</td>
+            <td>одновременная запись в несколько схем</td></tr>
+        <tr><td class="mono-c">hub/</td>
+            <td>приём пакетов, очередь импорта, дашборд</td></tr>
+        <tr><td class="mono-c">tools/</td>
+            <td>догрузка адресов, дозаполнение справочника, нагрузочный и конкурентный тесты</td></tr>
+        <tr><td class="mono-c">deploy/</td>
+            <td>Docker, systemd, reverse-proxy для выноса хаба на хостинг</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <p><b>Что не проверено на практике.</b> Docker-образ и systemd-юнит написаны
+    по документации, но не собирались: для них нужен Linux и клиент Oracle,
+    которого в среде разработки нет. Первый запуск на хостинге может
+    потребовать правок — вероятнее всего в пути к клиенту внутри образа.</p>
+  </div>
+</section>
+
+<footer>
+  Данные предоставляет портал открытых данных Правительства Республики Молдова
+  (date.gov.md). Утилита работает с публичной формой портала штатным способом,
+  как обычный пользователь в браузере.
+</footer>
+
+</div>

@@ -11,6 +11,29 @@ __pycache__/
 companies.db
 companies.db-journal
 
+# Параметры подключения к una.md (содержат пароль) — не выкладываются
+tms_config.json
+hub_config.json
+goods_config.json
+goods_local.db
+
+# Данные хаба: принятые пакеты и реестр заданий
+hub_data/
+
+# Delphi CRM: сборочные артефакты и локальные данные
+crm_delphi/dcu/
+crm_delphi/*.exe
+crm_delphi/*.RES
+crm_delphi/*.res
+crm_delphi/*.dcu
+crm_delphi/clients.db
+crm_delphi/crm.ini
+
+# Секреты развёртывания
+deploy/.env
+deploy/hub_config.json
+deploy/instantclient-*.zip
+
 # Экспортированные данные
 *.xlsx
 *.csv
@@ -30,3 +53,10 @@ export/
 # Архивы и временные файлы
 *.zip
 *.log
+
+# Собранные дистрибутивы (cx_Freeze / MSI) — не хранятся в репозитории
+build/
+dist/
+crm_delphi/build.log
+crm_delphi/gui_test.log
+crm_delphi/shots_gui/test_clients.db

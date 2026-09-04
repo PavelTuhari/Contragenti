@@ -26,6 +26,7 @@ import os
 import sys
 import csv
 import json
+import time
 import queue
 import sqlite3
 import argparse
@@ -52,10 +53,29 @@ import openpyxl
 APP_VERSION = "1.0"
 SEARCH_URL = "https://date.gov.md/open/company-search"
 DETAILS_URL = "https://date.gov.md/open/company-details"
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "companies.db")
+def _app_dir():
+    """Каталог рядом с исполняемым файлом — и для скрипта, и для frozen exe
+    (cx_Freeze/PyInstaller кладут __file__ внутрь library.zip, а не рядом с exe)."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+DB_PATH = os.path.join(_app_dir(), "companies.db")
 DEFAULT_PORT = 9393
 
 COLUMNS = ("idno", "denumire", "administratori", "inregistrare")
+
+# символы галочки выбора в колонке #0 (отправка в una.md)
+CHECK_ON = "☑"   # ☑
+CHECK_OFF = "☐"  # ☐
+
+# ── бренд экосистемы una.md ──
+# Contragenti распространяется как бесплатный инструмент платформы una.md,
+# поэтому окно программы несёт её витрину: баннер, окно «Об ERP una.md».
+UNA_URL = "https://una.md"
+UNA_ACCENT = "#0b6e5f"
+UNA_BANNER_BG = "#e3efec"
 EXPORT_COLUMNS = (
     "idno", "denumire", "administratori", "inregistrare",
     "forma_juridica", "lichidata", "adresa", "details_text",
@@ -98,6 +118,88 @@ TR = {
         "res_full_xml": "Full XML",
         "menu_file": "File", "mi_hide": "Hide window", "mi_quit": "Quit",
         "menu_export": "Export", "menu_lang": "Language",
+        "menu_help": "Help", "mi_about": "About / Overview", "mi_selftest": "Run self-test",
+        "mi_una": "About una.md ERP", "mi_una_site": "Open una.md website",
+        "una_banner": "A free tool from the una.md ERP ecosystem — "
+                      "the Moldovan alternative to 1C.",
+        "una_banner_btn": "About una.md",
+        "una_title": "una.md — ERP for Moldovan business",
+        "una_tagline": "A Moldovan ERP platform — an alternative to 1C.",
+        "una_p1": "una.md is a business management platform built in Moldova, for "
+                  "Moldovan accounting and reporting practice. It is designed as an "
+                  "alternative to 1C for companies that want their ERP, their data and "
+                  "their support to stay in the country.",
+        "una_p2": "Contragenti — the tool you are using now — is a free part of that "
+                  "ecosystem. It is a working example of how una.md opens up: any "
+                  "program can read from it and write into it.",
+        "una_p3": "The counterparty you find here goes straight into the una.md "
+                  "directory as three linked blocks: the reference record, the company "
+                  "details and its bank accounts. No re-typing, no CSV in between.",
+        "una_adv_title": "What this changes in practice",
+        "una_a1": "Data stays in your own infrastructure — the database is yours, "
+                  "not a foreign cloud.",
+        "una_a2": "Built around Moldovan reality: IDNO, state registry date.gov.md, "
+                  "MDL bank accounts, local banks directory.",
+        "una_a3": "Three interface languages out of the box: Română, Русский, English.",
+        "una_a4": "Open integration: local HTTP API and XML, so 1C, a browser or any "
+                  "in-house program can talk to it.",
+        "una_a5": "Extensible by your own team — the schema and the integration points "
+                  "are documented, not sealed.",
+        "una_case": "This utility is the short version of the argument: a free program "
+                    "that fills your ERP with official registry data in one click. "
+                    "That is what an open platform makes possible.",
+        "una_btn_site": "Open una.md",
+        "una_btn_connect": "Set up connection",
+        "about_title": "Contragenti — overview",
+        "about_text": (
+            "Contragenti {version}\n"
+            "A free tool from the una.md ERP ecosystem\n\n"
+            "Desktop tool for searching Moldovan legal entities on the date.gov.md "
+            "open-data portal, with a local counterparty database.\n\n"
+            "Key features:\n"
+            "  - Online search by name / manager / IDNO via a real Chrome window\n"
+            "  - Company card: basic data, founders, budget debts\n"
+            "  - Local SQLite database ({count} companies stored) with offline search\n"
+            "  - Export to CSV / Excel / Markdown\n"
+            "  - Local HTTP API (port 9393) for integration with 1C and other software\n"
+            "  - Direct export of found companies to the una.md ERP "
+            "(TMS_UNIVERS / TMS_ORG / TMS_ORG_ACCOUNTS)\n"
+            "  - Three interface languages: English / Русский / Română\n\n"
+            "Use \"Run self-test\" below to verify the database, translations, "
+            "XML export and network subsystems."
+        ),
+        "selftest_title": "Contragenti — self-test",
+        "tms_bar_title": "una.md (ERP):",
+        "tms_auto": "Auto-send on search",
+        "tms_send": "Send selected to una.md",
+        "tms_settings": "una.md settings…",
+        "tms_title": "una.md export",
+        "tms_none_selected": "No rows are checked. Tick the box in the first column, "
+                             "or enable auto-send.",
+        "tms_busy": "A previous una.md export is still running.",
+        "tms_auto_on": "Auto-send to una.md is ON — new search results are exported automatically.",
+        "tms_auto_off": "Auto-send to una.md is OFF — tick rows and press “Send selected”.",
+        "tms_progress_run": "una.md: sending {n}/{total}…",
+        "tms_progress_done": "una.md: added {ok}, duplicates {dup}, errors {err}",
+        "tms_result": "una.md export finished: {total} processed — {ok} added, "
+                      "{dup} duplicates, {err} errors.",
+        "tms_settings_title": "una.md connection",
+        "tms_f_dsn": "DSN (host:port/service):",
+        "tms_f_user": "User (schema):",
+        "tms_f_pwd": "Password:",
+        "tms_f_client": "Oracle Client dir (optional):",
+        "tms_f_hub_user": "Shared hub schema (optional):",
+        "tms_f_hub_pwd": "Hub schema password:",
+        "tms_no_targets": "No schema is configured for writing.",
+        "tms_result_multi": "Export finished: {total} processed — {schemas}",
+        "tms_warn": "Some schemas are unavailable: {err}",
+        "tms_test": "Test", "tms_save": "Save", "tms_cancel": "Cancel",
+        "tms_test_ok": "Connected: {ver}",
+        "hub_send_now": "Send database to una.md hub",
+        "hub_not_set": "Hub address is not configured (hub_url).",
+        "hub_sending": "Sending the database to the hub…",
+        "hub_sent": "Database sent to the hub, batch {id} — import runs there.",
+        "hub_error": "Hub is unreachable: {err}",
         "exp_csv_all": "All DB → CSV…", "exp_xlsx_all": "All DB → Excel…",
         "exp_selected_md": "Selected → MD (folder)…", "exp_current_md": "Current → MD…",
         "no_details": "No details in DB. Click “Get data by IDNO”.",
@@ -157,6 +259,90 @@ TR = {
         "res_full_xml": "Полный XML",
         "menu_file": "Файл", "mi_hide": "Скрыть окно", "mi_quit": "Выход",
         "menu_export": "Экспорт", "menu_lang": "Язык",
+        "menu_help": "Справка", "mi_about": "О программе", "mi_selftest": "Запустить самопроверку",
+        "mi_una": "Об ERP una.md", "mi_una_site": "Открыть сайт una.md",
+        "una_banner": "Бесплатный инструмент экосистемы ERP una.md — "
+                      "молдавской альтернативы 1С.",
+        "una_banner_btn": "Об una.md",
+        "una_title": "una.md — ERP для молдавского бизнеса",
+        "una_tagline": "Молдавская ERP-платформа — альтернатива 1С.",
+        "una_p1": "una.md — платформа управления предприятием, сделанная в Молдове под "
+                  "молдавскую практику учёта и отчётности. Это альтернатива 1С для "
+                  "компаний, которым важно, чтобы ERP, данные и поддержка оставались "
+                  "внутри страны.",
+        "una_p2": "Contragenti — программа, которой вы сейчас пользуетесь, — бесплатная "
+                  "часть этой экосистемы. Это рабочий пример того, как una.md "
+                  "открыта наружу: из неё может читать и в неё может писать любая "
+                  "программа.",
+        "una_p3": "Найденный здесь контрагент попадает в справочник una.md сразу тремя "
+                  "связанными блоками: справочная запись, реквизиты и банковские счета. "
+                  "Без перенабора вручную и без промежуточных CSV.",
+        "una_adv_title": "Что это меняет на практике",
+        "una_a1": "Данные остаются в вашей инфраструктуре — база ваша, а не чужое облако.",
+        "una_a2": "Построена вокруг молдавских реалий: IDNO, госреестр date.gov.md, "
+                  "счета в MDL, справочник местных банков.",
+        "una_a3": "Три языка интерфейса сразу: Română, Русский, English.",
+        "una_a4": "Открытая интеграция: локальный HTTP-API и XML — с платформой могут "
+                  "говорить 1С, браузер или любая ваша программа.",
+        "una_a5": "Расширяется силами вашей команды: схема и точки интеграции "
+                  "задокументированы, а не закрыты.",
+        "una_case": "Эта утилита — короткая версия аргумента: бесплатная программа, "
+                    "которая одним нажатием наполняет ERP данными госреестра. Именно "
+                    "это и позволяет открытая платформа.",
+        "una_btn_site": "Открыть una.md",
+        "una_btn_connect": "Настроить подключение",
+        "about_title": "Contragenti — о программе",
+        "about_text": (
+            "Contragenti {version}\n"
+            "Бесплатный инструмент экосистемы ERP una.md\n\n"
+            "Настольная утилита для поиска юридических лиц Молдовы на портале "
+            "открытых данных date.gov.md, с локальной базой контрагентов.\n\n"
+            "Возможности:\n"
+            "  - Онлайн-поиск по названию / руководителю / IDNO через реальный Chrome\n"
+            "  - Карточка компании: базовые данные, учредители, задолженность перед бюджетом\n"
+            "  - Локальная база SQLite (сохранено компаний: {count}) с офлайн-поиском\n"
+            "  - Экспорт в CSV / Excel / Markdown\n"
+            "  - Локальный HTTP-API (порт 9393) для интеграции с 1С и другими программами\n"
+            "  - Прямая отправка найденных компаний в ERP una.md "
+            "(TMS_UNIVERS / TMS_ORG / TMS_ORG_ACCOUNTS)\n"
+            "  - Три языка интерфейса: English / Русский / Română\n\n"
+            "Кнопка «Запустить самопроверку» ниже проверит базу данных, переводы, "
+            "экспорт в XML и сетевую подсистему."
+        ),
+        "selftest_title": "Contragenti — самопроверка",
+        "tms_bar_title": "una.md (ERP):",
+        "tms_auto": "Авто-отправка при поиске",
+        "tms_send": "Отправить выбранные в una.md",
+        "tms_settings": "Настройки una.md…",
+        "tms_title": "Экспорт в una.md",
+        "tms_none_selected": "Ни одна строка не отмечена. Поставьте галочку в первом "
+                             "столбце или включите авто-отправку.",
+        "tms_busy": "Предыдущая отправка в una.md ещё выполняется.",
+        "tms_auto_on": "Авто-отправка в una.md ВКЛючена — новые результаты поиска "
+                       "отправляются автоматически.",
+        "tms_auto_off": "Авто-отправка в una.md ВЫКЛючена — отметьте строки и нажмите "
+                        "«Отправить выбранные».",
+        "tms_progress_run": "una.md: отправка {n}/{total}…",
+        "tms_progress_done": "una.md: добавлено {ok}, дубликатов {dup}, ошибок {err}",
+        "tms_result": "Экспорт в una.md завершён: обработано {total} — добавлено {ok}, "
+                      "дубликатов {dup}, ошибок {err}.",
+        "tms_settings_title": "Подключение к una.md",
+        "tms_f_dsn": "DSN (host:port/service):",
+        "tms_f_user": "Пользователь (схема):",
+        "tms_f_pwd": "Пароль:",
+        "tms_f_client": "Каталог Oracle Client (необязательно):",
+        "tms_f_hub_user": "Сводная схема хаба (необязательно):",
+        "tms_f_hub_pwd": "Пароль сводной схемы:",
+        "tms_no_targets": "Не настроена ни одна схема для записи.",
+        "tms_result_multi": "Экспорт завершён: обработано {total} — {schemas}",
+        "tms_warn": "Часть схем недоступна: {err}",
+        "tms_test": "Проверить", "tms_save": "Сохранить", "tms_cancel": "Отмена",
+        "tms_test_ok": "Подключено: {ver}",
+        "hub_send_now": "Отправить базу на хаб una.md",
+        "hub_not_set": "Адрес хаба не настроен (hub_url).",
+        "hub_sending": "Отправка базы на хаб…",
+        "hub_sent": "База отправлена на хаб, пакет {id} — импорт идёт там.",
+        "hub_error": "Хаб недоступен: {err}",
         "exp_csv_all": "Вся БД → CSV…", "exp_xlsx_all": "Вся БД → Excel…",
         "exp_selected_md": "Выбранные → MD (папка)…", "exp_current_md": "Текущую → MD…",
         "no_details": "В БД нет деталей. Нажмите «Данные по IDNO».",
@@ -216,6 +402,91 @@ TR = {
         "res_full_xml": "XML complet",
         "menu_file": "Fișier", "mi_hide": "Ascunde fereastra", "mi_quit": "Ieșire",
         "menu_export": "Export", "menu_lang": "Limbă",
+        "menu_help": "Ajutor", "mi_about": "Despre program", "mi_selftest": "Rulează auto-testul",
+        "mi_una": "Despre ERP una.md", "mi_una_site": "Deschide site-ul una.md",
+        "una_banner": "Instrument gratuit din ecosistemul ERP una.md — "
+                      "alternativa moldovenească la 1C.",
+        "una_banner_btn": "Despre una.md",
+        "una_title": "una.md — ERP pentru businessul din Moldova",
+        "una_tagline": "Platformă ERP moldovenească — alternativă la 1C.",
+        "una_p1": "una.md este o platformă de gestiune a întreprinderii, creată în "
+                  "Moldova, pentru practica locală de contabilitate și raportare. Este "
+                  "o alternativă la 1C pentru companiile care vor ca ERP-ul, datele și "
+                  "suportul să rămână în țară.",
+        "una_p2": "Contragenti — programul pe care îl folosiți acum — este o parte "
+                  "gratuită a acestui ecosistem. Este un exemplu concret al deschiderii "
+                  "una.md: orice program poate citi din ea și scrie în ea.",
+        "una_p3": "Contragentul găsit aici ajunge direct în nomenclatorul una.md prin "
+                  "trei blocuri legate: înregistrarea de nomenclator, datele de "
+                  "identificare și conturile bancare. Fără reintroducere manuală și "
+                  "fără fișiere CSV intermediare.",
+        "una_adv_title": "Ce schimbă acest lucru în practică",
+        "una_a1": "Datele rămân în infrastructura dumneavoastră — baza este a voastră, "
+                  "nu un cloud străin.",
+        "una_a2": "Construită în jurul realităților moldovenești: IDNO, registrul de stat "
+                  "date.gov.md, conturi în MDL, nomenclatorul băncilor locale.",
+        "una_a3": "Trei limbi de interfață din start: Română, Русский, English.",
+        "una_a4": "Integrare deschisă: API HTTP local și XML — cu platforma pot vorbi "
+                  "1C, browserul sau orice program al vostru.",
+        "una_a5": "Extensibilă de echipa voastră: schema și punctele de integrare sunt "
+                  "documentate, nu închise.",
+        "una_case": "Acest utilitar este varianta scurtă a argumentului: un program "
+                    "gratuit care umple ERP-ul cu date din registrul de stat printr-un "
+                    "singur clic. Exact asta permite o platformă deschisă.",
+        "una_btn_site": "Deschide una.md",
+        "una_btn_connect": "Configurează conexiunea",
+        "about_title": "Contragenti — despre program",
+        "about_text": (
+            "Contragenti {version}\n"
+            "Instrument gratuit din ecosistemul ERP una.md\n\n"
+            "Utilitar desktop pentru căutarea persoanelor juridice din Moldova pe "
+            "portalul de date deschise date.gov.md, cu bază locală de contragenți.\n\n"
+            "Funcționalități:\n"
+            "  - Căutare online după denumire / administrator / IDNO printr-o fereastră Chrome reală\n"
+            "  - Fișa companiei: date de bază, fondatori, restanțe față de buget\n"
+            "  - Bază locală SQLite ({count} companii salvate) cu căutare offline\n"
+            "  - Export în CSV / Excel / Markdown\n"
+            "  - API HTTP local (port 9393) pentru integrare cu 1C și alte programe\n"
+            "  - Export direct al companiilor găsite în ERP una.md "
+            "(TMS_UNIVERS / TMS_ORG / TMS_ORG_ACCOUNTS)\n"
+            "  - Trei limbi de interfață: English / Русский / Română\n\n"
+            "Butonul „Rulează auto-testul” de mai jos verifică baza de date, traducerile, "
+            "exportul XML și subsistemul de rețea."
+        ),
+        "selftest_title": "Contragenti — auto-test",
+        "tms_bar_title": "una.md (ERP):",
+        "tms_auto": "Trimitere automată la căutare",
+        "tms_send": "Trimite selectate în una.md",
+        "tms_settings": "Setări una.md…",
+        "tms_title": "Export în una.md",
+        "tms_none_selected": "Nicio linie bifată. Bifați caseta din prima coloană "
+                             "sau activați trimiterea automată.",
+        "tms_busy": "Un export una.md anterior încă rulează.",
+        "tms_auto_on": "Trimiterea automată în una.md este ACTIVĂ — rezultatele noi "
+                       "sunt exportate automat.",
+        "tms_auto_off": "Trimiterea automată în una.md este OPRITĂ — bifați liniile și "
+                        "apăsați „Trimite selectate”.",
+        "tms_progress_run": "una.md: se trimite {n}/{total}…",
+        "tms_progress_done": "una.md: adăugate {ok}, duplicate {dup}, erori {err}",
+        "tms_result": "Export una.md finalizat: {total} procesate — {ok} adăugate, "
+                      "{dup} duplicate, {err} erori.",
+        "tms_settings_title": "Conexiune una.md",
+        "tms_f_dsn": "DSN (host:port/service):",
+        "tms_f_user": "Utilizator (schemă):",
+        "tms_f_pwd": "Parolă:",
+        "tms_f_client": "Director Oracle Client (opțional):",
+        "tms_f_hub_user": "Schema centralizată a hubului (opțional):",
+        "tms_f_hub_pwd": "Parola schemei hubului:",
+        "tms_no_targets": "Nu este configurată nicio schemă pentru scriere.",
+        "tms_result_multi": "Export finalizat: {total} procesate — {schemas}",
+        "tms_warn": "O parte din scheme sunt indisponibile: {err}",
+        "tms_test": "Testează", "tms_save": "Salvează", "tms_cancel": "Anulează",
+        "tms_test_ok": "Conectat: {ver}",
+        "hub_send_now": "Trimite baza către hubul una.md",
+        "hub_not_set": "Adresa hubului nu este configurată (hub_url).",
+        "hub_sending": "Se trimite baza către hub…",
+        "hub_sent": "Baza a fost trimisă, pachetul {id} — importul rulează acolo.",
+        "hub_error": "Hubul nu este accesibil: {err}",
         "exp_csv_all": "Toată BD → CSV…", "exp_xlsx_all": "Toată BD → Excel…",
         "exp_selected_md": "Selectate → MD (folder)…", "exp_current_md": "Curentă → MD…",
         "no_details": "BD nu are detalii. Apasă „Date după IDNO”.",
@@ -724,23 +995,36 @@ def build_card_html(rec, xml, lang="ru"):
 class BrowserWorker(threading.Thread):
     """Онлайн-запрос через Chrome в отдельном потоке."""
 
-    def __init__(self, mode, value, out_queue, tr, headless=False):
+    def __init__(self, mode, value, out_queue, tr, headless=False, shots_dir=None):
         super().__init__(daemon=True)
         self.mode = mode
         self.value = value
         self.out = out_queue
         self.tr = tr
         self.headless = headless
+        self.shots_dir = shots_dir
 
     def _status(self, key):
         self.out.put(("status", self.tr.get(key, key)))
+
+    def _shot(self, driver, name):
+        """Снимок страницы портала средствами самого браузера (--shots-dir):
+        не зависит от рабочего стола и перекрытия окон."""
+        if not self.shots_dir:
+            return
+        try:
+            os.makedirs(self.shots_dir, exist_ok=True)
+            driver.save_screenshot(os.path.join(self.shots_dir, f"{name}.png"))
+        except Exception:  # noqa: BLE001
+            pass
 
     def _make_driver(self):
         options = Options()
         if self.headless:
             options.add_argument("--headless=new")
         options.add_argument("--window-size=1200,900")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        # excludeSwitches=["enable-automation"] убрано: Chrome 152 с этой
+        # опцией завершается сразу после старта (SessionNotCreatedException)
         driver = webdriver.Chrome(options=options)
         driver.set_page_load_timeout(60)
         return driver
@@ -755,6 +1039,8 @@ class BrowserWorker(threading.Thread):
             else:
                 self._run_details(driver)
         except TimeoutException:
+            if driver is not None:
+                self._shot(driver, "sdk_0_portal_timeout")   # что показал портал (капча?)
             self.out.put(("error", self.tr.get("err_timeout", "Timeout")))
         except Exception as exc:  # noqa: BLE001
             self.out.put(("error", f"{type(exc).__name__}: {exc}"))
@@ -765,6 +1051,28 @@ class BrowserWorker(threading.Thread):
                 except Exception:  # noqa: BLE001
                     pass
 
+    def _dismiss_cookie_banner(self, driver):
+        """Закрыть баннер cookie — иначе он перекрывает кнопку отправки формы.
+
+        Выбираем «только необходимые» (btnNecessary): минимум cookie,
+        аналитические и рекламные не принимаем.
+        """
+        for sel in ("#btnNecessary", "#btnAcceptNecessary", ".cookie-btn--outline"):
+            try:
+                btns = driver.find_elements(By.CSS_SELECTOR, sel)
+            except Exception:  # noqa: BLE001
+                continue
+            for btn in btns:
+                try:
+                    if btn.is_displayed():
+                        driver.execute_script("arguments[0].click();", btn)
+                        WebDriverWait(driver, 5).until_not(
+                            EC.visibility_of(btn))
+                        return True
+                except Exception:  # noqa: BLE001
+                    continue
+        return False
+
     def _fill_and_submit(self, driver, field_name):
         wait = WebDriverWait(driver, 30)
         self._status("st_form")
@@ -772,8 +1080,14 @@ class BrowserWorker(threading.Thread):
             (By.CSS_SELECTOR, f"#requestForm input[name='{field_name}']")))
         field.clear()
         field.send_keys(self.value)
+        self._dismiss_cookie_banner(driver)
         self._status("st_submit")
-        wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#access-service"))).click()
+        btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#access-service")))
+        try:
+            btn.click()
+        except Exception:  # noqa: BLE001
+            # Что-то всё же перекрыло кнопку — жмём напрямую через DOM.
+            driver.execute_script("arguments[0].click();", btn)
 
     def _run_search(self, driver):
         self._status("st_open_search")
@@ -788,6 +1102,7 @@ class BrowserWorker(threading.Thread):
                 lambda d: len(table.find_elements(By.CSS_SELECTOR, "tbody tr")) > 0)
         except TimeoutException:
             pass
+        self._shot(driver, "sdk_1_portal_search_results")
         self.out.put(("search_done", parse_results(table.get_attribute("outerHTML"))))
 
     def _run_details(self, driver):
@@ -808,6 +1123,7 @@ class BrowserWorker(threading.Thread):
             "document.querySelectorAll('#fragments-accordion .accordion-collapse')"
             ".forEach(function(e){e.classList.add('show'); e.style.height='auto';"
             "e.style.display='block';});")
+        self._shot(driver, "sdk_2_portal_details")
 
         fragments, text_parts = [], []
         for item in accordion.find_elements(By.CSS_SELECTOR, ".accordion-item"):
@@ -832,6 +1148,92 @@ class BrowserWorker(threading.Thread):
             "idno": self.value, "fragments": fragments, "basic": basic,
             "text": "\n\n".join(text_parts), "founders": founders, "debts": debts,
         }))
+
+
+# ─────────────────────── интеграция с ERP una.md ───────────────────────
+
+TMS_CONFIG_PATH = os.path.join(_app_dir(), "tms_config.json")
+
+
+def tms_load_config():
+    """Прочитать параметры подключения к una.md (без пароля в коде)."""
+    cfg = {"dsn": "192.168.0.24:1521/clouddev.world", "user": "paralax",
+           "password": "", "client_dir": "",
+           # сводная схема хаба: пишем в неё тем же подключением, что и в свою
+           "hub_schema_user": "", "hub_schema_password": "",
+           # хаб сбора баз по HTTP: пустой URL — фоновая отправка выключена
+           "hub_url": "", "hub_key": "", "hub_interval": 900}
+    try:
+        with open(TMS_CONFIG_PATH, encoding="utf-8") as f:
+            cfg.update(json.load(f))
+    except Exception:  # noqa: BLE001
+        pass
+    # переменные окружения имеют приоритет над файлом
+    for key, env in (("dsn", "TMS_DSN"), ("user", "TMS_USER"),
+                     ("password", "TMS_PASSWORD"), ("client_dir", "ORACLE_CLIENT_DIR"),
+                     ("hub_url", "HUB_URL"), ("hub_key", "HUB_API_KEY")):
+        if os.environ.get(env):
+            cfg[key] = os.environ[env]
+    return cfg
+
+
+def tms_save_config(cfg):
+    with open(TMS_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+
+class TmsExportWorker(threading.Thread):
+    """Асинхронная отправка организаций в una.md — по одной записи.
+
+    Организация пишется сразу во все настроенные схемы: свою рабочую и
+    сводную схему хаба. Каждая схема получает свою транзакцию, поэтому
+    недоступность одной не отменяет запись в остальные.
+
+    Внутри схемы запись раскладывается тремя автономными блоками
+    (TMS_UNIVERS → TMS_ORG → TMS_ORG26); прогресс и итог кладутся
+    в очередь Tk-потока.
+    """
+
+    def __init__(self, records, config, out_queue, tr):
+        super().__init__(daemon=True)
+        self.records = list(records)
+        self.config = config
+        self.out = out_queue
+        self.tr = tr
+
+    def run(self):
+        try:
+            import tms_multi
+        except Exception as exc:  # noqa: BLE001
+            self.out.put(("tms_error", f"tms_multi import: {exc}"))
+            return
+
+        targets = tms_multi.targets_from_config(self.config)
+        if not targets:
+            self.out.put(("tms_error", "не задана ни одна схема для записи"))
+            return
+
+        mx = tms_multi.MultiExporter(targets).connect()
+        if not mx.ready:
+            errs = "; ".join(f"{n}: {e}" for n, e in mx.errors.items())
+            self.out.put(("tms_error", errs or "не удалось подключиться"))
+            return
+        if mx.errors:
+            # часть схем недоступна — работаем с остальными, но сообщаем
+            self.out.put(("tms_warn", "; ".join(
+                f"{n}: {e}" for n, e in mx.errors.items())))
+
+        schemas = list(mx.exporters)      # close() очистит список
+        done = 0
+        try:
+            for rec in self.records:
+                report = mx.export_one(rec)
+                done += 1
+                self.out.put(("tms_progress", {
+                    "n": done, "total": len(self.records), "report": report}))
+        finally:
+            mx.close()
+        self.out.put(("tms_done", {"total": len(self.records), "schemas": schemas}))
 
 
 # ────────────────────────────── HTTP API ──────────────────────────────
@@ -1013,6 +1415,7 @@ class App(tk.Tk):
             self._start_server()
         if not self.args.no_tray:
             self._start_tray()
+        self._start_hub_uploader()
         # стартовый запрос из командной строки
         if self.args.q:
             if self.args.pick:
@@ -1039,17 +1442,27 @@ class App(tk.Tk):
         self.export_menu.add_separator()
         self.export_menu.add_command(label="", command=self.export_selected_md)
         self.export_menu.add_command(label="", command=self.export_md_current)
+        self.export_menu.add_separator()
+        self.export_menu.add_command(label="", command=self.on_hub_send_now)
         self.menubar.add_cascade(menu=self.export_menu, label="")
         self.lang_menu = tk.Menu(self.menubar, tearoff=0)
         for code in LANGS:
             self.lang_menu.add_command(label=LANG_NAMES[code],
                                        command=lambda c=code: self.set_lang(c))
         self.menubar.add_cascade(menu=self.lang_menu, label="")
+        self.help_menu = tk.Menu(self.menubar, tearoff=0)
+        self.help_menu.add_command(label="", command=self._show_about)
+        self.help_menu.add_command(label="", command=self._run_selftest_ui)
+        self.help_menu.add_separator()
+        self.help_menu.add_command(label="", command=self._show_una)
+        self.help_menu.add_command(label="", command=self._open_una_site)
+        self.menubar.add_cascade(menu=self.help_menu, label="")
         self.config(menu=self.menubar)
 
     # ── интерфейс ──
 
     def _build_ui(self):
+        self._build_una_banner()
         paned = ttk.Panedwindow(self, orient="vertical")
         paned.pack(fill="both", expand=True)
 
@@ -1069,6 +1482,50 @@ class App(tk.Tk):
         self.status = tk.StringVar()
         ttk.Label(self, textvariable=self.status, relief="sunken", anchor="w",
                   padding=(6, 3)).pack(fill="x", side="bottom")
+        self._build_tms_bar()
+
+    def _build_una_banner(self):
+        """Верхняя полоса бренда: чей это инструмент и куда ведёт ERP."""
+        bar = tk.Frame(self, bg=UNA_BANNER_BG)
+        bar.pack(fill="x", side="top")
+        inner = tk.Frame(bar, bg=UNA_BANNER_BG)
+        inner.pack(fill="x", padx=10, pady=5)
+        tk.Label(inner, text="una.md", bg=UNA_BANNER_BG, fg=UNA_ACCENT,
+                 font=("", 12, "bold")).pack(side="left")
+        self.una_banner_lbl = tk.Label(inner, bg=UNA_BANNER_BG, fg="#274b45",
+                                       font=("", 9))
+        self.una_banner_lbl.pack(side="left", padx=(10, 0))
+        self.una_banner_btn = ttk.Button(inner, command=self._show_una)
+        self.una_banner_btn.pack(side="right")
+
+    def _build_tms_bar(self):
+        """Панель интеграции с una.md: авто-режим, выбор галочками, отправка."""
+        bar = ttk.Frame(self, padding=(8, 5))
+        bar.pack(fill="x", side="bottom")
+        self.tms_title_lbl = ttk.Label(bar, font=("", 9, "bold"))
+        self.tms_title_lbl.pack(side="left", padx=(0, 10))
+
+        self.tms_auto_var = tk.BooleanVar(value=False)
+        self.tms_auto_chk = ttk.Checkbutton(bar, variable=self.tms_auto_var,
+                                            command=self._on_tms_auto_toggle)
+        self.tms_auto_chk.pack(side="left", padx=(0, 12))
+
+        self.tms_send_btn = ttk.Button(bar, command=self.on_tms_send_selected,
+                                       state="disabled")
+        self.tms_send_btn.pack(side="left")
+        self.tms_count = tk.StringVar(value="")
+        ttk.Label(bar, textvariable=self.tms_count, width=4,
+                  foreground="#0b6e5f").pack(side="left", padx=(4, 8))
+        self.tms_all_btn = ttk.Button(bar, width=3, command=self._on_tms_check_all)
+        self.tms_all_btn.pack(side="left")
+        self.tms_none_btn = ttk.Button(bar, width=3, command=self._on_tms_check_none)
+        self.tms_none_btn.pack(side="left", padx=(2, 12))
+
+        self.tms_cfg_btn = ttk.Button(bar, command=self._tms_settings_dialog)
+        self.tms_cfg_btn.pack(side="right")
+        self.tms_progress = tk.StringVar(value="")
+        ttk.Label(bar, textvariable=self.tms_progress,
+                  foreground="#69808f").pack(side="right", padx=(0, 10))
 
     def _build_search_tab(self, parent, online):
         bar = ttk.Frame(parent, padding=(8, 8, 8, 4))
@@ -1100,7 +1557,10 @@ class App(tk.Tk):
 
         tf = ttk.Frame(parent, padding=(8, 0, 8, 8))
         tf.pack(fill="both", expand=True)
-        tree = ttk.Treeview(tf, columns=COLUMNS, show="headings", selectmode="extended")
+        # show="tree headings": колонка #0 хранит галочку выбора для una.md
+        tree = ttk.Treeview(tf, columns=COLUMNS, show="tree headings",
+                            selectmode="extended")
+        tree.column("#0", width=34, minwidth=34, stretch=False, anchor="center")
         widths = {"idno": 150, "denumire": 430, "administratori": 280, "inregistrare": 100}
         for col in COLUMNS:
             tree.column(col, width=widths[col], anchor="w")
@@ -1113,7 +1573,10 @@ class App(tk.Tk):
         tf.rowconfigure(0, weight=1)
         tf.columnconfigure(0, weight=1)
         tree.bind("<<TreeviewSelect>>", lambda e, tv=tree: self._on_row_select(tv))
+        tree.bind("<Button-1>", lambda e, tv=tree: self._on_tree_click(tv, e))
         tree._idno_map = {}
+        tree._recs = {}        # iid → полная запись (для отправки в una.md)
+        tree._checked = set()  # iid отмеченных галочкой строк
         return tree
 
     def _build_detail(self, parent):
@@ -1172,12 +1635,21 @@ class App(tk.Tk):
         self.menubar.entryconfig(1, label=self.t("menu_file"))
         self.menubar.entryconfig(2, label=self.t("menu_export"))
         self.menubar.entryconfig(3, label=self.t("menu_lang"))
+        self.menubar.entryconfig(4, label=self.t("menu_help"))
         self.file_menu.entryconfig(0, label=self.t("mi_hide"))
         self.file_menu.entryconfig(1, label=self.t("mi_quit"))
+        self.help_menu.entryconfig(0, label=self.t("mi_about"))
+        self.help_menu.entryconfig(1, label=self.t("mi_selftest"))
+        self.help_menu.entryconfig(3, label=self.t("mi_una"))
+        self.help_menu.entryconfig(4, label=self.t("mi_una_site"))
+        if hasattr(self, "una_banner_lbl"):
+            self.una_banner_lbl.config(text=self.t("una_banner"))
+            self.una_banner_btn.config(text=self.t("una_banner_btn"))
         self.export_menu.entryconfig(0, label=self.t("exp_csv_all"))
         self.export_menu.entryconfig(1, label=self.t("exp_xlsx_all"))
         self.export_menu.entryconfig(3, label=self.t("exp_selected_md"))
         self.export_menu.entryconfig(4, label=self.t("exp_current_md"))
+        self.export_menu.entryconfig(6, label=self.t("hub_send_now"))
         self.notebook.tab(0, text=self.t("tab_online"))
         self.notebook.tab(1, text=self.t("tab_offline"))
         self.online_label.config(text=self.t("search_label"))
@@ -1198,12 +1670,274 @@ class App(tk.Tk):
         for tree in (self.tree_online, self.tree_offline):
             for col in COLUMNS:
                 tree.heading(col, text=self.t("col_" + col))
+            tree.heading("#0", text=CHECK_ON)
+        if hasattr(self, "tms_title_lbl"):
+            self.tms_title_lbl.config(text=self.t("tms_bar_title"))
+            self.tms_auto_chk.config(text=self.t("tms_auto"))
+            self.tms_send_btn.config(text=self.t("tms_send"))
+            self.tms_all_btn.config(text=CHECK_ON)
+            self.tms_none_btn.config(text=CHECK_OFF)
+            self.tms_cfg_btn.config(text=self.t("tms_settings"))
         if not self.status.get():
             self.status.set(self.t("status_ready"))
 
     def set_lang(self, code):
         self.lang = code
         self.retranslate()
+
+    # ── интеграция с una.md (ERP) ──
+
+    def _tms_config(self):
+        if getattr(self, "_tms_cfg", None) is None:
+            self._tms_cfg = tms_load_config()
+        return self._tms_cfg
+
+    def _start_hub_uploader(self):
+        """Фоновая отправка локальной базы на хаб una.md (если настроен)."""
+        self.hub_uploader = None
+        cfg = self._tms_config()
+        url = (cfg.get("hub_url") or "").strip()
+        if not url:
+            return
+        try:
+            import hub_client
+        except Exception:  # noqa: BLE001
+            return
+        self.hub_uploader = hub_client.HubUploader(
+            DB_PATH, url=url, api_key=cfg.get("hub_key") or None,
+            interval=int(cfg.get("hub_interval") or 900), out_queue=self.queue)
+        self.hub_uploader.start()
+
+    def on_hub_send_now(self):
+        """Отправить базу на хаб немедленно, не дожидаясь периода."""
+        cfg = self._tms_config()
+        url = (cfg.get("hub_url") or "").strip()
+        if not url:
+            messagebox.showinfo(self.t("tms_title"), self.t("hub_not_set"))
+            return
+        try:
+            import hub_client
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror(self.t("tms_title"), str(exc))
+            return
+
+        def worker():
+            try:
+                res = hub_client.upload_once(DB_PATH, url, cfg.get("hub_key") or None)
+                self.queue.put(("hub_sent", res))
+            except Exception as exc:  # noqa: BLE001
+                self.queue.put(("hub_error", str(exc)))
+
+        self.status.set(self.t("hub_sending"))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_tms_auto_toggle(self):
+        # включение авто-режима не действует задним числом — только на будущие
+        # результаты поиска; сообщим пользователю текущий режим в статусе.
+        self.status.set(self.t("tms_auto_on") if self.tms_auto_var.get()
+                        else self.t("tms_auto_off"))
+
+    def _on_tms_check_all(self):
+        self._set_all_checks(self._current_tree(), True)
+
+    def _on_tms_check_none(self):
+        self._set_all_checks(self._current_tree(), False)
+
+    def on_tms_send_selected(self):
+        """Отправить в una.md записи, отмеченные галочкой в текущей вкладке."""
+        tree = self._current_tree()
+        recs = [tree._recs[iid] for iid in tree._checked if iid in tree._recs]
+        if not recs:
+            messagebox.showinfo(self.t("tms_title"), self.t("tms_none_selected"))
+            return
+        self._tms_send(recs)
+
+    def _tms_send(self, records):
+        """Общий запуск асинхронной отправки списка записей в una.md."""
+        if getattr(self, "_tms_worker", None) and self._tms_worker.is_alive():
+            messagebox.showinfo(self.t("tms_title"), self.t("tms_busy"))
+            return
+        cfg = self._tms_config()
+        if not cfg.get("password"):
+            if not self._tms_settings_dialog():
+                return
+            cfg = self._tms_config()
+            if not cfg.get("password"):
+                return
+        self._tms_stats = {"ok": 0, "dup": 0, "err": 0, "by_schema": {}}
+        self.tms_progress.set(self.t("tms_progress_run", n=0, total=len(records)))
+        self._tms_worker = TmsExportWorker(records, cfg, self.queue, TR[self.lang])
+        self._tms_worker.start()
+
+    def _on_tms_progress(self, payload):
+        """Счёт ведём по схемам: одна запись даёт результат в каждой из них."""
+        rep = payload["report"]
+        st = self._tms_stats
+        for name, res in (rep.get("targets") or {}).items():
+            per = st["by_schema"].setdefault(name, {"ok": 0, "dup": 0, "err": 0})
+            status = res.get("status")
+            if status == "ok":
+                per["ok"] += 1
+                st["ok"] += 1
+            elif status == "duplicate":
+                per["dup"] += 1
+                st["dup"] += 1
+            else:
+                per["err"] += 1
+                st["err"] += 1
+        self.tms_progress.set(self.t("tms_progress_run", n=payload["n"],
+                                     total=payload["total"]))
+
+    def _on_tms_done(self, payload):
+        st = self._tms_stats
+        self.tms_progress.set(self.t("tms_progress_done",
+                                     ok=st["ok"], dup=st["dup"], err=st["err"]))
+        # в статусе — разбивка по схемам: куда именно легло
+        parts = [f"{name}: +{v['ok']}/={v['dup']}" + (f"/!{v['err']}" if v["err"] else "")
+                 for name, v in st["by_schema"].items()]
+        self.status.set(self.t("tms_result_multi", total=payload["total"],
+                                schemas=";  ".join(parts) or "—"))
+
+    def _tms_settings_dialog(self):
+        """Диалог параметров подключения к una.md. Возвращает True при сохранении."""
+        cfg = self._tms_config()
+        win = tk.Toplevel(self)
+        win.title(self.t("tms_settings_title"))
+        win.transient(self)
+        win.resizable(False, False)
+        win.grab_set()
+        frm = ttk.Frame(win, padding=14)
+        frm.pack(fill="both", expand=True)
+        fields = [("dsn", "tms_f_dsn", False), ("user", "tms_f_user", False),
+                  ("password", "tms_f_pwd", True),
+                  ("hub_schema_user", "tms_f_hub_user", False),
+                  ("hub_schema_password", "tms_f_hub_pwd", True),
+                  ("client_dir", "tms_f_client", False)]
+        vars_ = {}
+        for i, (key, lkey, secret) in enumerate(fields):
+            ttk.Label(frm, text=self.t(lkey)).grid(row=i, column=0, sticky="w", pady=4)
+            v = tk.StringVar(value=cfg.get(key, ""))
+            vars_[key] = v
+            ttk.Entry(frm, textvariable=v, width=42,
+                      show="•" if secret else "").grid(row=i, column=1, pady=4, padx=(8, 0))
+        saved = {"ok": False}
+
+        def do_test():
+            """Проверяем все настроенные схемы — и свою, и сводную."""
+            self._tms_apply_cfg(vars_)
+            try:
+                import tms_multi
+                targets = tms_multi.targets_from_config(self._tms_cfg)
+                if not targets:
+                    messagebox.showwarning(self.t("tms_settings_title"),
+                                           self.t("tms_no_targets"), parent=win)
+                    return
+                mx = tms_multi.MultiExporter(targets).connect()
+                lines = [f"{name}: {ver[:52]}" for name, ver in mx.ping_all().items()]
+                mx.close()
+                messagebox.showinfo(self.t("tms_settings_title"),
+                                    "\n".join(lines), parent=win)
+            except Exception as exc:  # noqa: BLE001
+                messagebox.showerror(self.t("tms_settings_title"),
+                                     str(exc), parent=win)
+
+        def do_save():
+            self._tms_apply_cfg(vars_)
+            tms_save_config(self._tms_cfg)
+            saved["ok"] = True
+            win.destroy()
+
+        btns = ttk.Frame(frm)
+        btns.grid(row=len(fields), column=0, columnspan=2, pady=(12, 0), sticky="e")
+        ttk.Button(btns, text=self.t("tms_test"), command=do_test).pack(side="left", padx=4)
+        ttk.Button(btns, text=self.t("tms_save"), command=do_save).pack(side="left", padx=4)
+        ttk.Button(btns, text=self.t("tms_cancel"),
+                   command=win.destroy).pack(side="left", padx=4)
+        win.wait_window()
+        return saved["ok"]
+
+    def _tms_apply_cfg(self, vars_):
+        self._tms_cfg = {k: v.get().strip() for k, v in vars_.items()}
+
+    # ── самопрезентация и самопроверка ──
+
+    def _show_about(self):
+        """Окно «О программе»: краткая самопрезентация возможностей приложения."""
+        win = tk.Toplevel(self)
+        win.title(self.t("about_title"))
+        win.transient(self)
+        win.resizable(False, False)
+        txt = tk.Text(win, width=64, height=18, wrap="word", padx=8, pady=8)
+        txt.insert("1.0", self.t("about_text", version=APP_VERSION, count=db_count()))
+        txt.config(state="disabled")
+        txt.pack(padx=12, pady=(12, 6), fill="both", expand=True)
+        ttk.Button(win, text=self.t("mi_selftest"),
+                   command=self._run_selftest_ui).pack(pady=(0, 12))
+        win.grab_set()
+        self._about_win = win
+        return win
+
+    def _run_selftest_ui(self):
+        """Запускает встроенную самопроверку и показывает отчёт пользователю."""
+        ok, report = run_selftest()
+        (messagebox.showinfo if ok else messagebox.showwarning)(
+            self.t("selftest_title"), report)
+
+    # ── витрина ERP una.md ──
+
+    def _open_una_site(self):
+        import webbrowser
+        webbrowser.open(UNA_URL)
+
+    def _show_una(self):
+        """Окно «Об ERP una.md»: чем платформа отличается от 1С и что даёт бизнесу.
+
+        Contragenti — бесплатный инструмент экосистемы una.md, поэтому окно
+        доступно из меню «Справка» и из баннера главного окна.
+        """
+        win = tk.Toplevel(self)
+        win.title(self.t("una_title"))
+        win.transient(self)
+        win.resizable(False, False)
+
+        head = ttk.Frame(win, padding=(16, 14, 16, 6))
+        head.pack(fill="x")
+        ttk.Label(head, text="una.md", font=("", 20, "bold"),
+                  foreground=UNA_ACCENT).pack(anchor="w")
+        ttk.Label(head, text=self.t("una_tagline"), font=("", 10),
+                  foreground="#555").pack(anchor="w", pady=(2, 0))
+
+        body = ttk.Frame(win, padding=(16, 4, 16, 8))
+        body.pack(fill="both", expand=True)
+        for key in ("una_p1", "una_p2", "una_p3"):
+            ttk.Label(body, text=self.t(key), wraplength=560,
+                      justify="left").pack(anchor="w", pady=(0, 8))
+
+        adv = ttk.Labelframe(body, text=self.t("una_adv_title"), padding=10)
+        adv.pack(fill="x", pady=(2, 6))
+        for key in ("una_a1", "una_a2", "una_a3", "una_a4", "una_a5"):
+            row = ttk.Frame(adv)
+            row.pack(fill="x", anchor="w", pady=1)
+            ttk.Label(row, text="•", foreground=UNA_ACCENT,
+                      font=("", 11, "bold")).pack(side="left", padx=(0, 6))
+            ttk.Label(row, text=self.t(key), wraplength=520,
+                      justify="left").pack(side="left", anchor="w")
+
+        ttk.Label(body, text=self.t("una_case"), wraplength=560, justify="left",
+                  foreground="#333").pack(anchor="w", pady=(2, 0))
+
+        btns = ttk.Frame(win, padding=(16, 0, 16, 14))
+        btns.pack(fill="x")
+        ttk.Button(btns, text=self.t("una_btn_site"),
+                   command=self._open_una_site).pack(side="left")
+        ttk.Button(btns, text=self.t("una_btn_connect"),
+                   command=lambda: (win.destroy(), self._tms_settings_dialog())
+                   ).pack(side="left", padx=6)
+        ttk.Button(btns, text=self.t("tms_cancel"),
+                   command=win.destroy).pack(side="right")
+        win.grab_set()
+        self._una_win = win
+        return win
 
     # ── общие действия ──
 
@@ -1230,7 +1964,8 @@ class App(tk.Tk):
         self._busy(True)
         self.status.set(self.t("status_search"))
         self.worker = BrowserWorker("search", query, self.queue, TR[self.lang],
-                                    headless=self.headless_var.get())
+                                    headless=self.headless_var.get(),
+                                        shots_dir=getattr(self.args, "shots_dir", None))
         self.worker.start()
 
     def on_db_find(self):
@@ -1252,7 +1987,8 @@ class App(tk.Tk):
             return
         self._busy(True)
         self.worker = BrowserWorker("details", idno, self.queue, TR[self.lang],
-                                    headless=self.headless_var.get())
+                                    headless=self.headless_var.get(),
+                                        shots_dir=getattr(self.args, "shots_dir", None))
         self.worker.start()
 
     def on_xml(self):
@@ -1300,7 +2036,29 @@ class App(tk.Tk):
                 elif kind == "error":
                     self._busy(False)
                     self.status.set(self.t("status_error"))
-                    messagebox.showerror(self.t("status_error"), payload)
+                    if getattr(self, "_oneshot", False):
+                        # one-shot (SDK): никаких модальных окон — ошибку в stderr,
+                        # вызывающая программа увидит отсутствие XML и код выхода 3
+                        sys.stderr.write(f"pick error: {payload}\n")
+                        sys.stderr.flush()
+                        self._oneshot = False
+                        self._exit_code = 3
+                        self.after(200, self.do_quit)
+                    else:
+                        messagebox.showerror(self.t("status_error"), payload)
+                elif kind == "tms_progress":
+                    self._on_tms_progress(payload)
+                elif kind == "tms_done":
+                    self._on_tms_done(payload)
+                elif kind == "tms_error":
+                    self.tms_progress.set("")
+                    messagebox.showerror(self.t("tms_title"), payload)
+                elif kind == "tms_warn":
+                    self.status.set(self.t("tms_warn", err=str(payload)[:90]))
+                elif kind == "hub_sent":
+                    self.status.set(self.t("hub_sent", id=payload.get("batch_id", "?")))
+                elif kind == "hub_error":
+                    self.status.set(self.t("hub_error", err=str(payload)[:80]))
                 elif kind == "pick":
                     self._begin_pick(payload)
                 elif kind == "open":
@@ -1327,6 +2085,38 @@ class App(tk.Tk):
         else:
             self._populate(self.tree_online, rows)
             self.status.set(self.t("status_online", n=len(rows)))
+        # авто-режим una.md: сразу отправить свежие результаты поиска
+        if getattr(self, "tms_auto_var", None) and self.tms_auto_var.get() and rows:
+            self._tms_send(rows)
+        # --pick --auto-pick: интеграционный тест SDK — вернуть первую найденную
+        # карточку без участия пользователя (детали дозагрузятся в resolve_pick)
+        if (getattr(self, "_oneshot", False) and getattr(self.args, "auto_pick", False)
+                and rows):
+            first = (rows[0].get("idno") or "").strip()
+            if first:
+                self.status.set(f"auto-pick → {first}")
+                self.after(400, lambda: self._self_shot("sdk_3_contragenti_results"))
+                self._auto_pick_when_idle(first)
+
+    def _self_shot(self, name):
+        """Снимок собственного окна (--shots-dir) через PrintWindow изнутри процесса."""
+        shots_dir = getattr(self.args, "shots_dir", None)
+        if not shots_dir:
+            return
+        try:
+            os.makedirs(shots_dir, exist_ok=True)
+            self.update_idletasks()
+            capture_window_win32(self, os.path.join(shots_dir, f"{name}.png"))
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _auto_pick_when_idle(self, idno):
+        """Ждём, пока поток поиска закроет Chrome: иначе resolve_pick решит,
+        что воркер занят, и вернёт карточку без деталей (адрес, форма, долги)."""
+        if self._worker_active():
+            self.after(300, lambda: self._auto_pick_when_idle(idno))
+        else:
+            self.resolve_pick(idno)
 
     def _on_details_done(self, data):
         self._busy(False)
@@ -1346,12 +2136,51 @@ class App(tk.Tk):
         for iid in tree.get_children():
             tree.delete(iid)
         tree._idno_map.clear()
+        tree._recs.clear()
+        tree._checked.clear()
         for rec in records:
             values = (rec.get("idno", "") or "", rec.get("denumire", "") or "",
                       rec.get("administratori", "") or "", rec.get("inregistrare", "") or "")
-            iid = tree.insert("", "end", values=values)
+            iid = tree.insert("", "end", text=CHECK_OFF, values=values)
+            tree._recs[iid] = rec
             if rec.get("idno"):
                 tree._idno_map[iid] = rec["idno"]
+
+    def _on_tree_click(self, tree, event):
+        """Клик по колонке-галочке (#0) переключает отметку строки."""
+        if tree.identify_region(event.x, event.y) != "tree":
+            return
+        iid = tree.identify_row(event.y)
+        if not iid:
+            return
+        self._toggle_check(tree, iid)
+        return "break"
+
+    def _toggle_check(self, tree, iid):
+        if iid in tree._checked:
+            tree._checked.discard(iid)
+            tree.item(iid, text=CHECK_OFF)
+        else:
+            tree._checked.add(iid)
+            tree.item(iid, text=CHECK_ON)
+        self._update_tms_count()
+
+    def _current_tree(self):
+        return self.tree_online if self.notebook.index("current") == 0 else self.tree_offline
+
+    def _set_all_checks(self, tree, on):
+        tree._checked.clear()
+        for iid in tree.get_children():
+            tree.item(iid, text=CHECK_ON if on else CHECK_OFF)
+            if on:
+                tree._checked.add(iid)
+        self._update_tms_count()
+
+    def _update_tms_count(self):
+        if hasattr(self, "tms_send_btn"):
+            n = len(self._current_tree()._checked)
+            self.tms_send_btn.config(state=("normal" if n else "disabled"))
+            self.tms_count.set(str(n) if n else "")
 
     def _show_all_db(self):
         records = db_all()
@@ -1427,6 +2256,26 @@ class App(tk.Tk):
         self._oneshot = payload.get("oneshot", False)
         if payload.get("event") is not None:
             self.pending_pick = {"event": payload["event"], "holder": payload["holder"]}
+        q = (payload.get("q") or "").strip()
+        # --auto-pick: сначала локальная база-кэш (полная карточка уже есть) —
+        # портал не трогаем зря; на портал идём только если компании нет в кэше
+        if self._oneshot and getattr(self.args, "auto_pick", False) and q:
+            cached = [r for r in db_query(q) if r.get("details_text")]
+            if cached:
+                if payload.get("lang") in LANGS:
+                    self.set_lang(payload["lang"])
+                self._raise_window()
+                self.online_entry.delete(0, "end")
+                self.online_entry.insert(0, q)
+                self.notebook.select(0)
+                self._populate(self.tree_online, cached)
+                self._show_return_button(True)
+                idno = cached[0]["idno"]
+                self._show_detail(cached[0])       # карточка видна на снимке возврата
+                self.status.set(f"auto-pick (cache) → {idno}")
+                self.after(500, lambda: self._self_shot("sdk_3_contragenti_results"))
+                self.after(900, lambda: self.resolve_pick(idno))
+                return
         self._begin_open(payload)
         self._show_return_button(True)
         self.status.set(self.t("status_pick", q=payload.get("q", "")))
@@ -1441,7 +2290,8 @@ class App(tk.Tk):
             self.pick_after_details = idno
             self._busy(True)
             self.worker = BrowserWorker("details", idno, self.queue, TR[self.lang],
-                                        headless=self.headless_var.get())
+                                        headless=self.headless_var.get(),
+                                        shots_dir=getattr(self.args, "shots_dir", None))
             self.worker.start()
         else:
             self._finish_pick(idno)
@@ -1449,6 +2299,7 @@ class App(tk.Tk):
     def _finish_pick(self, idno):
         rec = db_get(idno) or self.current_rec or {"idno": idno}
         xml = build_card_xml(rec)
+        self._self_shot("sdk_4_contragenti_card_return")
         if self.pending_pick:
             self.pending_pick["holder"]["xml"] = xml
             self.pending_pick["holder"]["rec"] = rec
@@ -1584,6 +2435,285 @@ class App(tk.Tk):
         self.title(self.t("title") + f"   ({self.t('f_updated')}: {db_count()})")
 
 
+def run_selftest():
+    """Автоматическая самопроверка ключевых подсистем без реального браузера.
+
+    Возвращает (ok: bool, report: str) — пригодно и для CLI (--selftest),
+    и для вызова из GUI (меню «Справка → Запустить самопроверку»).
+    """
+    checks = []
+
+    def add(name, fn):
+        try:
+            fn()
+            checks.append((name, True, ""))
+        except Exception as exc:  # noqa: BLE001
+            checks.append((name, False, str(exc)))
+
+    def check_db():
+        db_init()
+        conn = db_connect()
+        try:
+            conn.execute("SELECT COUNT(*) FROM companies").fetchone()
+        finally:
+            conn.close()
+
+    def check_i18n():
+        for code in LANGS:
+            assert TR[code].get("title"), f"missing 'title' for {code}"
+
+    def check_xml_export():
+        rec = {"idno": "0000000000000", "denumire": "SELFTEST S.R.L.", "updated_at": ""}
+        xml = build_card_xml(rec)
+        assert "<counterparty" in xml and "SELFTEST" in xml
+
+    def check_network():
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("127.0.0.1", 0))
+        finally:
+            s.close()
+
+    def check_html_parsers():
+        html = "<table><tr><td>x</td><td>y</td></tr></table>"
+        parse_tables(html)
+
+    def check_tms():
+        # интеграция с una.md: модуль импортируется и маппинг работает
+        import tms_export
+        m = tms_export.map_company({"denumire": "SELFTEST SRL", "idno": "0000000000000"})
+        assert m["univers"]["DENUMIREA"] == "SELFTEST SRL"
+        assert tms_export.iban_bank_prefix("MD24AG000225100013104168") == "AG"
+
+    add("database (SQLite)", check_db)
+    add("i18n (en/ru/ro)", check_i18n)
+    add("xml export", check_xml_export)
+    add("network socket", check_network)
+    add("html parsers", check_html_parsers)
+    add("una.md mapping", check_tms)
+
+    ok = all(c[1] for c in checks)
+    lines = ["Contragenti self-test: " + ("PASS" if ok else "FAIL"), ""]
+    for name, passed, err in checks:
+        lines.append(f"[{'OK' if passed else 'FAIL'}] {name}" + (f": {err}" if err else ""))
+    return ok, "\n".join(lines)
+
+
+def capture_window_win32(widget, path):
+    """Снимок окна Tk через WinAPI PrintWindow.
+
+    В отличие от захвата экрана (PIL.ImageGrab / CopyFromScreen), просит само
+    окно отрисовать себя в память — поэтому работает и там, где рабочий стол
+    недоступен: в отключённых RDP-сессиях, у служб, в CI и на headless-машинах.
+    """
+    import ctypes
+    from ctypes import wintypes
+    from PIL import Image
+
+    user32 = ctypes.windll.user32
+    gdi32 = ctypes.windll.gdi32
+    PW_RENDERFULLCONTENT = 0x00000002
+
+    # winfo_id() даёт дочерний Tk-холст; нужно окно верхнего уровня с рамкой
+    hwnd = user32.GetParent(widget.winfo_id()) or widget.winfo_id()
+
+    rect = wintypes.RECT()
+    user32.GetWindowRect(hwnd, ctypes.byref(rect))
+    w, h = rect.right - rect.left, rect.bottom - rect.top
+    if w <= 0 or h <= 0:
+        raise RuntimeError("window has no size")
+
+    hdc = user32.GetWindowDC(hwnd)
+    memdc = gdi32.CreateCompatibleDC(hdc)
+    bmp = gdi32.CreateCompatibleBitmap(hdc, w, h)
+    gdi32.SelectObject(memdc, bmp)
+    try:
+        if not user32.PrintWindow(hwnd, memdc, PW_RENDERFULLCONTENT):
+            raise RuntimeError("PrintWindow failed")
+
+        class BITMAPINFOHEADER(ctypes.Structure):
+            _fields_ = [
+                ("biSize", wintypes.DWORD), ("biWidth", wintypes.LONG),
+                ("biHeight", wintypes.LONG), ("biPlanes", wintypes.WORD),
+                ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", wintypes.LONG),
+                ("biYPelsPerMeter", wintypes.LONG), ("biClrUsed", wintypes.DWORD),
+                ("biClrImportant", wintypes.DWORD),
+            ]
+
+        bi = BITMAPINFOHEADER()
+        bi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+        bi.biWidth = w
+        bi.biHeight = -h  # отрицательная высота = строки сверху вниз
+        bi.biPlanes = 1
+        bi.biBitCount = 32
+        bi.biCompression = 0  # BI_RGB
+
+        buf = ctypes.create_string_buffer(w * h * 4)
+        if not gdi32.GetDIBits(memdc, bmp, 0, h, buf, ctypes.byref(bi), 0):
+            raise RuntimeError("GetDIBits failed")
+        img = Image.frombuffer("RGBA", (w, h), buf, "raw", "BGRA", 0, 1).convert("RGB")
+    finally:
+        gdi32.DeleteObject(bmp)
+        gdi32.DeleteDC(memdc)
+        user32.ReleaseDC(hwnd, hdc)
+
+    img.save(path)
+    return img
+
+
+# Предел размера окна демо. На виртуальном/отключённом рабочем столе система
+# может сообщать размер экрана больше, чем область, которую драйвер реально
+# отрисовывает; всё за её границей попадает в снимок пустым.
+DEMO_MAX_W = int(os.environ.get("CONTRAGENTI_DEMO_W", "620"))
+DEMO_MAX_H = int(os.environ.get("CONTRAGENTI_DEMO_H", "435"))
+
+
+def run_demo(outdir, lang="ru"):
+    """Самопрезентация: без участия пользователя открывает окна интерфейса
+    с демонстрационными данными и сохраняет их скриншоты в outdir.
+    """
+    os.makedirs(outdir, exist_ok=True)
+
+    db_init()
+    # Если база пуста (первый запуск / чистая установка), кладём образец
+    # реальной карточки с портала, чтобы демонстрация была наглядной.
+    demo_idno = "1003600116460"
+    if not db_get(demo_idno):
+        conn = db_connect()
+        try:
+            db_upsert(conn, {
+                "idno": demo_idno,
+                "denumire": "CENTRUL DE ELABORARE ŞI IMPLEMENTARE A SISTEMELOR "
+                            "INFORMAŢIONALE DE MANAGEMENT UNISIM-SOFT S.R.L.",
+                "administratori": "TUHARI PAVEL [Administrator]",
+                "inregistrare": "30.03.2001",
+                "forma_juridica": "Societate cu răspundere limitată",
+                "lichidata": "Nu",
+                "adresa": "mun. Chişinău, sec. Buiucani, str. Alba-Iulia, 75/B",
+                "founders_json": json.dumps(
+                    [{"name": "TUHARI PAVEL", "share": "100,00"}], ensure_ascii=False),
+                "debts_json": json.dumps([
+                    {"nr": "1", "type": "Bugetul de stat și local", "sum": "0,00"},
+                    {"nr": "2", "type": "Bugetul de stat", "sum": "0,98"},
+                    {"nr": "3", "type": "Bugetul asigurărilor sociale de stat", "sum": "0,00"},
+                ], ensure_ascii=False),
+            })
+            conn.commit()
+        finally:
+            conn.close()
+
+    args = argparse.Namespace(port=9491, host="127.0.0.1", lang=lang, q=None,
+                               pick=False, out=None, no_server=True, no_tray=True)
+    app = App(args)
+    # Окно не может быть больше рабочего стола (Windows обрезает его по
+    # размеру экрана), а на маленьком экране содержимое не помещается в кадр.
+    # Поэтому уменьшаем масштаб интерфейса Tk так, чтобы вся раскладка влезла.
+    # Окно должно целиком помещаться в рабочий стол: за пределами экрана
+    # содержимое не отрисовывается и в кадр попадает пустая область.
+    app.update()
+    scr_w, scr_h = app.winfo_screenwidth(), app.winfo_screenheight()
+    if sys.platform == "win32":
+        # Tk иногда сообщает размер виртуального рабочего стола, а реально
+        # отрисовывается только область физического экрана — берём её.
+        try:
+            import ctypes
+            scr_w = ctypes.windll.user32.GetSystemMetrics(0) or scr_w
+            scr_h = ctypes.windll.user32.GetSystemMetrics(1) or scr_h
+        except Exception:  # noqa: BLE001
+            pass
+    win_w = min(1120, scr_w - 24, DEMO_MAX_W)
+    win_h = min(780, scr_h - 56, DEMO_MAX_H)
+    app.minsize(200, 200)  # штатный minsize окна не даёт ужать его под кадр
+    app.geometry(f"{win_w}x{win_h}")
+    app.update()
+    # Колонки таблицы подгоняем под фактическую ширину окна.
+    weights = {"idno": 0.20, "denumire": 0.46, "administratori": 0.22,
+               "inregistrare": 0.12}
+    for tree in (app.tree_online, app.tree_offline):
+        for col in COLUMNS:
+            tree.column(col, width=max(60, int((win_w - 24) * weights.get(col, 0.2))))
+    app.update()
+
+    def shot(name, widget=None):
+        target = widget or app
+        app.update()
+        target.deiconify()
+        target.lift()
+        for _ in range(10):
+            app.update()
+            time.sleep(0.05)
+        path = os.path.join(outdir, name)
+        # Основной способ — PrintWindow: работает без доступа к рабочему столу.
+        try:
+            capture_window_win32(target, path)
+            print(f"  {name}: ok")
+            return
+        except Exception as exc:  # noqa: BLE001
+            win32_err = exc
+        # Резерв — обычный захват экрана (не-Windows или нестандартные случаи).
+        try:
+            from PIL import ImageGrab
+            x, y = target.winfo_rootx(), target.winfo_rooty()
+            w, h = target.winfo_width(), target.winfo_height()
+            ImageGrab.grab(bbox=(x, y, x + w, y + h)).save(path)
+            print(f"  {name}: ok (screen grab)")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {name}: skipped (PrintWindow: {win32_err}; grab: {exc})")
+
+    def select_row(idno):
+        for iid in app.tree_offline.get_children():
+            if app.tree_offline._idno_map.get(iid) == idno:
+                app.tree_offline.selection_set(iid)
+                app.tree_offline.focus(iid)
+                app.tree_offline.see(iid)
+                app._on_row_select(app.tree_offline)
+                return True
+        return False
+
+    app.notebook.select(0)
+    shot("01_online.png")
+
+    app.notebook.select(1)
+    app.on_db_find()
+    shot("02_db_list.png")
+
+    select_row(demo_idno)
+    shot("03_card.png")
+
+    # Вторая карточка — показывает несколько учредителей с долями.
+    app.offline_entry.delete(0, "end")
+    app.offline_entry.insert(0, "ALFA-VIS")
+    app.on_db_find()
+    if not select_row("1017600018242"):
+        kids = app.tree_offline.get_children()
+        if kids:
+            app.tree_offline.selection_set(kids[0])
+            app._on_row_select(app.tree_offline)
+    shot("04_card_search.png")
+
+    about_win = app._show_about()
+    shot("05_about.png", widget=about_win)
+
+    ok, report = run_selftest()
+    print(report)
+    report_win = tk.Toplevel(app)
+    report_win.title(app.t("selftest_title"))
+    report_win.transient(app)
+    report_txt = tk.Text(report_win, width=60, height=10, wrap="word", padx=8, pady=8)
+    report_txt.insert("1.0", report)
+    report_txt.config(state="disabled")
+    report_txt.pack(padx=12, pady=12, fill="both", expand=True)
+    shot("06_selftest.png", widget=report_win)
+    report_win.destroy()
+    about_win.destroy()
+
+    app.destroy()
+    print(f"Demo screenshots saved to: {outdir}")
+    return ok
+
+
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="Contragenti — date.gov.md company search")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT, help="HTTP API port")
@@ -1593,10 +2723,29 @@ def parse_args(argv=None):
     ap.add_argument("--pick", action="store_true",
                     help="one-shot: wait for selection, output XML to --out/stdout, quit")
     ap.add_argument("--out", default=None, help="file to write returned XML (with --pick)")
+    ap.add_argument("--auto-pick", action="store_true",
+                    help="with --pick: return the first search result automatically "
+                         "(for SDK integration tests)")
+    ap.add_argument("--shots-dir", default=None,
+                    help="with --pick: save portal/browser and own-window screenshots "
+                         "(sdk_*.png) to this directory for the caller's test report")
     ap.add_argument("--no-server", action="store_true", help="do not start HTTP API")
     ap.add_argument("--no-tray", action="store_true", help="do not create tray icon")
+    ap.add_argument("--selftest", action="store_true",
+                    help="run internal self-test (db/i18n/xml/network) and exit")
+    ap.add_argument("--demo", action="store_true",
+                    help="run unattended self-presentation demo, save screenshots, and exit")
+    ap.add_argument("--demo-dir", default="demo_screenshots",
+                    help="output folder for --demo screenshots")
     return ap.parse_args(argv)
 
 
 if __name__ == "__main__":
-    App(parse_args()).mainloop()
+    cli_args = parse_args()
+    if cli_args.selftest:
+        _ok, _report = run_selftest()
+        print(_report)
+        sys.exit(0 if _ok else 1)
+    if cli_args.demo:
+        sys.exit(0 if run_demo(cli_args.demo_dir, cli_args.lang) else 1)
+    App(cli_args).mainloop()

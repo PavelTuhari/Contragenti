@@ -1,0 +1,31 @@
+# Запуск хаба как systemd-службы (вариант без Docker).
+#
+#   sudo cp deploy/una-hub.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now una-hub
+#
+# Служба слушает петлевой адрес; наружу её выставляет reverse-proxy с TLS.
+
+[Unit]
+Description=Хаб справочника контрагентов una.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=una
+Group=una
+WorkingDirectory=/opt/una-hub
+EnvironmentFile=/opt/una-hub/.env
+ExecStart=/opt/una-hub/.venv/bin/python -m hub.app --host 127.0.0.1 --port 8800
+Restart=always
+RestartSec=5
+
+# ограничения: службе нужен только свой каталог данных
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/una-hub/hub_data
+
+[Install]
+WantedBy=multi-user.target
