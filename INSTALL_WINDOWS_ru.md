@@ -7,7 +7,11 @@
 программу — в демо-CRM, в 1С или в любой другой клиент.
 
 Репозиторий: [github.com/PavelTuhari/Contragenti](https://github.com/PavelTuhari/Contragenti).
-HTML-версия статьи: [docs/ustanovka-demo-crm-windows.html](docs/ustanovka-demo-crm-windows.html).
+
+**Открыть HTML как страницу в браузере:**
+[cdn.jsdelivr.net/…/ustanovka-demo-crm-windows.html](https://cdn.jsdelivr.net/gh/PavelTuhari/Contragenti@main/docs/ustanovka-demo-crm-windows.html)
+
+(ссылка `github.com/…/blob/…html` показывает исходник, а не страницу.)
 
 ---
 
