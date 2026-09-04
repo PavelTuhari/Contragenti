@@ -20,9 +20,13 @@ goods_local.db
 # Данные хаба: принятые пакеты и реестр заданий
 hub_data/
 
-# Delphi CRM: сборочные артефакты и локальные данные
+# Delphi CRM: сборочные артефакты и локальные данные.
+# ContragentiCRM.exe — исключение: собранный бинарник коммитится намеренно,
+# чтобы MSI-инсталлятор (setup.py) мог включить Demo CRM без установленного
+# RAD Studio/dcc32 на машине, которая собирает MSI.
 crm_delphi/dcu/
 crm_delphi/*.exe
+!crm_delphi/ContragentiCRM.exe
 crm_delphi/*.RES
 crm_delphi/*.res
 crm_delphi/*.dcu

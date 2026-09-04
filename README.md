@@ -147,11 +147,26 @@ curl "http://127.0.0.1:9393/card?idno=1003600116460&format=xml"
 
 | Документ | Содержание |
 |---|---|
+| **[INTEGRATION.md](INTEGRATION.md)** | **Единый гайд по интеграции** — CLI-контракт, формат XML, таблица соответствия полей, готовые SDK на Python/Delphi/C++ |
 | **[GUIDE_ru.md](GUIDE_ru.md)** | Инструкция пользователя **со скриншотами** |
 | **[DOCUMENTATION_ru.md](DOCUMENTATION_ru.md)** | Руководство пользователя: интерфейс, база, экспорт |
-| **[API_ru.md](API_ru.md)** | Интеграция: HTTP-эндпоинты, XML-схема, примеры 1С / JS / curl |
+| **[API_ru.md](API_ru.md)** | Интеграция через HTTP: эндпоинты, XML-схема, примеры 1С / JS / curl |
 | **[TECHNICAL_ru.md](TECHNICAL_ru.md)** | Техническая документация: архитектура, потоки, парсеры |
 | **[NATIVE_ru.md](NATIVE_ru.md)** | Почему это нативное приложение |
+
+## Интеграция и Demo CRM
+
+Хочешь подключить поиск контрагентов к своему приложению (Delphi / Python /
+C++ / 1С)? Один документ содержит всё необходимое — **[INTEGRATION.md](INTEGRATION.md)**.
+Готовые обёртки вызова лежат в **[sdk/](sdk/)** (Python, C++) и
+**[crm_delphi/uContragenti.pas](crm_delphi/uContragenti.pas)** (Delphi).
+
+В качестве рабочего образца «от кнопки до строки в БД» в репозитории есть
+**[crm_delphi/](crm_delphi/)** — demo-CRM на Delphi/VCL с интерфейсом в
+стиле EspoCRM: своя SQLite-база клиентов, кнопка «Создать клиента» вызывает
+Contragenti и сохраняет карточку с дедупликацией по IDNO. Она включена в
+MSI-инсталлятор целиком (`setup.py`, каталог `DemoCRM/`) — после установки
+на рабочем столе появляется отдельный ярлык «Demo CRM (SDK Contragenti)».
 
 ---
 
