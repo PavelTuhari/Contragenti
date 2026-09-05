@@ -466,6 +466,7 @@ var
   Stats: TSeedStats;
   Xlsx, Pdf, Stub, SavedLauncher: string;
   Id: Integer;
+  D1, D2: TDateTime;
 begin
   FSteps := nil;
   FNum := 0;
@@ -960,6 +961,29 @@ begin
     'kanban_back');
 
   Inc(FNum);
+  FForm.Kanban.SelectFirstCard(1);
+  Id := FForm.Kanban.SelectedId;
+  Before := FForm.Kanban.CardsInColumn(3);
+  FForm.Kanban.DragCardById(Id, 3);   // тот же путь, что и мышь: нажатие, сдвиг, отпускание
+  Pump;
+  V := FForm.Crm.Scalar('SELECT ship_date FROM orders WHERE id = ' + IntToStr(Id));
+  Step('Канбан: карточка перетащена мышью из «В работе» в «Отгружено — ждём оплату»',
+    (FForm.Kanban.CardsInColumn(3) = Before + 1) and (VarToStr(V) <> '')
+      and (FForm.Crm.StageOf(Id) = stAwaitPayment),
+    Format('в колонке «ждём оплату» %d → %d, дата отгрузки «%s», этап %d',
+      [Before, FForm.Kanban.CardsInColumn(3), VarToStr(V), Ord(FForm.Crm.StageOf(Id))]),
+    'kanban_drag');
+
+  Inc(FNum);
+  FForm.Kanban.DragCardById(Id, 1);   // и обратно — перетаскиванием той же карточки
+  Pump;
+  V := FForm.Crm.Scalar('SELECT COALESCE(ship_date,'''') FROM orders WHERE id = ' + IntToStr(Id));
+  Step('Канбан: перетаскивание работает в обе стороны — дата отгрузки снята',
+    (VarToStr(V) = '') and (FForm.Crm.StageOf(Id) = stInWork),
+    Format('дата отгрузки «%s», этап %d', [VarToStr(V), Ord(FForm.Crm.StageOf(Id))]),
+    'kanban_drag_back');
+
+  Inc(FNum);
   FForm.Kanban.SelectBoard(bkTasks);
   Pump;
   Step('Канбан «Задачи»: колонки по срокам — просрочено / сегодня / позже / выполнено',
@@ -980,6 +1004,35 @@ begin
       [FForm.Gantt.RowCount, FForm.Gantt.WorkCount, FForm.Gantt.OverdueCount,
        FForm.Gantt.RangeText]),
     'gantt_production');
+
+  Inc(FNum);
+  Id := FForm.Gantt.RowOrderId(0);
+  D1 := FForm.Gantt.RowStart(0);
+  D2 := FForm.Gantt.RowPlanEnd(0);
+  FForm.Gantt.DragBar(0, dmMove, 5);   // тот же путь, что и мышь
+  Pump;
+  V := FForm.Crm.Scalar('SELECT order_date FROM orders WHERE id = ' + IntToStr(Id));
+  Step('План работ: полоса заказа перетащена мышью на 5 дней вперёд — даты в базе сдвинулись',
+    (Abs(FForm.Gantt.RowStart(0) - (D1 + 5)) < 0.5) and
+    (Abs(FForm.Gantt.RowPlanEnd(0) - (D2 + 5)) < 0.5) and
+    (VarToStr(V) = FormatDateTime('yyyy-mm-dd', D1 + 5)),
+    Format('было %s–%s, стало %s–%s (в базе %s)',
+      [FormatDateTime('dd.mm', D1), FormatDateTime('dd.mm', D2),
+       FormatDateTime('dd.mm', FForm.Gantt.RowStart(0)),
+       FormatDateTime('dd.mm', FForm.Gantt.RowPlanEnd(0)), VarToStr(V)]),
+    'gantt_drag_move');
+
+  Inc(FNum);
+  D2 := FForm.Gantt.RowPlanEnd(0);
+  FForm.Gantt.DragBar(0, dmEnd, 7);    // тянем правый край — только срок
+  Pump;
+  Step('План работ: за правый край полосы растянут только срок, дата заказа не тронута',
+    (Abs(FForm.Gantt.RowPlanEnd(0) - (D2 + 7)) < 0.5) and
+    (Abs(FForm.Gantt.RowStart(0) - (D1 + 5)) < 0.5),
+    Format('срок %s → %s, начало осталось %s',
+      [FormatDateTime('dd.mm', D2), FormatDateTime('dd.mm', FForm.Gantt.RowPlanEnd(0)),
+       FormatDateTime('dd.mm', FForm.Gantt.RowStart(0))]),
+    'gantt_drag_resize');
 
   Inc(FNum);
   FForm.Gantt.SelectFilter(1);

@@ -88,6 +88,9 @@ type
     procedure OnStageClick(Stage: TStage);
     procedure OnContragentiWait;
     function  ResolveLauncher: string;
+    procedure OpenRecord(Section: TNavSection; Id: Integer);
+    procedure OnKanbanOpen(Board: TBoardKind; Id: Integer);
+    procedure OnGanttOpen(OrderId: Integer);
     procedure Say(Kind: TMsgKind; const Msg: string);
     procedure OnNavClick(Sender: TObject);
     procedure OnAddClick(Sender: TObject);
@@ -664,8 +667,34 @@ begin
   FReportsPage := TReportsPage.Create(Self, FContent, FCrm, Say,
     TPath.Combine(AppDir, 'reports'));
   FKanbanPage := TKanbanPage.Create(Self, FContent, FCrm, Say);
+  FKanbanPage.OnOpenRecord := OnKanbanOpen;
   FGanttPage := TGanttPage.Create(Self, FContent, FCrm, Say);
+  FGanttPage.OnOpenOrder := OnGanttOpen;
   SetStagePresets;
+end;
+
+{ Двойной клик по карточке канбана или полосе Ганта открывает саму запись
+  в её разделе, с уже раскрытым редактором. }
+procedure TMainForm.OpenRecord(Section: TNavSection; Id: Integer);
+begin
+  SelectSection(Section);
+  FPages[Section].SelectPreset(0);
+  if FPages[Section].SelectById(Id) then
+    Say(mkInfo, 'Открыта запись из ' + IfThen(Section = nsOrders, 'плана работ', 'канбана') + '.')
+  else
+    Say(mkWarn, 'Запись не найдена в разделе — возможно, она была удалена.');
+end;
+
+procedure TMainForm.OnKanbanOpen(Board: TBoardKind; Id: Integer);
+const
+  SECTIONS: array[TBoardKind] of TNavSection = (nsOrders, nsDeals, nsCalendar);
+begin
+  OpenRecord(SECTIONS[Board], Id);
+end;
+
+procedure TMainForm.OnGanttOpen(OrderId: Integer);
+begin
+  OpenRecord(nsOrders, OrderId);
 end;
 
 { Нажатие на плитку: открыть раздел с соответствующим фильтром. }

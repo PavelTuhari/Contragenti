@@ -23,6 +23,9 @@ uses
 type
   TBoardKind = (bkOrders, bkDeals, bkTasks);
 
+  { Двойной клик по карточке открывает запись в её разделе. }
+  TOpenRecordEvent = procedure(Board: TBoardKind; Id: Integer) of object;
+
   TKanbanCard = record
     Id: Integer;
     Col: Integer;
@@ -44,6 +47,14 @@ type
     FCardPanels: TArray<TPanel>;
     FSelected: Integer;      // индекс в FCards, -1 — ничего не выбрано
     FKind: TBoardKind;
+    FOnOpenRecord: TOpenRecordEvent;
+    // перетаскивание карточки мышью
+    FDragIdx: Integer;
+    FDragActive: Boolean;
+    FDragOrigin: TPoint;
+    FGhost: TPanel;
+    FGhostText: TLabel;
+    FHoverCol: Integer;
     procedure Say(Kind: TMsgKind; const Msg: string);
     function  ColumnTitles: TArray<string>;
     function  ColumnWhere(Col: Integer): string;
@@ -53,6 +64,18 @@ type
     procedure LoadCards;
     procedure OnBoardChange(Sender: TObject);
     procedure OnCardClick(Sender: TObject);
+    procedure OnCardDblClick(Sender: TObject);
+    procedure CardMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure CardMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+    procedure CardMouseUp(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure HookMouse(Ctrl: TControl; CardIndex: Integer);
+    function  ColumnAtScreen(const P: TPoint): Integer;
+    procedure ShowGhost(const P: TPoint);
+    procedure HideGhost;
+    procedure HighlightColumn(Col: Integer);
+    procedure MoveCardTo(Index, NewCol: Integer);
     procedure OnBackClick(Sender: TObject);
     procedure OnForwardClick(Sender: TObject);
     procedure OnRefreshClick(Sender: TObject);
@@ -71,7 +94,14 @@ type
     function  SelectedId: Integer;
     procedure MoveForward;
     procedure MoveBack;
+    { Проводит карточку тем же путём, что и мышь: нажатие, перемещение и
+      отпускание над колонкой (координаты берутся из реальных позиций
+      контролов). Возвращает False, если в колонке нет карточек. }
+    function  DragCard(FromCol, ToCol: Integer): Boolean;
+    function  DragCardById(Id, ToCol: Integer): Boolean;
+    function  DragCardIndex(Index, ToCol: Integer): Boolean;
     property Board: TBoardKind read FKind;
+    property OnOpenRecord: TOpenRecordEvent read FOnOpenRecord write FOnOpenRecord;
   end;
 
 implementation
@@ -162,21 +192,21 @@ begin
   Hdr := TPanel.Create(Self);
   Hdr.Parent := Self;
   Hdr.Align := alTop;
-  Hdr.Height := 56;
+  Hdr.Height := 72;
   Hdr.BevelOuter := bvNone;
   Hdr.Color := ESPO_BODY;
   Hdr.ParentBackground := False;
 
   L := TLabel.Create(Self);
   L.Parent := Hdr;
-  L.SetBounds(15, 14, 200, 30);
+  L.SetBounds(15, 10, 200, 30);
   L.Caption := 'Канбан';
   L.Font.Size := 16;
 
   FBoard := TComboBox.Create(Self);
   FBoard.Parent := Hdr;
   FBoard.Style := csDropDownList;
-  FBoard.SetBounds(125, 18, 260, 28);
+  FBoard.SetBounds(125, 14, 260, 28);
   FBoard.Items.Add('Заказы — исполнение');
   FBoard.Items.Add('Сделки — продажи');
   FBoard.Items.Add('Задачи — работы');
@@ -185,16 +215,17 @@ begin
 
   Btn := MakeButton(Self, Hdr, 'Вперёд →', True, OnForwardClick, 130);
   Btn.Anchors := [akTop, akRight];
-  Btn.SetBounds(Hdr.Width - 145, 12, 130, 36);
+  Btn.SetBounds(Hdr.Width - 145, 10, 130, 36);
   Btn := MakeButton(Self, Hdr, '← Назад', False, OnBackClick, 120);
   Btn.Anchors := [akTop, akRight];
-  Btn.SetBounds(Hdr.Width - 145 - 8 - 120, 12, 120, 36);
+  Btn.SetBounds(Hdr.Width - 145 - 8 - 120, 10, 120, 36);
   Btn := MakeButton(Self, Hdr, 'Обновить', False, OnRefreshClick, 110);
   Btn.Anchors := [akTop, akRight];
-  Btn.SetBounds(Hdr.Width - 145 - 8 - 120 - 8 - 110, 12, 110, 36);
+  Btn.SetBounds(Hdr.Width - 145 - 8 - 120 - 8 - 110, 10, 110, 36);
 
-  MakeLabel(Self, Hdr, 'выберите карточку и переносите её по этапам',
-    400, 24, 380, ESPO_MUTED, 9);
+  // подсказка отдельной строкой — иначе наезжает на кнопки
+  MakeLabel(Self, Hdr, 'тяните карточку мышью между колонками  ·  двойной клик по карточке открывает запись',
+    15, 50, 700, ESPO_MUTED, 9);
 
   FBody := TPanel.Create(Self);
   FBody.Parent := Self;
@@ -321,14 +352,14 @@ begin
         P.Color := IfThen(C.Overdue, ST_DANGER_BG, ESPO_HEAD_BG);
         P.ParentBackground := False;
         P.Cursor := crHandPoint;
-        P.Tag := Length(FCards);
-        P.OnClick := OnCardClick;
+        HookMouse(P, Length(FCards));
 
-        MakeLabel(Self, P, C.Title, 8, 6, P.Width - 16, ESPO_TEXT, 9).Font.Style := [fsBold];
-        MakeLabel(Self, P, C.Subtitle, 8, 24, P.Width - 16, ESPO_MUTED, 8);
-        MakeLabel(Self, P, C.Amount, 8, 42, P.Width - 16, ESPO_TEXT, 9);
-        MakeLabel(Self, P, IfThen(C.Due = '', '', IfThen(C.Overdue, 'просрочен ', 'срок ') + C.Due),
-          8, 56, P.Width - 16, IfThen(C.Overdue, ST_DANGER_FG, ESPO_MUTED), 8);
+        HookMouse(MakeLabel(Self, P, C.Title, 8, 6, P.Width - 16, ESPO_TEXT, 9), Length(FCards));
+        TLabel(P.Controls[0]).Font.Style := [fsBold];
+        HookMouse(MakeLabel(Self, P, C.Subtitle, 8, 24, P.Width - 16, ESPO_MUTED, 8), Length(FCards));
+        HookMouse(MakeLabel(Self, P, C.Amount, 8, 42, P.Width - 16, ESPO_TEXT, 9), Length(FCards));
+        HookMouse(MakeLabel(Self, P, IfThen(C.Due = '', '', IfThen(C.Overdue, 'просрочен ', 'срок ') + C.Due),
+          8, 56, P.Width - 16, IfThen(C.Overdue, ST_DANGER_FG, ESPO_MUTED), 8), Length(FCards));
 
         FCards := FCards + [C];
         FCardPanels := FCardPanels + [P];
@@ -365,6 +396,134 @@ begin
   OnBoardChange(FBoard);
 end;
 
+{ Мышь вешаем и на панель карточки, и на её подписи: иначе нажатие по тексту
+  до панели не доходит и карточку нельзя ни выбрать, ни потащить. }
+procedure TKanbanPage.HookMouse(Ctrl: TControl; CardIndex: Integer);
+begin
+  Ctrl.Tag := CardIndex;
+  Ctrl.Cursor := crHandPoint;
+  if Ctrl is TPanel then
+  begin
+    TPanel(Ctrl).OnMouseDown := CardMouseDown;
+    TPanel(Ctrl).OnMouseMove := CardMouseMove;
+    TPanel(Ctrl).OnMouseUp := CardMouseUp;
+    TPanel(Ctrl).OnDblClick := OnCardDblClick;
+  end
+  else if Ctrl is TLabel then
+  begin
+    TLabel(Ctrl).OnMouseDown := CardMouseDown;
+    TLabel(Ctrl).OnMouseMove := CardMouseMove;
+    TLabel(Ctrl).OnMouseUp := CardMouseUp;
+    TLabel(Ctrl).OnDblClick := OnCardDblClick;
+  end;
+end;
+
+function TKanbanPage.ColumnAtScreen(const P: TPoint): Integer;
+var
+  L: TPoint;
+  I: Integer;
+begin
+  Result := -1;
+  L := FBody.ScreenToClient(P);
+  for I := 0 to High(FCols) do
+    if (L.X >= FCols[I].Left) and (L.X <= FCols[I].Left + FCols[I].Width) then
+      Exit(I);
+end;
+
+procedure TKanbanPage.ShowGhost(const P: TPoint);
+var
+  L: TPoint;
+begin
+  if FGhost = nil then
+  begin
+    FGhost := TPanel.Create(Self);
+    FGhost.Parent := Self;
+    FGhost.BevelOuter := bvNone;
+    FGhost.BevelKind := bkFlat;
+    FGhost.Color := ST_PRIMARY_BG;
+    FGhost.ParentBackground := False;
+    FGhost.SetBounds(0, 0, 180, 30);
+    FGhostText := MakeLabel(Self, FGhost, '', 8, 7, 164, ST_PRIMARY_FG, 9);
+    FGhostText.Font.Style := [fsBold];
+  end;
+  FGhostText.Caption := FCards[FDragIdx].Title;
+  L := ScreenToClient(P);
+  FGhost.SetBounds(L.X + 12, L.Y + 8, 180, 30);
+  FGhost.Visible := True;
+  FGhost.BringToFront;
+end;
+
+procedure TKanbanPage.HideGhost;
+begin
+  if FGhost <> nil then
+    FGhost.Visible := False;
+end;
+
+procedure TKanbanPage.HighlightColumn(Col: Integer);
+var
+  I: Integer;
+begin
+  if Col = FHoverCol then Exit;
+  FHoverCol := Col;
+  for I := 0 to High(FCols) do
+    FCols[I].Color := IfThen(I = Col, ST_PRIMARY_BG, ESPO_WHITE);
+end;
+
+procedure TKanbanPage.CardMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+begin
+  if Button <> mbLeft then Exit;
+  FDragIdx := (Sender as TComponent).Tag;
+  FDragActive := False;
+  FDragOrigin := Mouse.CursorPos;
+  OnCardClick(Sender);
+end;
+
+procedure TKanbanPage.CardMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+var
+  P: TPoint;
+begin
+  if (FDragIdx < 0) or not (ssLeft in Shift) then Exit;
+  P := Mouse.CursorPos;
+  // старт перетаскивания только после заметного сдвига — чтобы обычный
+  // клик по карточке не превращался в перенос
+  if not FDragActive and (Abs(P.X - FDragOrigin.X) + Abs(P.Y - FDragOrigin.Y) < 8) then
+    Exit;
+  FDragActive := True;
+  ShowGhost(P);
+  HighlightColumn(ColumnAtScreen(P));
+end;
+
+procedure TKanbanPage.CardMouseUp(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+var
+  Col: Integer;
+begin
+  if FDragActive then
+  begin
+    Col := ColumnAtScreen(Mouse.CursorPos);
+    HideGhost;
+    HighlightColumn(-1);
+    if (Col >= 0) and (FDragIdx >= 0) and (FDragIdx <= High(FCards)) and
+       (Col <> FCards[FDragIdx].Col) then
+      MoveCardTo(FDragIdx, Col)
+    else
+      Say(mkInfo, 'Перенос отменён: карточка осталась на прежнем этапе.');
+  end;
+  FDragActive := False;
+  FDragIdx := -1;
+end;
+
+procedure TKanbanPage.OnCardDblClick(Sender: TObject);
+var
+  Idx: Integer;
+begin
+  Idx := (Sender as TComponent).Tag;
+  if (Idx < 0) or (Idx > High(FCards)) then Exit;
+  if Assigned(FOnOpenRecord) then
+    FOnOpenRecord(FKind, FCards[Idx].Id);
+end;
+
 procedure TKanbanPage.OnCardClick(Sender: TObject);
 var
   I: Integer;
@@ -380,26 +539,37 @@ begin
 end;
 
 procedure TKanbanPage.MoveSelected(Delta: Integer);
-var
-  C: TKanbanCard;
-  NewCol: Integer;
-  Titles: TArray<string>;
-  Total: Double;
-  Id: Integer;
 begin
   if (FSelected < 0) or (FSelected > High(FCards)) then
   begin
     Say(mkWarn, 'Выберите карточку на доске.');
     Exit;
   end;
-  C := FCards[FSelected];
+  MoveCardTo(FSelected, FCards[FSelected].Col + Delta);
+end;
+
+{ Единственное место, где карточка меняет этап: сюда приходят и кнопки
+  «Назад» / «Вперёд», и перетаскивание мышью. }
+procedure TKanbanPage.MoveCardTo(Index, NewCol: Integer);
+var
+  C: TKanbanCard;
+  Titles: TArray<string>;
+  Total: Double;
+  Id, I: Integer;
+begin
+  if (Index < 0) or (Index > High(FCards)) then
+  begin
+    Say(mkWarn, 'Выберите карточку на доске.');
+    Exit;
+  end;
+  C := FCards[Index];
   Titles := ColumnTitles;
-  NewCol := C.Col + Delta;
   if (NewCol < 0) or (NewCol > High(Titles)) then
   begin
     Say(mkWarn, 'Дальше двигать некуда: «' + Titles[C.Col] + '» — крайний этап.');
     Exit;
   end;
+  if NewCol = C.Col then Exit;
   Id := C.Id;
 
   case FKind of
@@ -437,14 +607,55 @@ begin
 
   LoadCards;
   // вернуть выделение на ту же запись в новой колонке
-  for NewCol := 0 to High(FCards) do
-    if FCards[NewCol].Id = Id then
+  for I := 0 to High(FCards) do
+    if FCards[I].Id = Id then
     begin
-      FSelected := NewCol;
-      FCardPanels[NewCol].Color := ST_PRIMARY_BG;
+      FSelected := I;
+      FCardPanels[I].Color := ST_PRIMARY_BG;
       Break;
     end;
-  Say(mkOk, Format('«%s» → этап «%s»', [C.Title, Titles[Min(High(Titles), Max(0, C.Col + Delta))]]));
+  Say(mkOk, Format('«%s» → этап «%s»', [C.Title, Titles[NewCol]]));
+end;
+
+function TKanbanPage.DragCardIndex(Index, ToCol: Integer): Boolean;
+var
+  P: TPoint;
+  Src: TPanel;
+begin
+  Result := (Index >= 0) and (Index <= High(FCards)) and
+            (ToCol >= 0) and (ToCol <= High(FCols));
+  if not Result then Exit;
+  Src := FCardPanels[Index];
+  // тот же путь, что и у мыши: нажатие на карточке, сдвиг, отпускание
+  // над серединой целевой колонки
+  P := Src.ClientToScreen(Point(Src.Width div 2, Src.Height div 2));
+  Mouse.CursorPos := P;
+  CardMouseDown(Src, mbLeft, [ssLeft], 0, 0);
+  P := FBody.ClientToScreen(Point(FCols[ToCol].Left + FCols[ToCol].Width div 2,
+    FCols[ToCol].Top + 80));
+  Mouse.CursorPos := P;
+  CardMouseMove(Src, [ssLeft], 0, 0);
+  CardMouseUp(Src, mbLeft, [], 0, 0);
+end;
+
+function TKanbanPage.DragCard(FromCol, ToCol: Integer): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to High(FCards) do
+    if FCards[I].Col = FromCol then
+      Exit(DragCardIndex(I, ToCol));
+end;
+
+function TKanbanPage.DragCardById(Id, ToCol: Integer): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to High(FCards) do
+    if FCards[I].Id = Id then
+      Exit(DragCardIndex(I, ToCol));
 end;
 
 procedure TKanbanPage.OnBackClick(Sender: TObject);

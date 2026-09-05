@@ -24,11 +24,17 @@ uses
 type
   TGanttRow = record
     IsWork: Boolean;        // строка заказа (операция), а не сам заказ
+    OrderId: Integer;
     Caption: string;
     Sub: string;
     Start, PlanEnd, FactEnd: TDateTime;
     Overdue, Closed: Boolean;
   end;
+
+  { Что делает перетаскивание: двигает весь заказ или тянет одну из границ. }
+  TDragMode = (dmNone, dmMove, dmStart, dmEnd);
+
+  TOpenOrderEvent = procedure(OrderId: Integer) of object;
 
   TGanttPage = class(TPanel)
   private
@@ -40,7 +46,24 @@ type
     FInfo: TLabel;
     FRows: TArray<TGanttRow>;
     FMin, FMax: TDateTime;
+    FChartW: Integer;
+    FOnOpenOrder: TOpenOrderEvent;
+    // перетаскивание полосы мышью
+    FDragRow: Integer;
+    FDragMode: TDragMode;
+    FDragX0: Integer;
+    FDragDays: Integer;
     procedure Say(Kind: TMsgKind; const Msg: string);
+    function  XOfDate(D: TDateTime): Integer;
+    function  DaysPerPixel: Double;
+    function  HitTest(X, Y: Integer; out Row: Integer): TDragMode;
+    procedure CanvasMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure CanvasMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+    procedure CanvasMouseUp(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure CanvasDblClick(Sender: TObject);
+    procedure CommitDrag;
     procedure BuildUI;
     procedure LoadRows;
     procedure PaintChart(Sender: TObject);
@@ -57,6 +80,13 @@ type
     function OverdueCount: Integer;
     function RangeText: string;
     procedure SelectFilter(Index: Integer);
+    { Тянет полосу тем же путём, что и мышь: нажатие на полосе, сдвиг на
+      Days дней и отпускание. Mode задаёт, что именно тянем. }
+    function DragBar(Row: Integer; Mode: TDragMode; Days: Integer): Boolean;
+    function RowStart(Row: Integer): TDateTime;
+    function RowPlanEnd(Row: Integer): TDateTime;
+    function RowOrderId(Row: Integer): Integer;
+    property OnOpenOrder: TOpenOrderEvent read FOnOpenOrder write FOnOpenOrder;
   end;
 
 implementation
@@ -124,7 +154,10 @@ begin
   FFilter.ItemIndex := 0;
   FFilter.OnChange := OnFilterChange;
 
-  FInfo := MakeLabel(Self, Hdr, '', 465, 24, 480, ESPO_MUTED, 9);
+  Hdr.Height := 72;
+  FInfo := MakeLabel(Self, Hdr, '', 465, 20, 560, ESPO_MUTED, 9);
+  MakeLabel(Self, Hdr, 'тяните полосу мышью — сдвиг заказа, за края — срок  ·  двойной клик открывает заказ',
+    15, 50, 700, ESPO_MUTED, 9);
 
   Btn := MakeButton(Self, Hdr, 'Обновить', False, OnRefreshClick, 110);
   Btn.Anchors := [akTop, akRight];
@@ -142,6 +175,167 @@ begin
   FCanvas.Parent := FScroll;
   FCanvas.Align := alClient;
   FCanvas.OnPaint := PaintChart;
+  FCanvas.OnMouseDown := CanvasMouseDown;
+  FCanvas.OnMouseMove := CanvasMouseMove;
+  FCanvas.OnMouseUp := CanvasMouseUp;
+  FCanvas.OnDblClick := CanvasDblClick;
+  FDragRow := -1;
+  FDragMode := dmNone;
+end;
+
+{ ── перетаскивание полос мышью ── }
+
+function TGanttPage.XOfDate(D: TDateTime): Integer;
+begin
+  if FMax - FMin <= 0 then Exit(LEFT_W);
+  Result := LEFT_W + Round((D - FMin) / (FMax - FMin) * FChartW);
+end;
+
+function TGanttPage.DaysPerPixel: Double;
+begin
+  if FChartW <= 0 then Exit(0);
+  Result := (FMax - FMin) / FChartW;
+end;
+
+{ Что под курсором: край полосы (растянуть) или её середина (сдвинуть).
+  Операции не тянем — их даты вычисляются из заказа. }
+function TGanttPage.HitTest(X, Y: Integer; out Row: Integer): TDragMode;
+var
+  X1, X2: Integer;
+begin
+  Result := dmNone;
+  Row := (Y - HEAD_H) div ROW_H;
+  if (Row < 0) or (Row > High(FRows)) or FRows[Row].IsWork then
+  begin
+    Row := -1;
+    Exit;
+  end;
+  X1 := XOfDate(FRows[Row].Start);
+  X2 := XOfDate(FRows[Row].PlanEnd);
+  if Abs(X - X1) <= 4 then Result := dmStart
+  else if Abs(X - X2) <= 4 then Result := dmEnd
+  else if (X > X1) and (X < X2) then Result := dmMove
+  else Row := -1;
+end;
+
+procedure TGanttPage.CanvasMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+var
+  Row: Integer;
+begin
+  if Button <> mbLeft then Exit;
+  FDragMode := HitTest(X, Y, Row);
+  FDragRow := Row;
+  FDragX0 := X;
+  FDragDays := 0;
+end;
+
+procedure TGanttPage.CanvasMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+var
+  Row: Integer;
+  Mode: TDragMode;
+begin
+  if (FDragMode <> dmNone) and (ssLeft in Shift) then
+  begin
+    FDragDays := Round((X - FDragX0) * DaysPerPixel);
+    FCanvas.Invalidate;
+    Exit;
+  end;
+  // подсказка курсором: у краёв — растянуть, в середине — двигать
+  Mode := HitTest(X, Y, Row);
+  case Mode of
+    dmStart, dmEnd: FCanvas.Cursor := crSizeWE;
+    dmMove: FCanvas.Cursor := crHandPoint;
+  else FCanvas.Cursor := crDefault;
+  end;
+end;
+
+procedure TGanttPage.CanvasMouseUp(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+begin
+  if (FDragMode <> dmNone) and (FDragRow >= 0) and (FDragDays <> 0) then
+    CommitDrag
+  else if FDragMode <> dmNone then
+    Say(mkInfo, 'Перетаскивание отменено: даты не изменились.');
+  FDragMode := dmNone;
+  FDragRow := -1;
+  FDragDays := 0;
+  FCanvas.Invalidate;
+end;
+
+procedure TGanttPage.CommitDrag;
+var
+  R: TGanttRow;
+  NewStart, NewEnd: TDateTime;
+  What: string;
+begin
+  R := FRows[FDragRow];
+  NewStart := R.Start;
+  NewEnd := R.PlanEnd;
+  case FDragMode of
+    dmMove:  begin NewStart := R.Start + FDragDays; NewEnd := R.PlanEnd + FDragDays; What := 'сдвинут'; end;
+    dmStart: begin NewStart := R.Start + FDragDays; What := 'смещено начало'; end;
+    dmEnd:   begin NewEnd := R.PlanEnd + FDragDays; What := 'изменён срок'; end;
+  end;
+  if NewEnd < NewStart then
+  begin
+    Say(mkWarn, 'Срок не может быть раньше даты заказа — изменение отменено.');
+    Exit;
+  end;
+  FData.DB.Connection.ExecSQL(
+    'UPDATE orders SET order_date = :d1, due_date = :d2 WHERE id = :i',
+    [FormatDateTime('yyyy-mm-dd', NewStart), FormatDateTime('yyyy-mm-dd', NewEnd), R.OrderId]);
+  LoadRows;
+  // «%+d» Delphi не поддерживает — знак ставим сами
+  Say(mkOk, Format('%s: %s — %s → %s (%s%d дн.)',
+    [R.Caption, What, FormatDateTime('dd.mm', R.Start) + '–' + FormatDateTime('dd.mm', R.PlanEnd),
+     FormatDateTime('dd.mm', NewStart) + '–' + FormatDateTime('dd.mm', NewEnd),
+     IfThen(FDragDays > 0, '+', ''), FDragDays]));
+end;
+
+procedure TGanttPage.CanvasDblClick(Sender: TObject);
+var
+  P: TPoint;
+  Row: Integer;
+begin
+  P := FCanvas.ScreenToClient(Mouse.CursorPos);
+  Row := (P.Y - HEAD_H) div ROW_H;
+  if (Row < 0) or (Row > High(FRows)) then Exit;
+  if Assigned(FOnOpenOrder) then
+    FOnOpenOrder(FRows[Row].OrderId);
+end;
+
+function TGanttPage.DragBar(Row: Integer; Mode: TDragMode; Days: Integer): Boolean;
+var
+  X0, Y0: Integer;
+begin
+  Result := (Row >= 0) and (Row <= High(FRows)) and not FRows[Row].IsWork and (Mode <> dmNone);
+  if not Result then Exit;
+  Y0 := HEAD_H + Row * ROW_H + ROW_H div 2;
+  case Mode of
+    dmStart: X0 := XOfDate(FRows[Row].Start);
+    dmEnd:   X0 := XOfDate(FRows[Row].PlanEnd);
+  else       X0 := (XOfDate(FRows[Row].Start) + XOfDate(FRows[Row].PlanEnd)) div 2;
+  end;
+  // тот же путь, что и у мыши: нажатие на полосе, сдвиг, отпускание
+  CanvasMouseDown(FCanvas, mbLeft, [ssLeft], X0, Y0);
+  CanvasMouseMove(FCanvas, [ssLeft], X0 + Round(Days / Max(DaysPerPixel, 1E-6)), Y0);
+  CanvasMouseUp(FCanvas, mbLeft, [], X0 + Round(Days / Max(DaysPerPixel, 1E-6)), Y0);
+end;
+
+function TGanttPage.RowStart(Row: Integer): TDateTime;
+begin
+  if (Row >= 0) and (Row <= High(FRows)) then Result := FRows[Row].Start else Result := 0;
+end;
+
+function TGanttPage.RowPlanEnd(Row: Integer): TDateTime;
+begin
+  if (Row >= 0) and (Row <= High(FRows)) then Result := FRows[Row].PlanEnd else Result := 0;
+end;
+
+function TGanttPage.RowOrderId(Row: Integer): Integer;
+begin
+  if (Row >= 0) and (Row <= High(FRows)) then Result := FRows[Row].OrderId else Result := 0;
 end;
 
 procedure TGanttPage.LoadRows;
@@ -185,6 +379,7 @@ begin
     while not Q.Eof do
     begin
       R.IsWork := False;
+      R.OrderId := Q.FieldByName('id').AsInteger;
       R.Caption := '№' + Q.FieldByName('number').AsString + '  ' + Q.FieldByName('kind').AsString;
       R.Sub := Q.FieldByName('client').AsString + '  ·  ' + Q.FieldByName('status').AsString;
       R.Start := AsDate(Q.FieldByName('d1').AsString, Today);
@@ -214,6 +409,7 @@ begin
           while not QL.Eof do
           begin
             W.IsWork := True;
+            W.OrderId := OrderId;
             W.Caption := '   ' + QL.FieldByName('name').AsString;
             W.Sub := FormatFloat('0.##', QL.FieldByName('qty').AsFloat) + ' ' +
                      QL.FieldByName('unit_').AsString;
@@ -269,6 +465,19 @@ var
     Result := LEFT_W + Round((ADate - FMin) / Total * ChartW);
   end;
 
+  { Предпросмотр во время перетаскивания: строка рисуется уже сдвинутой,
+    в базу изменение уходит только при отпускании кнопки. }
+  procedure ApplyDrag(var Row: TGanttRow; Index: Integer);
+  begin
+    if (FDragMode = dmNone) or (FDragRow < 0) or (FDragDays = 0) then Exit;
+    if Row.OrderId <> FRows[FDragRow].OrderId then Exit;
+    case FDragMode of
+      dmMove:  begin Row.Start := Row.Start + FDragDays; Row.PlanEnd := Row.PlanEnd + FDragDays; end;
+      dmStart: if Index = FDragRow then Row.Start := Row.Start + FDragDays;
+      dmEnd:   if Index = FDragRow then Row.PlanEnd := Row.PlanEnd + FDragDays;
+    end;
+  end;
+
   procedure Bar(X1, X2, AY, H: Integer; Col: TColor);
   begin
     if X2 < X1 + 2 then X2 := X1 + 2;
@@ -280,6 +489,7 @@ begin
   C := FCanvas.Canvas;
   W := FCanvas.Width;
   ChartW := Max(50, W - LEFT_W - 16);
+  FChartW := ChartW;         // нужен обработчикам мыши для перевода пикселей в дни
   Total := FMax - FMin;
 
   C.Brush.Color := ESPO_WHITE;
@@ -315,6 +525,7 @@ begin
   for I := 0 to High(FRows) do
   begin
     R := FRows[I];
+    ApplyDrag(R, I);
     Y := HEAD_H + I * ROW_H;
     if I mod 2 = 1 then
     begin
