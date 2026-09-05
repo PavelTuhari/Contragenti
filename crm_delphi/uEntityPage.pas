@@ -361,8 +361,9 @@ begin
           Cb.Parent := FEditor;
           Cb.Style := csDropDownList;
           Cb.SetBounds(X, Y + 18, W, 26);
+          // показываем перевод, а в базу пишем каноническое значение по позиции
           if F.Kind = fkEnum then
-            Cb.Items.AddStrings(F.Enum.Split([';']));
+            Cb.Items.AddStrings(EnumDisplayList(F.EnumName, F.Enum));
           FCtrls[I] := Cb;
         end;
       fkBool:
@@ -559,8 +560,7 @@ begin
     if Id > 0 then V := Row.Values[I] else V := ResolveDefault(F.Default);
     case F.Kind of
       fkEnum:
-        (FCtrls[I] as TComboBox).ItemIndex :=
-          Max(0, (FCtrls[I] as TComboBox).Items.IndexOf(V));
+        (FCtrls[I] as TComboBox).ItemIndex := Max(0, IndexStr(V, F.Enum.Split([';'])));
       fkLookupClient, fkLookupDeal, fkLookupItem:
         begin
           (FCtrls[I] as TComboBox).ItemIndex := 0;
@@ -638,7 +638,9 @@ begin
     if SameText(FDef.Fields[I].Name, FieldName) then
       case FDef.Fields[I].Kind of
         fkEnum:
-          (FCtrls[I] as TComboBox).ItemIndex := (FCtrls[I] as TComboBox).Items.IndexOf(Value);
+          // принимаем каноническое значение — оно же лежит в базе
+          (FCtrls[I] as TComboBox).ItemIndex :=
+            IndexStr(Value, FDef.Fields[I].Enum.Split([';']));
         fkLookupClient, fkLookupDeal, fkLookupItem:
           begin
             // значение — id или отображаемое имя
@@ -663,7 +665,10 @@ begin
   for I := 0 to High(FDef.Fields) do
     if SameText(FDef.Fields[I].Name, FieldName) then
       case FDef.Fields[I].Kind of
-        fkEnum: Result := (FCtrls[I] as TComboBox).Text;
+        fkEnum:
+          // из показанного перевода возвращаем каноническое значение
+          if (FCtrls[I] as TComboBox).ItemIndex >= 0 then
+            Result := FDef.Fields[I].Enum.Split([';'])[(FCtrls[I] as TComboBox).ItemIndex];
         fkLookupClient, fkLookupDeal, fkLookupItem:
           if (FCtrls[I] as TComboBox).ItemIndex > 0 then
             Result := IntToStr(FLookupIds[I][(FCtrls[I] as TComboBox).ItemIndex]);

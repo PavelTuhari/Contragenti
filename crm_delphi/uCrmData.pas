@@ -22,7 +22,8 @@ type
     Name: string;        // колонка в таблице
     Caption: string;
     Kind: TFieldKind;
-    Enum: string;        // значения через ';' для fkEnum
+    Enum: string;        // канонические значения через ';' — они лежат в базе
+    EnumName: string;    // имя списка в lang.json для показа перевода
     ListWidth: Integer;  // ширина колонки в списке, 0 — не показывать
     Required: Boolean;
     Default: string;
@@ -93,6 +94,12 @@ type
     { Открытый запрос для отчётов; освобождает вызывающий код. }
     function OpenQuery(const SQL: string): TFDQuery;
 
+    { ── пользователи и вход ── }
+    procedure EnsureAdmin;
+    function CheckLogin(const User, Password: string): Boolean;
+    function SetPassword(const User, Password: string): Boolean;
+    function UserCount: Integer;
+
     // справочники для выпадающих списков: пары id / название
     function LookupPairs(Kind: TFieldKind): TArray<TPair<Integer, string>>;
 
@@ -113,10 +120,13 @@ type
 
 function FieldDef(const Name, Caption: string; Kind: TFieldKind;
   ListWidth: Integer = 0; Required: Boolean = False; const Enum: string = '';
-  const Default: string = ''): TFieldDef;
+  const Default: string = ''; const EnumName: string = ''): TFieldDef;
 { Значение по умолчанию «today» / «today+N» превращает в дату; остальное
   возвращает как есть. Используется и редактором, и генератором данных. }
 function ResolveDefault(const S: string): string;
+{ Перевод значения перечисления для показа: в базе остаётся каноническое. }
+function EnumDisplay(const EnumName, Canonical, CanonicalList: string): string;
+function EnumDisplayList(const EnumName, CanonicalList: string): TArray<string>;
 
 var
   // ── описания сущностей ──
@@ -136,22 +146,44 @@ const
 implementation
 
 uses
-  System.Variants, System.StrUtils, System.DateUtils;
+  System.Variants, System.StrUtils, System.DateUtils, System.Hash, uI18n;
 
 var
   // числа в базу пишутся с точкой независимо от локали Windows
   FloatFS: TFormatSettings;
 
 function FieldDef(const Name, Caption: string; Kind: TFieldKind;
-  ListWidth: Integer; Required: Boolean; const Enum, Default: string): TFieldDef;
+  ListWidth: Integer; Required: Boolean; const Enum, Default, EnumName: string): TFieldDef;
 begin
   Result.Name := Name;
   Result.Caption := Caption;
   Result.Kind := Kind;
   Result.Enum := Enum;
+  Result.EnumName := EnumName;
   Result.ListWidth := ListWidth;
   Result.Required := Required;
   Result.Default := Default;
+end;
+
+function EnumDisplayList(const EnumName, CanonicalList: string): TArray<string>;
+begin
+  Result := T.EnumList(EnumName);
+  // перевода нет или он неполный — показываем канонические значения
+  if Length(Result) <> Length(CanonicalList.Split([';'])) then
+    Result := CanonicalList.Split([';']);
+end;
+
+function EnumDisplay(const EnumName, Canonical, CanonicalList: string): string;
+var
+  Canon, Disp: TArray<string>;
+  I: Integer;
+begin
+  Result := Canonical;
+  Canon := CanonicalList.Split([';']);
+  Disp := EnumDisplayList(EnumName, CanonicalList);
+  for I := 0 to High(Canon) do
+    if Canon[I] = Canonical then
+      Exit(Disp[I]);
 end;
 
 function ResolveDefault(const S: string): string;
@@ -185,8 +217,8 @@ begin
   DefLeads.Fields := [
     FieldDef('name', 'Имя', fkText, 180, True),
     FieldDef('company', 'Компания', fkText, 200),
-    FieldDef('status', 'Статус', fkEnum, 110, True, ENUM_LEAD_STATUS, 'Новый'),
-    FieldDef('source', 'Источник', fkEnum, 110, False, ENUM_LEAD_SOURCE, 'Сайт'),
+    FieldDef('status', 'Статус', fkEnum, 110, True, ENUM_LEAD_STATUS, 'Новый', 'lead_status'),
+    FieldDef('source', 'Источник', fkEnum, 110, False, ENUM_LEAD_SOURCE, 'Сайт', 'lead_source'),
     FieldDef('phone', 'Телефон', fkText, 120),
     FieldDef('email', 'E-mail', fkText, 150),
     FieldDef('notes', 'Заметки', fkMemo)];
@@ -199,7 +231,7 @@ begin
   DefDeals.Fields := [
     FieldDef('title', 'Название', fkText, 240, True),
     FieldDef('client_id', 'Клиент', fkLookupClient, 220),
-    FieldDef('stage', 'Этап', fkEnum, 110, True, ENUM_DEAL_STAGE, 'Новая'),
+    FieldDef('stage', 'Этап', fkEnum, 110, True, ENUM_DEAL_STAGE, 'Новая', 'deal_stage'),
     FieldDef('amount', 'Сумма, MDL', fkMoney, 110),
     FieldDef('close_date', 'Закрытие', fkDate, 100),
     FieldDef('notes', 'Заметки', fkMemo)];
@@ -212,8 +244,8 @@ begin
   DefItems.Fields := [
     FieldDef('code', 'Код', fkText, 80),
     FieldDef('name', 'Наименование', fkText, 260, True),
-    FieldDef('kind', 'Вид', fkEnum, 90, True, ENUM_ITEM_KIND, 'Товар'),
-    FieldDef('unit_', 'Ед.', fkEnum, 60, True, ENUM_UNIT, 'шт'),
+    FieldDef('kind', 'Вид', fkEnum, 90, True, ENUM_ITEM_KIND, 'Товар', 'item_kind'),
+    FieldDef('unit_', 'Ед.', fkEnum, 60, True, ENUM_UNIT, 'шт', 'unit'),
     FieldDef('price', 'Цена, MDL', fkMoney, 100),
     FieldDef('vat', 'НДС, %', fkNumber, 70, False, '', '20'),
     FieldDef('stock', 'Остаток', fkNumber, 80, False, '', '0'),
@@ -228,8 +260,8 @@ begin
     FieldDef('number', '№', fkText, 60, True),
     FieldDef('order_date', 'Дата', fkDate, 85, True, '', 'today'),
     FieldDef('client_id', 'Клиент', fkLookupClient, 190),
-    FieldDef('kind', 'Вид', fkEnum, 100, True, ENUM_ORDER_KIND, 'Продажа'),
-    FieldDef('status', 'Статус', fkEnum, 100, True, ENUM_ORDER_STATUS, 'Черновик'),
+    FieldDef('kind', 'Вид', fkEnum, 100, True, ENUM_ORDER_KIND, 'Продажа', 'order_kind'),
+    FieldDef('status', 'Статус', fkEnum, 100, True, ENUM_ORDER_STATUS, 'Черновик', 'order_status'),
     FieldDef('total', 'Итого, MDL', fkReadOnly, 90),
     FieldDef('advance', 'Аванс', fkMoney, 80),
     FieldDef('paid', 'Оплачено', fkMoney, 85),
@@ -244,7 +276,7 @@ begin
   DefTasks.SearchCols := 'subject';
   DefTasks.Fields := [
     FieldDef('subject', 'Тема', fkText, 240, True),
-    FieldDef('kind', 'Вид', fkEnum, 90, True, ENUM_TASK_KIND, 'Задача'),
+    FieldDef('kind', 'Вид', fkEnum, 90, True, ENUM_TASK_KIND, 'Задача', 'task_kind'),
     FieldDef('due_at', 'Срок', fkDate, 100, True, '', 'today'),
     FieldDef('client_id', 'Клиент', fkLookupClient, 200),
     FieldDef('deal_id', 'Сделка', fkLookupDeal, 160),
@@ -267,7 +299,7 @@ end;
 
 procedure TCrmData.EnsureSchema;
 const
-  DDL: array[0..7] of string = (
+  DDL: array[0..8] of string = (
     // расширение клиентов — колонки добавляются, если их ещё нет (см. ниже)
     '',
     'CREATE TABLE IF NOT EXISTS contacts (id INTEGER PRIMARY KEY AUTOINCREMENT,' +
@@ -290,6 +322,9 @@ const
     'CREATE TABLE IF NOT EXISTS order_lines (id INTEGER PRIMARY KEY AUTOINCREMENT,' +
     ' order_id INTEGER NOT NULL, item_id INTEGER NOT NULL, qty REAL DEFAULT 1,' +
     ' price REAL DEFAULT 0, sum REAL DEFAULT 0)',
+    'CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT,' +
+    ' login TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, full_name TEXT,' +
+    ' created_at TEXT DEFAULT (datetime(''now'',''localtime'')))',
     'CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT,' +
     ' subject TEXT NOT NULL, kind TEXT, due_at TEXT, client_id INTEGER, deal_id INTEGER,' +
     ' done INTEGER DEFAULT 0, notes TEXT, created_at TEXT DEFAULT (datetime(''now'',''localtime'')))');
@@ -308,6 +343,52 @@ begin
     AddColumn('clients', C, 'TEXT');
   for C in OrderCols do
     AddColumn('orders', Copy(C, 1, Pos(' ', C + ' ') - 1), Copy(C, Pos(' ', C + ' ') + 1, MaxInt));
+end;
+
+{ ── пользователи ── }
+
+{ Пароль хранится только как SHA-256 с солью из логина: в базе нет текста
+  пароля, а одинаковые пароли разных пользователей дают разные хеши. }
+function PassHash(const User, Password: string): string;
+begin
+  Result := THashSHA2.GetHashString('crm:' + LowerCase(User) + ':' + Password);
+end;
+
+procedure TCrmData.EnsureAdmin;
+begin
+  if UserCount = 0 then
+    Conn.ExecSQL('INSERT INTO users (login, pass_hash, full_name) VALUES (:l, :h, :n)',
+      ['admin', PassHash('admin', 'admin'), 'Administrator']);
+end;
+
+function TCrmData.UserCount: Integer;
+begin
+  Result := Scalar('SELECT COUNT(*) FROM users');
+end;
+
+function TCrmData.CheckLogin(const User, Password: string): Boolean;
+var
+  Q: TFDQuery;
+begin
+  Result := False;
+  if Trim(User) = '' then Exit;
+  Q := TFDQuery.Create(nil);
+  try
+    Q.Connection := Conn;
+    Q.Open('SELECT pass_hash FROM users WHERE login = :l COLLATE NOCASE', [Trim(User)]);
+    Result := (not Q.IsEmpty) and
+              (Q.FieldByName('pass_hash').AsString = PassHash(Trim(User), Password));
+  finally
+    Q.Free;
+  end;
+end;
+
+function TCrmData.SetPassword(const User, Password: string): Boolean;
+begin
+  Result := Trim(Password) <> '';
+  if not Result then Exit;
+  Conn.ExecSQL('UPDATE users SET pass_hash = :h WHERE login = :l COLLATE NOCASE',
+    [PassHash(Trim(User), Password), Trim(User)]);
 end;
 
 { Добавляет колонку, если её ещё нет — база могла быть создана старой версией. }
@@ -383,8 +464,11 @@ var
   Tbl, SumCol: string;
 begin
   Result.Stage := Stage;
-  Result.Title := STAGE_TITLES[Stage];
-  Result.Hint := STAGE_HINTS[Stage];
+  // названия этапов берём из lang.json; если перевода нет — из кода
+  Result.Title := T.EnumAt('stage_title', Ord(Stage));
+  if Result.Title = '' then Result.Title := STAGE_TITLES[Stage];
+  Result.Hint := T.EnumAt('stage_hint', Ord(Stage));
+  if Result.Hint = '' then Result.Hint := STAGE_HINTS[Stage];
   Tbl := STAGE_TABLES[Stage];
   Result.Table := Tbl;
   if Tbl = 'deals' then SumCol := 'amount' else SumCol := 'total';
@@ -467,6 +551,9 @@ begin
         case Def.Fields[I].Kind of
           fkLookupClient, fkLookupDeal, fkLookupItem:
             Row.Display[I] := Q.FieldByName(Def.Fields[I].Name + '__disp').AsString;
+          fkEnum:
+            Row.Display[I] := EnumDisplay(Def.Fields[I].EnumName, Row.Values[I],
+              Def.Fields[I].Enum);
           fkBool:
             Row.Display[I] := IfThen(Row.Values[I] = '1', 'Да', '');
           fkMoney, fkReadOnly:

@@ -27,6 +27,8 @@ uses
   uContragenti in 'uContragenti.pas',
   uClientsDB in 'uClientsDB.pas',
   uEspoTheme in 'uEspoTheme.pas',
+  uI18n in 'uI18n.pas',
+  uCalendarView in 'uCalendarView.pas',
   uCrmData in 'uCrmData.pas',
   uEntityPage in 'uEntityPage.pas',
   uReportTable in 'uReportTable.pas',

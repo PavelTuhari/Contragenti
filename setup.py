@@ -59,6 +59,8 @@ build_exe_options = {
 if _HAS_DEMO_CRM:
     build_exe_options["include_files"] += [
         (_DEMO_CRM_EXE, "DemoCRM/ContragentiCRM.exe"),
+        # переводы интерфейса лежат рядом с exe и правятся без пересборки
+        ("crm_delphi/lang.json", "DemoCRM/lang.json"),
         ("crm_delphi/README_ru.md", "DemoCRM/README_ru.md"),
         ("crm_delphi/sample_card.xml", "DemoCRM/sample_card.xml"),
     ]

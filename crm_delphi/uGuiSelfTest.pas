@@ -65,7 +65,7 @@ uses
   System.IOUtils, System.StrUtils, System.Generics.Collections, System.Generics.Defaults,
   System.Variants, System.Math, System.DateUtils,
   uContragenti, uClientsDB, uCrmData, uEntityPage, uTestData, uWorkspace,
-  uReports, uReportTable, uKanban, uGantt;
+  uReports, uReportTable, uKanban, uGantt, uCalendarView, uI18n;
 
 const
   PW_RENDERFULLCONTENT = $00000002;
@@ -467,11 +467,68 @@ var
   Xlsx, Pdf, Stub, SavedLauncher: string;
   Id: Integer;
   D1, D2: TDateTime;
+  Nav: string;
 begin
   FSteps := nil;
   FNum := 0;
   FExtra := nil;
   TDirectory.CreateDirectory(FOutDir);
+
+  // ── часть 0: вход в программу и язык интерфейса ──
+
+  Inc(FNum);
+  Step('Окно входа закрывает данные до авторизации',
+    FForm.TestLoginVisible, 'панель входа показана', 'login');
+
+  Inc(FNum);
+  FForm.TestLogin('admin', 'неверный');
+  Pump;
+  Step('Неверный пароль не пускает в программу',
+    FForm.TestLoginVisible and (FForm.TestMessageKind = mkWarn),
+    FForm.TestMessage, 'login_bad');
+
+  Inc(FNum);
+  FForm.TestSetLanguage('ro');
+  Pump;
+  Step('Язык интерфейса из внешнего lang.json: румынский (основной)',
+    T.Loaded and (T.Lang = 'ro') and (T.S('nav.clients') = 'Clienți'),
+    Format('файл %s; nav.clients = «%s», nav.orders = «%s»',
+      [ExtractFileName(T.FileName), T.S('nav.clients'), T.S('nav.orders')]),
+    'lang_ro');
+
+  Inc(FNum);
+  FForm.TestSetLanguage('en');
+  Pump;
+  Step('Переключение на английский меняет строки из того же файла',
+    (T.Lang = 'en') and (T.S('nav.clients') = 'Clients')
+      and (TI18n.ReadLangFromRegistry('') = 'en'),
+    Format('nav.clients = «%s», в реестре Language = «%s»',
+      [T.S('nav.clients'), TI18n.ReadLangFromRegistry('')]),
+    'lang_en');
+
+  Inc(FNum);
+  FForm.TestSetLanguage('ru');
+  Pump;
+  Step('Выбор языка сохраняется в реестре Windows (HKCU\Software\DemoCRM)',
+    (TI18n.ReadLangFromRegistry('') = 'ru') and (T.S('nav.clients') = 'Клиенты'),
+    Format('в реестре Language = «%s», nav.clients = «%s»',
+      [TI18n.ReadLangFromRegistry(''), T.S('nav.clients')]),
+    'lang_registry');
+
+  Inc(FNum);
+  Step('Значения справочников переводятся, а в базе остаются каноническими',
+    (EnumDisplay('order_status', 'Подтверждён', ENUM_ORDER_STATUS) = 'Подтверждён') and
+    (T.EnumAt('order_status', 1) = 'Подтверждён'),
+    Format('order_status[1] в ru = «%s», этап 3 = «%s»',
+      [T.EnumAt('order_status', 1), T.EnumAt('stage_title', 3)]),
+    'enum_translate');
+
+  Inc(FNum);
+  FForm.TestLogin('admin', 'admin');
+  Pump;
+  Step('Вход с верным паролем открывает программу',
+    (not FForm.TestLoginVisible) and (FForm.User = 'admin'),
+    Format('пользователь «%s»; %s', [FForm.User, FForm.TestMessage]), 'login_ok');
 
   // ── часть 1: интерфейс без внешних процессов ──
 
@@ -992,6 +1049,52 @@ begin
       [FForm.Kanban.ColumnCount, FForm.Kanban.CardsInColumn(0), FForm.Kanban.CardsInColumn(1),
        FForm.Kanban.CardsInColumn(2), FForm.Kanban.CardsInColumn(3)]),
     'kanban_tasks');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsCalendar);
+  Pump;
+  FForm.Calendar.GoToday;
+  Pump;
+  Step('Календарь месячной сеткой: задачи разложены по дням',
+    (FForm.Calendar.TasksInMonth > 0) and (FForm.Calendar.MonthTitle <> ''),
+    Format('месяц «%s», задач в месяце %d, сегодня %d',
+      [FForm.Calendar.MonthTitle, FForm.Calendar.TasksInMonth,
+       FForm.Calendar.TasksOnDay(Date)]),
+    'calendar_month');
+
+  Inc(FNum);
+  Id := FForm.Crm.Scalar('SELECT id FROM tasks WHERE done = 0 AND due_at = ' +
+    QuotedStr(FormatDateTime('yyyy-mm-dd', Date)) + ' LIMIT 1');
+  if Id = 0 then
+  begin
+    // на сегодня задач нет — создадим, чтобы было что перетаскивать
+    Id := FForm.Crm.Insert(DefTasks, ['Перенос мышью', 'Задача',
+      FormatDateTime('yyyy-mm-dd', Date), '', '', '0', '']);
+    FForm.Calendar.Refresh;
+    Pump;
+  end;
+  Before := FForm.Calendar.TasksOnDay(Date + 3);
+  FForm.Calendar.DragTask(Id, Date + 3);
+  Pump;
+  V := FForm.Crm.Scalar('SELECT due_at FROM tasks WHERE id = ' + IntToStr(Id));
+  Step('Календарь: задача перетащена мышью на три дня вперёд',
+    (VarToStr(V) = FormatDateTime('yyyy-mm-dd', Date + 3)) and
+    (FForm.Calendar.TasksOnDay(Date + 3) = Before + 1),
+    Format('срок в базе «%s», на дне %s задач %d → %d',
+      [VarToStr(V), FormatDateTime('dd.mm', Date + 3), Before,
+       FForm.Calendar.TasksOnDay(Date + 3)]),
+    'calendar_drag');
+
+  Inc(FNum);
+  FForm.Calendar.GoNextMonth;
+  Pump;
+  Nav := FForm.Calendar.MonthTitle;
+  FForm.Calendar.GoPrevMonth;
+  Pump;
+  Step('Календарь: листание месяцев кнопками ‹ ›',
+    (Nav <> FForm.Calendar.MonthTitle) and (FForm.Calendar.MonthTitle <> ''),
+    Format('следующий «%s», текущий «%s»', [Nav, FForm.Calendar.MonthTitle]),
+    'calendar_next_month');
 
   Inc(FNum);
   FForm.TestClickNav(nsGantt);

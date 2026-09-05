@@ -21,7 +21,7 @@ uses
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
   Vcl.Graphics,
   uClientsDB, uContragenti, uCrmData, uEntityPage, uEspoTheme, uErpApi,
-  uWorkspace, uReports, uKanban, uGantt;
+  uWorkspace, uReports, uKanban, uGantt, uCalendarView, uI18n;
 
 type
   TNavSection = (nsWorkspace, nsKanban, nsGantt, nsAccounts, nsContacts, nsLeads,
@@ -67,6 +67,18 @@ type
     FReportsPage: TReportsPage;
     FKanbanPage: TKanbanPage;
     FGanttPage: TGanttPage;
+    FCalendarPage: TCalendarPage;
+    FCalendarAsGrid: Boolean;
+
+    // вход в программу
+    FLoginPanel: TPanel;
+    FLoginUser, FLoginPass: TEdit;
+    FLoginLang: TComboBox;
+    FLoginError: TLabel;
+    FLoginBox: TPanel;
+    FUser: string;
+    FLangEdit: TComboBox;
+    FPassEdit: TEdit;
 
     FSettingsPanel: TPanel;
     FLauncherEdit, FErpUrlEdit, FErpKeyEdit: TEdit;
@@ -91,6 +103,15 @@ type
     procedure OpenRecord(Section: TNavSection; Id: Integer);
     procedure OnKanbanOpen(Board: TBoardKind; Id: Integer);
     procedure OnGanttOpen(OrderId: Integer);
+    procedure OnCalendarOpenTask(TaskId: Integer);
+    procedure OnCalendarNewTask(const ADate: TDateTime);
+    procedure OnCalendarShowList(Sender: TObject);
+    procedure OnShowCalendarClick(Sender: TObject);
+    procedure BuildLogin;
+    procedure OnLoginClick(Sender: TObject);
+    procedure OnLoginLangChange(Sender: TObject);
+    procedure OnLoginResize(Sender: TObject);
+    procedure ApplyNavCaptions;
     procedure Say(Kind: TMsgKind; const Msg: string);
     procedure OnNavClick(Sender: TObject);
     procedure OnAddClick(Sender: TObject);
@@ -125,6 +146,8 @@ type
     property Reports: TReportsPage read FReportsPage;
     property Kanban: TKanbanPage read FKanbanPage;
     property Gantt: TGanttPage read FGanttPage;
+    property Calendar: TCalendarPage read FCalendarPage;
+    property User: string read FUser;
     function  Page(Section: TNavSection): TEntityPage;
     function  TestImportXml(const Xml: string; out Card: TCounterpartyCard): TAddResult;
     function  TestSelectFirst: Boolean;
@@ -141,6 +164,11 @@ type
     { Сколько раз сработал обработчик ожидания Contragenti — по нему видно,
       что окно продолжало обрабатывать сообщения, а не висело. }
     function  TestWaitTicks: Integer;
+    { вход и языки }
+    function  TestLoginVisible: Boolean;
+    function  TestLogin(const AUser, APass: string): Boolean;
+    procedure TestSetLanguage(const Code: string);
+    function  TestNavCaption(Section: TNavSection): string;
   end;
 
 var
@@ -187,6 +215,13 @@ begin
   FCrm := TCrmData.Create(FDB);
   FCrm.EnsureSchema;
 
+  FCrm.EnsureAdmin;
+
+  // язык берём из реестра: он переживает переустановку и не зависит от crm.ini
+  if not T.Load then
+    T.UseLang('ru');
+  T.UseLang(TI18n.ReadLangFromRegistry('ro'));
+
   FCli := TContragentiClient.Create;
   FErp := TErpClient.Create;
   LoadSettings;
@@ -195,7 +230,11 @@ begin
   Application.OnException := OnAppException;
   RefreshList;
   SelectSection(nsWorkspace);
-  Say(mkInfo, Format('База: %s   |   клиентов: %d', [FDB.DBPath, FDB.Count]));
+  BuildLogin;
+  if not T.Loaded then
+    Say(mkWarn, 'Переводы не загружены: ' + T.Error)
+  else
+    Say(mkInfo, Format('База: %s   |   клиентов: %d', [FDB.DBPath, FDB.Count]));
 end;
 
 procedure TMainForm.OnAppException(Sender: TObject; E: Exception);
@@ -335,28 +374,28 @@ begin
   Logo := TLabel.Create(Self);
   Logo.Parent := Hdr;
   Logo.SetBounds(18, 14, 200, 26);
-  Logo.Caption := 'Demo CRM';
+  Logo.Caption := T.S('app.title');
   Logo.Font.Size := 14;
   Logo.Font.Style := [fsBold];
   Logo.Font.Color := ESPO_PRIMARY;
   Sub := TLabel.Create(Self);
   Sub.Parent := Hdr;
   Sub.SetBounds(19, 40, 200, 16);
-  Sub.Caption := 'SDK Contragenti · date.gov.md';
+  Sub.Caption := T.S('app.subtitle');
   Sub.Font.Size := 8;
   Sub.Font.Color := ESPO_MUTED;
 
-  AddNavItem(nsWorkspace, '⌂', 'Рабочий стол');
-  AddNavItem(nsKanban,    '▦', 'Канбан');
-  AddNavItem(nsGantt,     '▤', 'План работ');
-  AddNavItem(nsAccounts,  '▣', 'Клиенты');
-  AddNavItem(nsContacts,  '☺', 'Контакты');
-  AddNavItem(nsLeads,     '✉', 'Лиды');
-  AddNavItem(nsDeals,     '$', 'Сделки');
-  AddNavItem(nsItems,     '▤', 'Номенклатура');
-  AddNavItem(nsOrders,    '▥', 'Заказы');
-  AddNavItem(nsCalendar,  '▦', 'Календарь');
-  AddNavItem(nsReports,   '▤', 'Отчёты');
+  AddNavItem(nsWorkspace, '⌂', T.S('nav.workspace'));
+  AddNavItem(nsKanban,    '▦', T.S('nav.kanban'));
+  AddNavItem(nsGantt,     '▤', T.S('nav.gantt'));
+  AddNavItem(nsAccounts,  '▣', T.S('nav.clients'));
+  AddNavItem(nsContacts,  '☺', T.S('nav.contacts'));
+  AddNavItem(nsLeads,     '✉', T.S('nav.leads'));
+  AddNavItem(nsDeals,     '$', T.S('nav.deals'));
+  AddNavItem(nsItems,     '▤', T.S('nav.items'));
+  AddNavItem(nsOrders,    '▥', T.S('nav.orders'));
+  AddNavItem(nsCalendar,  '▦', T.S('nav.calendar'));
+  AddNavItem(nsReports,   '▤', T.S('nav.reports'));
 
   Sep := TPanel.Create(Self);
   Sep.Parent := FSidebar;
@@ -372,7 +411,7 @@ begin
     BevelOuter := bvNone; Color := ESPO_BORDER; ParentBackground := False;
   end;
 
-  AddNavItem(nsSettings, '⚙', 'Настройки');
+  AddNavItem(nsSettings, '⚙', T.S('nav.settings'));
 
   Min := TLabel.Create(Self);
   Min.Parent := FSidebar;
@@ -670,7 +709,128 @@ begin
   FKanbanPage.OnOpenRecord := OnKanbanOpen;
   FGanttPage := TGanttPage.Create(Self, FContent, FCrm, Say);
   FGanttPage.OnOpenOrder := OnGanttOpen;
+  FCalendarPage := TCalendarPage.Create(Self, FContent, FCrm, Say);
+  FCalendarPage.OnOpenTask := OnCalendarOpenTask;
+  FCalendarPage.OnNewTask := OnCalendarNewTask;
+  FCalendarPage.OnShowList := OnCalendarShowList;
+  FCalendarAsGrid := True;
+  FPages[nsCalendar].AddExtraButton(T.S('calendar.title'), OnShowCalendarClick, False, 120);
   SetStagePresets;
+end;
+
+{ ── вход в программу ──
+  Это не отдельное модальное окно, а панель поверх содержимого: модальные
+  окна в проекте запрещены (ломают самотест и headless-режимы), а закрыть
+  доступ к данным панель поверх всего окна позволяет так же надёжно. }
+procedure TMainForm.BuildLogin;
+var
+  Box: TPanel;
+  Btn: TPanel;
+  I: Integer;
+  L: TLangInfo;
+begin
+  FLoginPanel := TPanel.Create(Self);
+  FLoginPanel.Parent := Self;
+  FLoginPanel.Align := alClient;
+  FLoginPanel.BevelOuter := bvNone;
+  FLoginPanel.Color := ESPO_BODY;
+  FLoginPanel.ParentBackground := False;
+
+  Box := MakePanelBox(Self, FLoginPanel, '');
+  Box.SetBounds((FLoginPanel.Width - 460) div 2, 120, 460, 300);
+  Box.Anchors := [akTop];
+  FLoginBox := Box;
+  FLoginPanel.OnResize := OnLoginResize;
+
+  with MakeLabel(Self, Box, T.S('app.title'), 30, 22, 400, ESPO_PRIMARY, 18) do
+  begin
+    Height := 30;      // иначе крупный шрифт обрезается по высоте метки
+    Font.Style := [fsBold];
+  end;
+  MakeLabel(Self, Box, T.S('login.title'), 30, 60, 400, ESPO_TEXT, 12);
+  MakeLabel(Self, Box, T.S('login.subtitle'), 30, 82, 400, ESPO_MUTED, 9);
+
+  MakeLabel(Self, Box, T.S('login.user'), 30, 112, 180, ESPO_MUTED, 9);
+  FLoginUser := TEdit.Create(Self);
+  FLoginUser.Parent := Box;
+  FLoginUser.SetBounds(30, 130, 200, 26);
+  FLoginUser.Text := 'admin';
+
+  MakeLabel(Self, Box, T.S('login.password'), 245, 112, 180, ESPO_MUTED, 9);
+  FLoginPass := TEdit.Create(Self);
+  FLoginPass.Parent := Box;
+  FLoginPass.SetBounds(245, 130, 185, 26);
+  FLoginPass.PasswordChar := '•';
+
+  MakeLabel(Self, Box, T.S('login.language'), 30, 168, 180, ESPO_MUTED, 9);
+  FLoginLang := TComboBox.Create(Self);
+  FLoginLang.Parent := Box;
+  FLoginLang.Style := csDropDownList;
+  FLoginLang.SetBounds(30, 186, 200, 26);
+  for I := 0 to High(T.Langs) do
+  begin
+    L := T.Langs[I];
+    FLoginLang.Items.Add(L.Name);
+    if SameText(L.Code, T.Lang) then FLoginLang.ItemIndex := I;
+  end;
+  if FLoginLang.ItemIndex < 0 then FLoginLang.ItemIndex := 0;
+  FLoginLang.OnChange := OnLoginLangChange;
+
+  Btn := MakeButton(Self, Box, T.S('login.enter'), True, OnLoginClick, 185);
+  Btn.SetBounds(245, 181, 185, 36);
+
+  FLoginError := MakeLabel(Self, Box, '', 30, 228, 400, ST_DANGER_FG, 9);
+  MakeLabel(Self, Box, T.S('login.hint'), 30, 252, 410, ESPO_MUTED, 8);
+
+  FLoginPanel.BringToFront;
+end;
+
+procedure TMainForm.OnLoginResize(Sender: TObject);
+begin
+  if FLoginBox <> nil then
+    FLoginBox.Left := Max(10, (FLoginPanel.Width - FLoginBox.Width) div 2);
+end;
+
+{ Меню переписываем сразу при смене языка: остальные страницы уже построены,
+  их подписи применяются после перезапуска — об этом и говорит сообщение. }
+procedure TMainForm.ApplyNavCaptions;
+const
+  KEYS: array[TNavSection] of string = ('nav.workspace', 'nav.kanban', 'nav.gantt',
+    'nav.clients', 'nav.contacts', 'nav.leads', 'nav.deals', 'nav.items',
+    'nav.orders', 'nav.calendar', 'nav.reports', 'nav.settings');
+var
+  S: TNavSection;
+begin
+  for S := Low(TNavSection) to High(TNavSection) do
+    if FNavItems[S] <> nil then
+      TLabel(FNavItems[S].Controls[1]).Caption := T.S(KEYS[S]);
+  SelectSection(FSection);
+end;
+
+procedure TMainForm.OnLoginLangChange(Sender: TObject);
+begin
+  // язык можно выбрать прямо на входе; выбор сразу уходит в реестр
+  if (FLoginLang.ItemIndex >= 0) and (FLoginLang.ItemIndex <= High(T.Langs)) then
+  begin
+    T.UseLang(T.Langs[FLoginLang.ItemIndex].Code);
+    ApplyNavCaptions;
+    Say(mkInfo, T.S('settings.lang_saved'));
+  end;
+end;
+
+procedure TMainForm.OnLoginClick(Sender: TObject);
+begin
+  if FCrm.CheckLogin(FLoginUser.Text, FLoginPass.Text) then
+  begin
+    FUser := Trim(FLoginUser.Text);
+    FLoginPanel.Visible := False;
+    Say(mkOk, T.F('login.welcome', [FUser]));
+  end
+  else
+  begin
+    FLoginError.Caption := T.S('login.bad');
+    Say(mkWarn, T.S('login.bad'));
+  end;
 end;
 
 { Двойной клик по карточке канбана или полосе Ганта открывает саму запись
@@ -695,6 +855,33 @@ end;
 procedure TMainForm.OnGanttOpen(OrderId: Integer);
 begin
   OpenRecord(nsOrders, OrderId);
+end;
+
+{ Календарь и список задач — два вида одного раздела. }
+procedure TMainForm.OnCalendarOpenTask(TaskId: Integer);
+begin
+  FCalendarAsGrid := False;
+  OpenRecord(nsCalendar, TaskId);
+end;
+
+procedure TMainForm.OnCalendarNewTask(const ADate: TDateTime);
+begin
+  FCalendarAsGrid := False;
+  SelectSection(nsCalendar);
+  FPages[nsCalendar].NewRecord;
+  FPages[nsCalendar].SetField('due_at', FormatDateTime('yyyy-mm-dd', ADate));
+end;
+
+procedure TMainForm.OnCalendarShowList(Sender: TObject);
+begin
+  FCalendarAsGrid := False;
+  SelectSection(nsCalendar);
+end;
+
+procedure TMainForm.OnShowCalendarClick(Sender: TObject);
+begin
+  FCalendarAsGrid := True;
+  SelectSection(nsCalendar);
 end;
 
 { Нажатие на плитку: открыть раздел с соответствующим фильтром. }
@@ -723,6 +910,7 @@ end;
 procedure TMainForm.BuildSettingsPanel;
 var
   Btn: TPanel;
+  I: Integer;
 begin
   FSettingsPanel := TPanel.Create(Self);
   FSettingsPanel.Parent := FContent;
@@ -732,23 +920,40 @@ begin
   FSettingsPanel.Color := ST_PRIMARY_BG;
   FSettingsPanel.ParentBackground := False;
   FSettingsPanel.Visible := False;
-  FSettingsPanel.Height := 92;
-  MakeLabel(Self, FSettingsPanel, 'Путь к Contragenti (exe/py):', 15, 14, 190, ST_PRIMARY_FG, 10);
+  FSettingsPanel.Height := 128;
+  MakeLabel(Self, FSettingsPanel, T.S('settings.launcher'), 15, 14, 200, ST_PRIMARY_FG, 10);
   FLauncherEdit := TEdit.Create(Self);
   FLauncherEdit.Parent := FSettingsPanel;
-  FLauncherEdit.SetBounds(215, 10, 560, 26);
-  MakeLabel(Self, FSettingsPanel, 'ERP una.md, адрес API:', 15, 50, 190, ST_PRIMARY_FG, 10);
+  FLauncherEdit.SetBounds(220, 10, 555, 26);
+  MakeLabel(Self, FSettingsPanel, T.S('settings.erp_url'), 15, 50, 200, ST_PRIMARY_FG, 10);
   FErpUrlEdit := TEdit.Create(Self);
   FErpUrlEdit.Parent := FSettingsPanel;
-  FErpUrlEdit.SetBounds(215, 46, 330, 26);
+  FErpUrlEdit.SetBounds(220, 46, 330, 26);
   FErpUrlEdit.TextHint := 'http://127.0.0.1:9000';
-  MakeLabel(Self, FSettingsPanel, 'Ключ:', 555, 50, 50, ST_PRIMARY_FG, 10);
+  MakeLabel(Self, FSettingsPanel, T.S('settings.erp_key'), 560, 50, 60, ST_PRIMARY_FG, 10);
   FErpKeyEdit := TEdit.Create(Self);
   FErpKeyEdit.Parent := FSettingsPanel;
-  FErpKeyEdit.SetBounds(600, 46, 175, 26);
+  FErpKeyEdit.SetBounds(620, 46, 155, 26);
   FErpKeyEdit.PasswordChar := '•';
-  Btn := MakeButton(Self, FSettingsPanel, 'Сохранить', True, OnSettingsSave, 110);
-  Btn.SetBounds(790, 28, 110, 36);
+
+  MakeLabel(Self, FSettingsPanel, T.S('settings.language'), 15, 86, 200, ST_PRIMARY_FG, 10);
+  FLangEdit := TComboBox.Create(Self);
+  FLangEdit.Parent := FSettingsPanel;
+  FLangEdit.Style := csDropDownList;
+  FLangEdit.SetBounds(220, 82, 200, 26);
+  for I := 0 to High(T.Langs) do
+  begin
+    FLangEdit.Items.Add(T.Langs[I].Name);
+    if SameText(T.Langs[I].Code, T.Lang) then FLangEdit.ItemIndex := I;
+  end;
+  MakeLabel(Self, FSettingsPanel, T.S('settings.password'), 430, 86, 130, ST_PRIMARY_FG, 10);
+  FPassEdit := TEdit.Create(Self);
+  FPassEdit.Parent := FSettingsPanel;
+  FPassEdit.SetBounds(560, 82, 215, 26);
+  FPassEdit.PasswordChar := '•';
+
+  Btn := MakeButton(Self, FSettingsPanel, T.S('btn.save'), True, OnSettingsSave, 110);
+  Btn.SetBounds(790, 46, 110, 36);
 end;
 
 { ── навигация ── }
@@ -758,12 +963,12 @@ var
   S: TNavSection;
   Titles: array[TNavSection] of string;
 begin
-  Titles[nsWorkspace] := 'Рабочий стол'; Titles[nsAccounts] := 'Клиенты';
-  Titles[nsKanban] := 'Канбан'; Titles[nsGantt] := 'План работ';
-  Titles[nsContacts] := 'Контакты'; Titles[nsLeads] := 'Лиды';
-  Titles[nsDeals] := 'Сделки'; Titles[nsItems] := 'Номенклатура';
-  Titles[nsOrders] := 'Заказы'; Titles[nsCalendar] := 'Календарь';
-  Titles[nsReports] := 'Отчёты'; Titles[nsSettings] := 'Настройки';
+  Titles[nsWorkspace] := T.S('nav.workspace'); Titles[nsAccounts] := T.S('nav.clients');
+  Titles[nsKanban] := T.S('nav.kanban'); Titles[nsGantt] := T.S('nav.gantt');
+  Titles[nsContacts] := T.S('nav.contacts'); Titles[nsLeads] := T.S('nav.leads');
+  Titles[nsDeals] := T.S('nav.deals'); Titles[nsItems] := T.S('nav.items');
+  Titles[nsOrders] := T.S('nav.orders'); Titles[nsCalendar] := T.S('nav.calendar');
+  Titles[nsReports] := T.S('nav.reports'); Titles[nsSettings] := T.S('nav.settings');
 
   if Section = nsSettings then
   begin
@@ -789,10 +994,11 @@ begin
   FReportsPage.Visible := Section = nsReports;
   FKanbanPage.Visible := Section = nsKanban;
   FGanttPage.Visible := Section = nsGantt;
+  FCalendarPage.Visible := (Section = nsCalendar) and FCalendarAsGrid;
   for S := Low(TNavSection) to High(TNavSection) do
     if FPages[S] <> nil then
     begin
-      FPages[S].Visible := S = Section;
+      FPages[S].Visible := (S = Section) and not (FCalendarPage.Visible and (S = nsCalendar));
       if S = Section then
       begin
         FPages[S].Cancel;    // при входе в раздел — чистый список, без редактора прошлой записи
@@ -803,6 +1009,7 @@ begin
   if Section = nsReports then FReportsPage.Refresh;
   if Section = nsKanban then FKanbanPage.Refresh;
   if Section = nsGantt then FGanttPage.Refresh;
+  if FCalendarPage.Visible then FCalendarPage.Refresh;
   Caption := 'Demo CRM · ' + Titles[Section];
 end;
 
@@ -1141,16 +1348,36 @@ begin
 end;
 
 procedure TMainForm.OnSettingsSave(Sender: TObject);
+var
+  Msg: string;
 begin
   FCli.LauncherExe := Trim(FLauncherEdit.Text);
   FErp.Url := Trim(FErpUrlEdit.Text);
   FErp.Key := Trim(FErpKeyEdit.Text);
   SaveSettings;
+  Msg := T.S('settings.saved');
+
+  // язык запоминается в реестре Windows, а не в crm.ini
+  if (FLangEdit.ItemIndex >= 0) and (FLangEdit.ItemIndex <= High(T.Langs)) and
+     not SameText(T.Langs[FLangEdit.ItemIndex].Code, T.Lang) then
+  begin
+    T.UseLang(T.Langs[FLangEdit.ItemIndex].Code);
+    ApplyNavCaptions;
+    Msg := Msg + '  ' + T.S('settings.lang_saved');
+  end;
+
+  if Trim(FPassEdit.Text) <> '' then
+  begin
+    FCrm.SetPassword(IfThen(FUser = '', 'admin', FUser), Trim(FPassEdit.Text));
+    FPassEdit.Text := '';
+    Msg := Msg + '  ' + T.S('settings.pass_changed');
+  end;
+
   SelectSection(nsSettings);
   if TFile.Exists(FCli.LauncherExe) then
-    Say(mkOk, 'Настройки сохранены: ' + FCli.LauncherExe)
+    Say(mkOk, Msg)
   else
-    Say(mkWarn, 'Сохранено, но файл не найден: ' + FCli.LauncherExe);
+    Say(mkWarn, Msg + '  ' + T.F('msg.contragenti_missing', [FCli.LauncherExe]));
 end;
 
 procedure TMainForm.OnFormClose(Sender: TObject; var Action: TCloseAction);
@@ -1274,6 +1501,31 @@ end;
 function TMainForm.TestWaitTicks: Integer;
 begin
   Result := FWaitTicks;
+end;
+
+function TMainForm.TestLoginVisible: Boolean;
+begin
+  Result := (FLoginPanel <> nil) and FLoginPanel.Visible;
+end;
+
+function TMainForm.TestLogin(const AUser, APass: string): Boolean;
+begin
+  FLoginUser.Text := AUser;
+  FLoginPass.Text := APass;
+  OnLoginClick(nil);
+  Result := not TestLoginVisible;
+end;
+
+procedure TMainForm.TestSetLanguage(const Code: string);
+begin
+  T.UseLang(Code);
+  ApplyNavCaptions;
+end;
+
+function TMainForm.TestNavCaption(Section: TNavSection): string;
+begin
+  // подпись пункта навигации — второй ярлык на панели (после значка)
+  Result := TLabel(FNavItems[Section].Controls[1]).Caption;
 end;
 
 
