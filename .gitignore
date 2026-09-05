@@ -32,6 +32,8 @@ crm_delphi/*.res
 crm_delphi/*.dcu
 crm_delphi/clients.db
 crm_delphi/crm.ini
+# выгруженные отчёты — результат работы, а не исходник
+crm_delphi/reports/
 
 # Секреты развёртывания
 deploy/.env

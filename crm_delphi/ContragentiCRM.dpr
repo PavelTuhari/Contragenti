@@ -29,6 +29,12 @@ uses
   uEspoTheme in 'uEspoTheme.pas',
   uCrmData in 'uCrmData.pas',
   uEntityPage in 'uEntityPage.pas',
+  uReportTable in 'uReportTable.pas',
+  uXlsx in 'uXlsx.pas',
+  uPdf in 'uPdf.pas',
+  uReports in 'uReports.pas',
+  uErpApi in 'uErpApi.pas',
+  uWorkspace in 'uWorkspace.pas',
   uMainForm in 'uMainForm.pas',
   uGuiSelfTest in 'uGuiSelfTest.pas',
   uTestData in 'uTestData.pas';
@@ -185,7 +191,15 @@ begin
     DB.Open;
     Data := TCrmData.Create(DB);
     try
-      Stats := SeedDemo(DB, Data);
+      try
+        Stats := SeedDemo(DB, Data);
+      except
+        on E: Exception do
+        begin
+          WriteConsole('Ошибка генерации: ' + E.ClassName + ': ' + E.Message);
+          Exit(2);
+        end;
+      end;
       WriteConsole('Тестовые данные добавлены в ' + Path);
       WriteConsole('Добавлено: ' + Stats.Text);
       WriteConsole(Format('Всего в базе: клиентов %d, контактов %d, лидов %d, сделок %d, ' +
@@ -214,15 +228,21 @@ begin
   if TFile.Exists(TmpDb) then TFile.Delete(TmpDb);
   DB := TClientsDB.Create(TmpDb);
   Log := TStringList.Create;
+  Ok := False;
   try
-    DB.Open;
-    Data := TCrmData.Create(DB);
     try
-      // сначала полный набор данных — DML проверяется на заполненной базе
-      SeedDemo(DB, Data);
-      Ok := RunDmlTest(DB, Data, Log);
-    finally
-      Data.Free;
+      DB.Open;
+      Data := TCrmData.Create(DB);
+      try
+        // сначала полный набор данных — DML проверяется на заполненной базе
+        SeedDemo(DB, Data);
+        Ok := RunDmlTest(DB, Data, Log);
+      finally
+        Data.Free;
+      end;
+    except
+      on E: Exception do
+        Log.Add('[FAIL] исключение: ' + E.ClassName + ': ' + E.Message);
     end;
     for S in Log do WriteConsole(S);
     if Ok then Result := 0 else Result := 1;

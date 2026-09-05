@@ -20,11 +20,12 @@ uses
   Winapi.Windows, System.SysUtils, System.Classes,
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
   Vcl.Graphics,
-  uClientsDB, uContragenti, uCrmData, uEntityPage, uEspoTheme;
+  uClientsDB, uContragenti, uCrmData, uEntityPage, uEspoTheme, uErpApi,
+  uWorkspace, uReports;
 
 type
-  TNavSection = (nsHome, nsAccounts, nsContacts, nsLeads, nsDeals, nsItems,
-    nsOrders, nsCalendar, nsSettings);
+  TNavSection = (nsWorkspace, nsAccounts, nsContacts, nsLeads, nsDeals, nsItems,
+    nsOrders, nsCalendar, nsReports, nsSettings);
 
   TMainForm = class(TForm)
   private
@@ -58,28 +59,29 @@ type
     // универсальные страницы
     FPages: array[TNavSection] of TEntityPage;
 
-    // «Главная»
-    FPageHome: TPanel;
-    FKpi: array[0..4] of TLabel;
-    FDashOrders, FDashTasks: TLabel;
+    // рабочий стол и отчёты
+    FErp: TErpClient;
+    FWorkspace: TWorkspacePage;
+    FReportsPage: TReportsPage;
 
     FSettingsPanel: TPanel;
-    FLauncherEdit: TEdit;
+    FLauncherEdit, FErpUrlEdit, FErpKeyEdit: TEdit;
 
     procedure BuildUI;
     procedure BuildSidebar;
     procedure BuildTopBar;
     procedure BuildAccountsPage;
     procedure BuildEntityPages;
-    procedure BuildHomePage;
+    procedure BuildWorkspacePages;
+    procedure SetStagePresets;
     procedure BuildSettingsPanel;
     procedure AddNavItem(Section: TNavSection; const Glyph, Title: string);
     procedure SelectSection(Section: TNavSection);
     procedure LoadSettings;
     procedure SaveSettings;
     procedure RefreshList;
-    procedure RefreshHome;
     procedure ShowOverview(Item: TListItem);
+    procedure OnStageClick(Stage: TStage);
     procedure Say(Kind: TMsgKind; const Msg: string);
     procedure OnNavClick(Sender: TObject);
     procedure OnAddClick(Sender: TObject);
@@ -109,6 +111,9 @@ type
     procedure TestClickNav(Section: TNavSection);
     property Client: TContragentiClient read FCli;
     property Crm: TCrmData read FCrm;
+    property Erp: TErpClient read FErp;
+    property Workspace: TWorkspacePage read FWorkspace;
+    property Reports: TReportsPage read FReportsPage;
     function  Page(Section: TNavSection): TEntityPage;
     function  TestImportXml(const Xml: string; out Card: TCounterpartyCard): TAddResult;
     function  TestSelectFirst: Boolean;
@@ -122,7 +127,6 @@ type
     function  TestMessage: string;
     function  TestMessageKind: TMsgKind;
     function  TestSection: TNavSection;
-    function  TestKpi(Index: Integer): string;
   end;
 
 var
@@ -144,8 +148,6 @@ const
   COL_TITLES: array[0..5] of string =
     ('Название', 'IDNO', 'Форма', 'Адрес', 'Руководитель', 'Добавлен');
   COL_WIDTHS: array[0..5] of Integer = (300, 120, 90, 230, 150, 120);
-  KPI_TITLES: array[0..4] of string =
-    ('Клиенты', 'Открытые сделки, MDL', 'Заказы за месяц, MDL', 'Просроченные задачи', 'Позиций номенклатуры');
 
 function AppDir: string;
 begin
@@ -172,12 +174,13 @@ begin
   FCrm.EnsureSchema;
 
   FCli := TContragentiClient.Create;
+  FErp := TErpClient.Create;
   LoadSettings;
 
   BuildUI;
   Application.OnException := OnAppException;
   RefreshList;
-  SelectSection(nsAccounts);
+  SelectSection(nsWorkspace);
   Say(mkInfo, Format('База: %s   |   клиентов: %d', [FDB.DBPath, FDB.Count]));
 end;
 
@@ -188,6 +191,7 @@ end;
 
 destructor TMainForm.Destroy;
 begin
+  FErp.Free;
   FCli.Free;
   FCrm.Free;
   FDB.Free;
@@ -242,7 +246,7 @@ begin
   BuildSettingsPanel;
   BuildAccountsPage;
   BuildEntityPages;
-  BuildHomePage;
+  BuildWorkspacePages;
 end;
 
 procedure TMainForm.AddNavItem(Section: TNavSection; const Glyph, Title: string);
@@ -328,14 +332,15 @@ begin
   Sub.Font.Size := 8;
   Sub.Font.Color := ESPO_MUTED;
 
-  AddNavItem(nsHome,     '⌂', 'Главная');
-  AddNavItem(nsAccounts, '▣', 'Клиенты');
-  AddNavItem(nsContacts, '☺', 'Контакты');
-  AddNavItem(nsLeads,    '✉', 'Лиды');
-  AddNavItem(nsDeals,    '$', 'Сделки');
-  AddNavItem(nsItems,    '▤', 'Номенклатура');
-  AddNavItem(nsOrders,   '▥', 'Заказы');
-  AddNavItem(nsCalendar, '▦', 'Календарь');
+  AddNavItem(nsWorkspace, '⌂', 'Рабочий стол');
+  AddNavItem(nsAccounts,  '▣', 'Клиенты');
+  AddNavItem(nsContacts,  '☺', 'Контакты');
+  AddNavItem(nsLeads,     '✉', 'Лиды');
+  AddNavItem(nsDeals,     '$', 'Сделки');
+  AddNavItem(nsItems,     '▤', 'Номенклатура');
+  AddNavItem(nsOrders,    '▥', 'Заказы');
+  AddNavItem(nsCalendar,  '▦', 'Календарь');
+  AddNavItem(nsReports,   '▤', 'Отчёты');
 
   Sep := TPanel.Create(Self);
   Sep.Parent := FSidebar;
@@ -619,55 +624,57 @@ begin
      't.done = 0 AND t.due_at < date(''now'',''localtime'')', '']);
 end;
 
-procedure TMainForm.BuildHomePage;
-var
-  T: TLabel;
-  B: TPanel;
-  I: Integer;
+{ Пресеты разделов совпадают с плитками рабочего стола, поэтому нажатие на
+  плитку открывает раздел уже отфильтрованным. }
+procedure TMainForm.SetStagePresets;
 begin
-  FPageHome := TPanel.Create(Self);
-  FPageHome.Parent := FContent;
-  FPageHome.Align := alClient;
-  FPageHome.BevelOuter := bvNone;
-  FPageHome.Color := ESPO_BODY;
-  FPageHome.ParentBackground := False;
-  FPageHome.Visible := False;
-
-  T := TLabel.Create(Self);
-  T.Parent := FPageHome;
-  T.SetBounds(15, 18, 400, 30);
-  T.Caption := 'Главная';
-  T.Font.Size := 16;
-
-  for I := 0 to 4 do
-  begin
-    B := MakePanelBox(Self, FPageHome, KPI_TITLES[I]);
-    B.SetBounds(15 + I * 200, 64, 188, 100);
-    FKpi[I] := TLabel.Create(Self);
-    FKpi[I].Parent := B;
-    FKpi[I].SetBounds(14, 38, 170, 44);
-    FKpi[I].Font.Size := 20;
-    FKpi[I].Font.Style := [fsBold];
-    FKpi[I].Font.Color := ESPO_PRIMARY;
-  end;
-  FKpi[3].Font.Color := ST_DANGER_FG;
-
-  B := MakePanelBox(Self, FPageHome, 'Последние заказы');
-  B.SetBounds(15, 180, 480, 260);
-  FDashOrders := TLabel.Create(Self);
-  FDashOrders.Parent := B;
-  FDashOrders.AutoSize := False;
-  FDashOrders.WordWrap := True;
-  FDashOrders.SetBounds(14, 38, 452, 210);
-
-  B := MakePanelBox(Self, FPageHome, 'Ближайшие задачи');
-  B.SetBounds(511, 180, 480, 260);
-  FDashTasks := TLabel.Create(Self);
-  FDashTasks.Parent := B;
-  FDashTasks.AutoSize := False;
-  FDashTasks.WordWrap := True;
-  FDashTasks.SetBounds(14, 38, 452, 210);
+  FPages[nsDeals].SetPresets(
+    ['Все', 'Предложение', 'Переговоры', 'Выиграна', 'Проиграна', 'Открытые'],
+    ['', FCrm.StageWhere(stDealOffer), FCrm.StageWhere(stDealTalks),
+     FCrm.StageWhere(stDealWon), 't.stage = ''Проиграна''',
+     't.stage NOT IN (''Выиграна'',''Проиграна'')']);
+  FPages[nsOrders].SetPresets(
+    ['Все', 'Ожидает аванс', 'В работе / производство', 'Готово к отгрузке',
+     'Отгружено — ждём оплату', 'Закрыто', 'Запаздывает'],
+    ['', FCrm.StageWhere(stAwaitAdvance), FCrm.StageWhere(stInWork),
+     FCrm.StageWhere(stReadyToShip), FCrm.StageWhere(stAwaitPayment),
+     FCrm.StageWhere(stClosed),
+     't.status <> ''Отменён'' AND COALESCE(t.due_date,'''') <> '''' ' +
+     'AND t.due_date < date(''now'',''localtime'') ' +
+     'AND NOT (COALESCE(t.ship_date,'''') <> '''' AND COALESCE(t.paid,0) >= t.total)']);
 end;
+
+procedure TMainForm.BuildWorkspacePages;
+begin
+  FWorkspace := TWorkspacePage.Create(Self, FContent, FCrm, FErp, Say);
+  FWorkspace.OnStageClick := OnStageClick;
+  FReportsPage := TReportsPage.Create(Self, FContent, FCrm, Say,
+    TPath.Combine(AppDir, 'reports'));
+  SetStagePresets;
+end;
+
+{ Нажатие на плитку: открыть раздел с соответствующим фильтром. }
+procedure TMainForm.OnStageClick(Stage: TStage);
+const
+  DEAL_PRESET: array[stDealOffer..stDealWon] of Integer = (1, 2, 3);
+  ORDER_PRESET: array[stAwaitAdvance..stClosed] of Integer = (1, 2, 3, 4, 5);
+begin
+  if Stage in [stDealOffer, stDealTalks, stDealWon] then
+  begin
+    SelectSection(nsDeals);
+    FPages[nsDeals].SelectPreset(DEAL_PRESET[Stage]);
+    Say(mkInfo, Format('Сделки, этап «%s»: %d',
+      [FCrm.StageInfo(Stage).Title, FPages[nsDeals].ListCount]));
+  end
+  else
+  begin
+    SelectSection(nsOrders);
+    FPages[nsOrders].SelectPreset(ORDER_PRESET[Stage]);
+    Say(mkInfo, Format('Заказы, этап «%s»: %d',
+      [FCrm.StageInfo(Stage).Title, FPages[nsOrders].ListCount]));
+  end;
+end;
+
 
 procedure TMainForm.BuildSettingsPanel;
 var
@@ -681,12 +688,23 @@ begin
   FSettingsPanel.Color := ST_PRIMARY_BG;
   FSettingsPanel.ParentBackground := False;
   FSettingsPanel.Visible := False;
-  MakeLabel(Self, FSettingsPanel, 'Путь к Contragenti (exe/py):', 15, 18, 190, ST_PRIMARY_FG, 10);
+  FSettingsPanel.Height := 92;
+  MakeLabel(Self, FSettingsPanel, 'Путь к Contragenti (exe/py):', 15, 14, 190, ST_PRIMARY_FG, 10);
   FLauncherEdit := TEdit.Create(Self);
   FLauncherEdit.Parent := FSettingsPanel;
-  FLauncherEdit.SetBounds(205, 14, 560, 26);
+  FLauncherEdit.SetBounds(215, 10, 560, 26);
+  MakeLabel(Self, FSettingsPanel, 'ERP una.md, адрес API:', 15, 50, 190, ST_PRIMARY_FG, 10);
+  FErpUrlEdit := TEdit.Create(Self);
+  FErpUrlEdit.Parent := FSettingsPanel;
+  FErpUrlEdit.SetBounds(215, 46, 330, 26);
+  FErpUrlEdit.TextHint := 'http://127.0.0.1:9000';
+  MakeLabel(Self, FSettingsPanel, 'Ключ:', 555, 50, 50, ST_PRIMARY_FG, 10);
+  FErpKeyEdit := TEdit.Create(Self);
+  FErpKeyEdit.Parent := FSettingsPanel;
+  FErpKeyEdit.SetBounds(600, 46, 175, 26);
+  FErpKeyEdit.PasswordChar := '•';
   Btn := MakeButton(Self, FSettingsPanel, 'Сохранить', True, OnSettingsSave, 110);
-  Btn.SetBounds(775, 10, 110, 36);
+  Btn.SetBounds(790, 28, 110, 36);
 end;
 
 { ── навигация ── }
@@ -696,11 +714,11 @@ var
   S: TNavSection;
   Titles: array[TNavSection] of string;
 begin
-  Titles[nsHome] := 'Главная'; Titles[nsAccounts] := 'Клиенты';
+  Titles[nsWorkspace] := 'Рабочий стол'; Titles[nsAccounts] := 'Клиенты';
   Titles[nsContacts] := 'Контакты'; Titles[nsLeads] := 'Лиды';
   Titles[nsDeals] := 'Сделки'; Titles[nsItems] := 'Номенклатура';
   Titles[nsOrders] := 'Заказы'; Titles[nsCalendar] := 'Календарь';
-  Titles[nsSettings] := 'Настройки';
+  Titles[nsReports] := 'Отчёты'; Titles[nsSettings] := 'Настройки';
 
   if Section = nsSettings then
   begin
@@ -708,7 +726,9 @@ begin
     if FSettingsPanel.Visible then
     begin
       FLauncherEdit.Text := FCli.LauncherExe;
-      Say(mkInfo, 'Укажите путь к Contragenti.exe и нажмите «Сохранить».');
+      FErpUrlEdit.Text := FErp.Url;
+      FErpKeyEdit.Text := FErp.Key;
+      Say(mkInfo, 'Путь к Contragenti и адрес ERP — затем «Сохранить».');
     end;
     FNavItems[nsSettings].Color := IfThen(FSettingsPanel.Visible, ESPO_NAV_ACT, ESPO_BODY);
     Exit;
@@ -719,8 +739,9 @@ begin
     if (FNavItems[S] <> nil) and (S <> nsSettings) then
       FNavItems[S].Color := IfThen(S = Section, ESPO_NAV_ACT, ESPO_BODY);
 
-  FPageHome.Visible := Section = nsHome;
   FPageAccounts.Visible := Section = nsAccounts;
+  FWorkspace.Visible := Section = nsWorkspace;
+  FReportsPage.Visible := Section = nsReports;
   for S := Low(TNavSection) to High(TNavSection) do
     if FPages[S] <> nil then
     begin
@@ -731,7 +752,8 @@ begin
         FPages[S].Refresh;
       end;
     end;
-  if Section = nsHome then RefreshHome;
+  if Section = nsWorkspace then FWorkspace.Refresh;
+  if Section = nsReports then FReportsPage.Refresh;
   Caption := 'Demo CRM · ' + Titles[Section];
 end;
 
@@ -763,6 +785,10 @@ begin
   try
     FCli.LauncherExe := Ini.ReadString('contragenti', 'launcher', DefExe);
     FCli.Lang := Ini.ReadString('contragenti', 'lang', 'ru');
+    // связь с ERP una.md: адрес хаба и ключ клиента (ключ хранится локально)
+    FErp.Url := Ini.ReadString('erp', 'url', 'http://127.0.0.1:9000');
+    FErp.Key := Ini.ReadString('erp', 'key', '');
+    FErp.ClientId := Ini.ReadString('erp', 'client_id', 'demo-crm');
   finally
     Ini.Free;
   end;
@@ -776,6 +802,9 @@ begin
   try
     Ini.WriteString('contragenti', 'launcher', FCli.LauncherExe);
     Ini.WriteString('contragenti', 'lang', FCli.Lang);
+    Ini.WriteString('erp', 'url', FErp.Url);
+    Ini.WriteString('erp', 'key', FErp.Key);
+    Ini.WriteString('erp', 'client_id', FErp.ClientId);
   finally
     Ini.Free;
   end;
@@ -828,47 +857,6 @@ begin
   else
     FPager.Caption := Format('1 – %d из %d', [FList.Items.Count, FDB.Count]);
   ShowOverview(nil);
-end;
-
-procedure TMainForm.RefreshHome;
-var
-  Month: string;
-  V: Variant;
-  Rows: TArray<TRow>;
-  R: TRow;
-  S: string;
-  N: Integer;
-begin
-  Month := FormatDateTime('yyyy-mm', Now);
-  FKpi[0].Caption := IntToStr(FDB.Count);
-  V := FCrm.Scalar('SELECT COALESCE(SUM(amount),0) FROM deals WHERE stage NOT IN (''Выиграна'',''Проиграна'')');
-  FKpi[1].Caption := FormatFloat('#,##0', Double(V)) + '  (' +
-    IntToStr(FCrm.Count('deals', 'stage NOT IN (''Выиграна'',''Проиграна'')')) + ')';
-  V := FCrm.Scalar('SELECT COALESCE(SUM(total),0) FROM orders WHERE order_date LIKE ''' + Month + '%'' AND status <> ''Отменён''');
-  FKpi[2].Caption := FormatFloat('#,##0', Double(V)) + '  (' +
-    IntToStr(FCrm.Count('orders', 'order_date LIKE ''' + Month + '%'' AND status <> ''Отменён''')) + ')';
-  FKpi[3].Caption := IntToStr(FCrm.Count('tasks', 'done = 0 AND due_at < date(''now'',''localtime'')'));
-  FKpi[4].Caption := IntToStr(FCrm.Count('items'));
-
-  S := ''; N := 0;
-  Rows := FCrm.List(DefOrders, '');
-  for R in Rows do
-  begin
-    S := S + Format('• №%s от %s — %s, %s, %s MDL  [%s]', [R.Display[0], R.Display[1],
-      IfThen(R.Display[2] = '', 'без клиента', R.Display[2]), R.Display[3], R.Display[5], R.Display[4]]) + sLineBreak;
-    Inc(N); if N >= 7 then Break;
-  end;
-  FDashOrders.Caption := IfThen(S = '', 'Заказов пока нет — создайте первый в разделе «Заказы».', S);
-
-  S := ''; N := 0;
-  Rows := FCrm.List(DefTasks, '', 't.done = 0');
-  for R in Rows do
-  begin
-    S := S + Format('• %s  %s — %s%s', [R.Display[2], R.Display[1], R.Display[0],
-      IfThen(R.Display[3] = '', '', ' (' + R.Display[3] + ')')]) + sLineBreak;
-    Inc(N); if N >= 7 then Break;
-  end;
-  FDashTasks.Caption := IfThen(S = '', 'Открытых задач нет.', S);
 end;
 
 procedure TMainForm.ShowOverview(Item: TListItem);
@@ -1060,6 +1048,8 @@ end;
 procedure TMainForm.OnSettingsSave(Sender: TObject);
 begin
   FCli.LauncherExe := Trim(FLauncherEdit.Text);
+  FErp.Url := Trim(FErpUrlEdit.Text);
+  FErp.Key := Trim(FErpKeyEdit.Text);
   SaveSettings;
   SelectSection(nsSettings);
   if TFile.Exists(FCli.LauncherExe) then
@@ -1186,9 +1176,5 @@ begin
   Result := FSection;
 end;
 
-function TMainForm.TestKpi(Index: Integer): string;
-begin
-  Result := FKpi[Index].Caption;
-end;
 
 end.

@@ -32,7 +32,41 @@ function RunDmlTest(DB: TClientsDB; Data: TCrmData; Log: TStrings): Boolean;
 implementation
 
 uses
-  System.StrUtils, System.Variants, System.Math, System.DateUtils;
+  System.StrUtils, System.Variants, System.Math, System.DateUtils, System.IOUtils,
+  FireDAC.Comp.Client, uReports, uReportTable;
+
+{ Проверка выгрузки по сигнатуре файла, а не по расширению. }
+function HeadOf(const FileName: string; Count: Integer): TBytes;
+var
+  FS: TFileStream;
+begin
+  SetLength(Result, 0);
+  if not TFile.Exists(FileName) then Exit;
+  FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, Min(Count, FS.Size));
+    if Length(Result) > 0 then FS.ReadBuffer(Result[0], Length(Result));
+  finally
+    FS.Free;
+  end;
+end;
+
+function IsZipFile(const FileName: string): Boolean;
+var
+  B: TBytes;
+begin
+  B := HeadOf(FileName, 2);
+  Result := (Length(B) = 2) and (B[0] = Ord('P')) and (B[1] = Ord('K'));
+end;
+
+function IsPdfFile(const FileName: string): Boolean;
+var
+  B: TBytes;
+begin
+  B := HeadOf(FileName, 4);
+  Result := (Length(B) = 4) and (B[0] = Ord('%')) and (B[1] = Ord('P')) and
+            (B[2] = Ord('D')) and (B[3] = Ord('F'));
+end;
 
 { TSeedStats }
 
@@ -135,7 +169,7 @@ var
   I: Integer;
 begin
   SetLength(Result, Length(Def.Fields));
-  for I := 0 to High(Def.Fields) do Result[I] := Def.Fields[I].Default;
+  for I := 0 to High(Def.Fields) do Result[I] := ResolveDefault(Def.Fields[I].Default);
   I := 0;
   while I < Length(Pairs) - 1 do
   begin
@@ -165,7 +199,11 @@ var
   ItemIds: TArray<Integer>;
   ItemPrices: TArray<Double>;
   Kind, Status, Num: string;
-  Conn: TArray<Integer>;
+  Total: Double;
+  Qry: TFDQuery;
+  Ids: TArray<Integer>;
+  Statuses: TArray<string>;
+  Totals: TArray<Double>;
 begin
   FillChar(Result, SizeOf(Result), 0);
   Data.EnsureSchema;
@@ -255,7 +293,10 @@ begin
     Status := ENUM_ORDER_STATUS.Split([';'])[I mod 6];
     OrderId := Data.Insert(DefOrders, Vals(DefOrders, ['number', Num, 'order_date', D(-40 + I * 2),
       'client_id', IfThen(Kind = 'Производство', '', IntToStr(ClientIds[(I * 5) mod Length(ClientIds)])),
-      'kind', Kind, 'status', Status, 'notes', IfThen(I mod 4 = 0, 'Срочный', '')]));
+      'kind', Kind, 'status', Status,
+      // срок: часть заказов намеренно просрочена, чтобы плитки показывали запаздывание
+      'due_date', D(-40 + I * 2 + IfThen(I mod 4 = 1, 5, 25)),
+      'notes', IfThen(I mod 4 = 0, 'Срочный', '')]));
     Inc(Result.Orders);
     for J := 0 to I mod 3 do
     begin
@@ -267,6 +308,78 @@ begin
     end;
     if (Status = 'Выполнен') or (Status = 'Оплачен') then
       Data.PostOrder(OrderId);
+
+    // деньги и отгрузка проставляются после строк: сумма заказа уже известна.
+    // Набор подобран так, чтобы на рабочем столе были заполнены все этапы.
+    Total := Data.Scalar('SELECT COALESCE(total,0) FROM orders WHERE id = ' + IntToStr(OrderId));
+    if Status = 'Подтверждён' then
+    begin
+      if (I div 6) mod 2 = 0 then               // ждём аванс
+        Data.DB.Connection.ExecSQL('UPDATE orders SET advance = 0 WHERE id = :i', [OrderId])
+      else                                       // аванс получен — в работе
+        Data.DB.Connection.ExecSQL('UPDATE orders SET advance = :a WHERE id = :i',
+          [Round(Total * 0.3 * 100) / 100, OrderId]);
+    end
+    else if Status = 'В работе' then
+      Data.DB.Connection.ExecSQL('UPDATE orders SET advance = :a WHERE id = :i',
+        [Round(Total * 0.5 * 100) / 100, OrderId])
+    else if Status = 'Выполнен' then
+    begin
+      if I div 6 = 0 then                        // готово к отгрузке
+        Data.DB.Connection.ExecSQL('UPDATE orders SET advance = :a WHERE id = :i',
+          [Round(Total * 0.4 * 100) / 100, OrderId])
+      else                                       // отгружено, ждём остаток оплаты
+        Data.DB.Connection.ExecSQL(
+          'UPDATE orders SET advance = :a, paid = :p, ship_date = :s WHERE id = :i',
+          [Round(Total * 0.4 * 100) / 100, Round(Total * 0.4 * 100) / 100,
+           D(-40 + I * 2 + 20), OrderId]);
+    end
+    else if Status = 'Оплачен' then              // закрыто
+      Data.DB.Connection.ExecSQL(
+        'UPDATE orders SET advance = :a, paid = :p, ship_date = :s WHERE id = :i',
+        [Round(Total * 0.5 * 100) / 100, Total, D(-40 + I * 2 + 15), OrderId]);
+  end;
+
+  // Заказы, созданные до появления полей процесса (аванс, оплата, срок,
+  // отгрузка), дополняются здесь — иначе плитки рабочего стола на старой
+  // базе остались бы наполовину пустыми. Уже заполненные не трогаем.
+  Qry := Data.OpenQuery('SELECT id, status, COALESCE(total,0) AS total ' +
+    'FROM orders WHERE COALESCE(due_date,'''') = ''''');
+  try
+    while not Qry.Eof do
+    begin
+      Ids := Ids + [Qry.FieldByName('id').AsInteger];
+      Statuses := Statuses + [Qry.FieldByName('status').AsString];
+      Totals := Totals + [Qry.FieldByName('total').AsFloat];
+      Qry.Next;
+    end;
+  finally
+    Qry.Free;
+  end;
+  for I := 0 to High(Ids) do
+  begin
+    Status := Statuses[I];
+    Total := Totals[I];
+    Data.DB.Connection.ExecSQL('UPDATE orders SET due_date = :d WHERE id = :i',
+      [D(IfThen(I mod 4 = 1, -3, 12)), Ids[I]]);
+    if Status = 'Подтверждён' then
+      Data.DB.Connection.ExecSQL('UPDATE orders SET advance = :a WHERE id = :i',
+        [IfThen(I mod 2 = 0, 0, Round(Total * 0.3 * 100) / 100), Ids[I]])
+    else if Status = 'В работе' then
+      Data.DB.Connection.ExecSQL('UPDATE orders SET advance = :a WHERE id = :i',
+        [Round(Total * 0.5 * 100) / 100, Ids[I]])
+    else if Status = 'Выполнен' then
+      if I mod 2 = 0 then
+        Data.DB.Connection.ExecSQL('UPDATE orders SET advance = :a WHERE id = :i',
+          [Round(Total * 0.4 * 100) / 100, Ids[I]])
+      else
+        Data.DB.Connection.ExecSQL(
+          'UPDATE orders SET advance = :a, paid = :p, ship_date = :s WHERE id = :i',
+          [Round(Total * 0.4 * 100) / 100, Round(Total * 0.4 * 100) / 100, D(-2), Ids[I]])
+    else if Status = 'Оплачен' then
+      Data.DB.Connection.ExecSQL(
+        'UPDATE orders SET advance = :a, paid = :p, ship_date = :s WHERE id = :i',
+        [Round(Total * 0.5 * 100) / 100, Total, D(-5), Ids[I]]);
   end;
 
   // задачи — 24: просроченные, сегодня, будущие, часть выполнена
@@ -330,11 +443,14 @@ var
   Res: TAddResult;
   V: Variant;
   Lines: TArray<TOrderLine>;
-  Msg: string;
+  Msg, TmpDir, Xlsx, Pdf: string;
   Rows: TArray<TRow>;
+  Rk: TReportKind;
+  Rep: TReportTable;
 begin
   Fails := 0;
   Data.EnsureSchema;
+  TmpDir := TPath.Combine(TPath.GetTempPath, 'crm_dml_reports');
 
   // ── клиенты: AddFromCard / дубликат / поиск / удаление ──
   Card.Clear;
@@ -434,6 +550,45 @@ begin
   Data.Delete(DefOrders, Id);
   Check(Data.Count('order_lines', 'order_id = ' + IntToStr(Id)) = 0, 'orders: DELETE заказа удаляет его строки');
   Data.Delete(DefOrders, OrderId);
+
+  // ── процесс исполнения: этапы по авансу, отгрузке и оплате ──
+  OrderId := Data.Insert(DefOrders, Vals(DefOrders, ['number', 'DML-W', 'order_date', D(0),
+    'client_id', IntToStr(ClientId), 'kind', 'Продажа', 'status', 'Подтверждён',
+    'due_date', D(-1)]));
+  Data.AddOrderLine(OrderId, ItemGoods, 1, 1000);
+  Check(Data.StageOf(OrderId) = stAwaitAdvance, 'process: подтверждён без аванса → «Ожидает аванс»');
+  Check(Data.Count('orders', 'id = ' + IntToStr(OrderId)) = 1, 'process: заказ на месте');
+  N := Data.StageInfo(stAwaitAdvance).Overdue;
+  Check(N > 0, Format('process: срок в прошлом попал в просрочку этапа (%d)', [N]));
+
+  Data.DB.Connection.ExecSQL('UPDATE orders SET advance = 300 WHERE id = :i', [OrderId]);
+  Check(Data.StageOf(OrderId) = stInWork, 'process: аванс получен → «В работе / производство»');
+
+  Data.DB.Connection.ExecSQL('UPDATE orders SET status = ''Выполнен'' WHERE id = :i', [OrderId]);
+  Check(Data.StageOf(OrderId) = stReadyToShip, 'process: исполнен без отгрузки → «Готово к отгрузке»');
+
+  Data.DB.Connection.ExecSQL('UPDATE orders SET ship_date = :s, paid = 300 WHERE id = :i', [D(0), OrderId]);
+  Check(Data.StageOf(OrderId) = stAwaitPayment, 'process: отгружен, оплата не закрыта → «Ждём оплату»');
+
+  Data.DB.Connection.ExecSQL('UPDATE orders SET paid = 1000 WHERE id = :i', [OrderId]);
+  Check(Data.StageOf(OrderId) = stClosed, 'process: оплачен полностью → «Закрыто»');
+  Check(Data.StageInfo(stClosed).Overdue = 0, 'process: закрытый этап не считается просроченным');
+  Data.Delete(DefOrders, OrderId);
+
+  // ── отчёты: строятся и выгружаются в оба формата ──
+  for Rk := Low(TReportKind) to High(TReportKind) do
+  begin
+    Rep := BuildReport(Data, Rk);
+    try
+      Check(Rep.ColCount > 0, Format('отчёт «%s»: колонки описаны (%d)', [Rep.Title, Rep.ColCount]));
+    finally
+      Rep.Free;
+    end;
+    Xlsx := ExportReport(Data, Rk, efXlsx, TmpDir);
+    Pdf := ExportReport(Data, Rk, efPdf, TmpDir);
+    Check(IsZipFile(Xlsx), Format('отчёт «%s»: xlsx — корректный zip-контейнер', [REPORTS[Rk].Title]));
+    Check(IsPdfFile(Pdf), Format('отчёт «%s»: pdf — заголовок %%PDF', [REPORTS[Rk].Title]));
+  end;
 
   // ── задачи ──
   CrudCycle(DefTasks, 'subject',

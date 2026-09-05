@@ -553,9 +553,10 @@ begin
   for I := 0 to High(FDef.Fields) do
   begin
     F := FDef.Fields[I];
-    if Id > 0 then V := Row.Values[I] else V := F.Default;
-    if (Id = 0) and (F.Kind = fkDate) and (V = '') then
-      V := FormatDateTime('yyyy-mm-dd', Now);
+    // Дата подставляется только там, где объявлена по умолчанию («today»,
+    // «today+N»). Иначе новый заказ получал бы дату отгрузки сегодняшним
+    // числом и сразу считался отгруженным.
+    if Id > 0 then V := Row.Values[I] else V := ResolveDefault(F.Default);
     case F.Kind of
       fkEnum:
         (FCtrls[I] as TComboBox).ItemIndex :=

@@ -39,6 +39,7 @@ type
     FExtra: TArray<string>;     // копятся во время шага (OnWait)
     FWaitTicks: Integer;
     FWaitShots: Integer;
+    FExports: TArray<string>;  // выгруженные отчёты — перечисляются в отчёте
     FSdkStart: TFileTime;     // момент нажатия кнопки — фильтр для чужих окон
     procedure MarkSdkStart;
     procedure CollectSdkShots;
@@ -63,7 +64,8 @@ uses
   Vcl.Forms, Vcl.Graphics, Vcl.Imaging.pngimage,
   System.IOUtils, System.StrUtils, System.Generics.Collections, System.Generics.Defaults,
   System.Variants, System.Math, System.DateUtils,
-  uContragenti, uClientsDB, uCrmData, uEntityPage, uTestData;
+  uContragenti, uClientsDB, uCrmData, uEntityPage, uTestData, uWorkspace,
+  uReports, uReportTable;
 
 const
   PW_RENDERFULLCONTENT = $00000002;
@@ -101,6 +103,55 @@ const
     '<founder name="BUBIS YEVGENY" share="50,00"/></founders>' +
     '<debts currency="MDL"><debt nr="1" type="Bugetul de stat" sum="0,00"/></debts>' +
     '</counterparty>';
+
+{ Проверка выгруженных файлов по сигнатуре, а не по расширению:
+  xlsx — zip (PK), pdf — %PDF. }
+function HeadBytes(const FileName: string; Count: Integer): TBytes;
+var
+  FS: TFileStream;
+begin
+  SetLength(Result, 0);
+  if not TFile.Exists(FileName) then Exit;
+  FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, Min(Count, FS.Size));
+    if Length(Result) > 0 then
+      FS.ReadBuffer(Result[0], Length(Result));
+  finally
+    FS.Free;
+  end;
+end;
+
+function FileSizeOf(const FileName: string): Int64;
+var
+  FS: TFileStream;
+begin
+  Result := 0;
+  if not TFile.Exists(FileName) then Exit;
+  FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyNone);
+  try
+    Result := FS.Size;
+  finally
+    FS.Free;
+  end;
+end;
+
+function IsZip(const FileName: string): Boolean;
+var
+  B: TBytes;
+begin
+  B := HeadBytes(FileName, 2);
+  Result := (Length(B) = 2) and (B[0] = Ord('P')) and (B[1] = Ord('K'));
+end;
+
+function IsPdf(const FileName: string): Boolean;
+var
+  B: TBytes;
+begin
+  B := HeadBytes(FileName, 5);
+  Result := (Length(B) = 5) and (B[0] = Ord('%')) and (B[1] = Ord('P')) and
+            (B[2] = Ord('D')) and (B[3] = Ord('F'));
+end;
 
 function HtmlEsc(const S: string): string;
 begin
@@ -413,6 +464,7 @@ var
   AlfaId, AgroId: Integer;
   V: Variant;
   Stats: TSeedStats;
+  Xlsx, Pdf: string;
 begin
   FSteps := nil;
   FNum := 0;
@@ -480,10 +532,10 @@ begin
   Step('Панель настроек скрыта повторным нажатием', True, '', 'settings_close');
 
   Inc(FNum);
-  FForm.TestClickNav(nsHome);
+  FForm.TestClickNav(nsWorkspace);
   Pump;
-  Step('Навигация: раздел «Главная» с дашлетами (стиль EspoCRM)',
-    FForm.TestSection = nsHome, '', 'home');
+  Step('Навигация: «Рабочий стол» — большие плитки этапов процесса',
+    FForm.TestSection = nsWorkspace, '', 'workspace_empty');
 
   Inc(FNum);
   FForm.TestClickNav(nsLeads);
@@ -773,32 +825,57 @@ begin
   P.SelectPreset(0);
 
   Inc(FNum);
-  FForm.TestClickNav(nsHome);
+  FForm.TestClickNav(nsWorkspace);
   Pump;
-  Step('Главная: показатели — клиенты, открытые сделки, заказы месяца, просроченные задачи, номенклатура',
-    (FForm.TestKpi(0) = '3') and (FForm.TestKpi(3) = '0') and (FForm.TestKpi(4) = '3')
-      and (Abs(Double(FForm.Crm.Scalar('SELECT SUM(total) FROM orders')) - 111800) < 0.01),
-    Format('клиенты=%s, сделки=%s, заказы=%s, просрочено=%s, номенклатура=%s',
-      [FForm.TestKpi(0), FForm.TestKpi(1), FForm.TestKpi(2), FForm.TestKpi(3), FForm.TestKpi(4)]),
-    'dashboard');
+  Step('Рабочий стол: плитки показывают процесс — два заказа исполнены и закрыты',
+    (FForm.Workspace.TileValue(stClosed) = '0') and (FForm.Workspace.TileValue(stReadyToShip) = '2'),
+    Format('ожидает аванс=%s, в работе=%s, готово к отгрузке=%s, ждём оплату=%s, закрыто=%s',
+      [FForm.Workspace.TileValue(stAwaitAdvance), FForm.Workspace.TileValue(stInWork),
+       FForm.Workspace.TileValue(stReadyToShip), FForm.Workspace.TileValue(stAwaitPayment),
+       FForm.Workspace.TileValue(stClosed)]),
+    'workspace');
 
   // ── часть 4: генератор тестовых данных в полном объёме (AGENTS.md §1) ──
 
   Inc(FNum);
   Stats := SeedDemo(FForm.Crm.DB, FForm.Crm);
-  FForm.TestClickNav(nsHome);
+  FForm.TestClickNav(nsWorkspace);
   Pump;
-  Step('Генератор тестовых данных: ' + Stats.Text + ' — показатели на «Главной»',
+  Step('Генератор тестовых данных: ' + Stats.Text + ' — плитки процесса заполнились',
     (Stats.Clients >= 12) and (Stats.Orders >= 15) and (Stats.Tasks >= 20)
-      and (FForm.TestKpi(4) = IntToStr(FForm.Crm.Count('items'))),
-    Format('KPI: клиенты=%s, сделки=%s, заказы=%s, просрочено=%s, номенклатура=%s',
-      [FForm.TestKpi(0), FForm.TestKpi(1), FForm.TestKpi(2), FForm.TestKpi(3), FForm.TestKpi(4)]),
-    'seed_dashboard');
+      and (StrToIntDef(FForm.Workspace.TileValue(stAwaitPayment), 0) > 0),
+    Format('аванс=%s, в работе=%s, к отгрузке=%s, ждём оплату=%s, закрыто=%s',
+      [FForm.Workspace.TileValue(stAwaitAdvance), FForm.Workspace.TileValue(stInWork),
+       FForm.Workspace.TileValue(stReadyToShip), FForm.Workspace.TileValue(stAwaitPayment),
+       FForm.Workspace.TileValue(stClosed)]),
+    'seed_workspace');
+
+  Inc(FNum);
+  FForm.Workspace.ClickTile(stAwaitPayment);
+  Pump;
+  P := FForm.Page(nsOrders);
+  Step('Плитка «Отгружено — ждём оплату» открывает «Заказы» с этим фильтром',
+    (FForm.TestSection = nsOrders) and (P.ListCount > 0)
+      and (P.ListCount = FForm.Crm.Count('orders', FForm.Crm.StageWhere(stAwaitPayment))),
+    Format('в списке %d, по условию этапа %d',
+      [P.ListCount, FForm.Crm.Count('orders', FForm.Crm.StageWhere(stAwaitPayment))]),
+    'tile_drilldown');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsWorkspace);
+  Pump;
+  FForm.Workspace.ErpCheck;
+  Pump;
+  Step('Связь с ERP una.md по HTTP-API хаба: результат проверки виден в полосе ERP',
+    FForm.Workspace.ErpText <> '',
+    FForm.Workspace.ErpText, 'erp_check');
 
   Inc(FNum);
   FForm.TestClickNav(nsOrders);
   Pump;
   P := FForm.Page(nsOrders);
+  P.SelectPreset(0);   // снять фильтр, оставшийся от перехода с плитки
+  Pump;
   Step('Заказы на полном наборе: продажа / услуга / производство, все статусы',
     P.ListCount = FForm.Crm.Count('orders'),
     Format('в списке %d, в базе %d', [P.ListCount, FForm.Crm.Count('orders')]), 'seed_orders');
@@ -823,6 +900,55 @@ begin
   Step('Календарь на полном наборе: просроченные задачи выделены пресетом',
     P.ListCount > 0, Format('просроченных %d', [P.ListCount]), 'seed_tasks_overdue');
   P.SelectPreset(0);
+
+  // ── часть 5: отчёты и выгрузка в Excel и PDF ──
+
+  Inc(FNum);
+  FForm.TestClickNav(nsReports);
+  Pump;
+  FForm.Reports.SelectReport(rkProcess);
+  Pump;
+  Step('Отчёты: «Процесс исполнения заказов» — предпросмотр по этапам',
+    (FForm.TestSection = nsReports) and (FForm.Reports.PreviewRows >= 8)
+      and (FForm.Reports.PreviewCols = 6),
+    Format('строк %d, колонок %d', [FForm.Reports.PreviewRows, FForm.Reports.PreviewCols]),
+    'report_process');
+
+  Inc(FNum);
+  Xlsx := FForm.Reports.Export(efXlsx);
+  Pdf := FForm.Reports.Export(efPdf);
+  Pump;
+  Step('Выгрузка отчёта в Excel и PDF',
+    IsZip(Xlsx) and IsPdf(Pdf),
+    Format('%s (%d байт, zip=%s); %s (%d байт, %%PDF=%s)',
+      [ExtractFileName(Xlsx), FileSizeOf(Xlsx), BoolToStr(IsZip(Xlsx), True),
+       ExtractFileName(Pdf), FileSizeOf(Pdf), BoolToStr(IsPdf(Pdf), True)]),
+    'report_export');
+  FExports := FExports + [Xlsx, Pdf];
+
+  Inc(FNum);
+  FForm.Reports.SelectReport(rkReceivables);
+  Pump;
+  Xlsx := FForm.Reports.Export(efXlsx);
+  Pdf := FForm.Reports.Export(efPdf);
+  Step('Отчёт «Дебиторская задолженность»: строки есть, выгружен в оба формата',
+    (FForm.Reports.PreviewRows > 0) and IsZip(Xlsx) and IsPdf(Pdf),
+    Format('строк %d; %s, %s', [FForm.Reports.PreviewRows,
+      ExtractFileName(Xlsx), ExtractFileName(Pdf)]),
+    'report_receivables');
+  FExports := FExports + [Xlsx, Pdf];
+
+  Inc(FNum);
+  FForm.Reports.SelectReport(rkStock);
+  Pump;
+  Xlsx := FForm.Reports.Export(efXlsx);
+  Pdf := FForm.Reports.Export(efPdf);
+  Step('Отчёт «Остатки номенклатуры»: остатки после проводок, выгружен в оба формата',
+    (FForm.Reports.PreviewRows > 0) and IsZip(Xlsx) and IsPdf(Pdf),
+    Format('позиций %d; %s, %s', [FForm.Reports.PreviewRows - 1,
+      ExtractFileName(Xlsx), ExtractFileName(Pdf)]),
+    'report_stock');
+  FExports := FExports + [Xlsx, Pdf];
 
   Inc(FNum);
   FForm.TestClickNav(nsAccounts);

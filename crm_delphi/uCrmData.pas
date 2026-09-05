@@ -49,14 +49,37 @@ type
     Qty, Price, Sum: Double;
   end;
 
+  { Этап процесса «от контракта до денег» — по нему строятся плитки
+    рабочего стола. Условия взаимоисключающие, см. StageWhere. }
+  TStage = (stDealOffer, stDealTalks, stDealWon,
+    stAwaitAdvance, stInWork, stReadyToShip, stAwaitPayment, stClosed);
+
+  TStageInfo = record
+    Stage: TStage;
+    Title: string;      // «Ожидает аванс»
+    Hint: string;       // пояснение процесса
+    Table: string;      // deals | orders
+    Count: Integer;
+    Sum: Double;
+    Overdue: Integer;   // сколько из них запаздывает
+    OverdueSum: Double;
+  end;
+
   TCrmData = class
   private
     FDB: TClientsDB;
     function Conn: TFDConnection;
     function LookupTable(Kind: TFieldKind; out DispCol: string): string;
+    procedure AddColumn(const Table, Col, Decl: string);
   public
     constructor Create(ADB: TClientsDB);
     procedure EnsureSchema;
+
+    { ── процесс работы: этапы, суммы, просрочка ── }
+    function StageWhere(Stage: TStage): string;
+    function OverdueWhere(Stage: TStage): string;
+    function StageInfo(Stage: TStage): TStageInfo;
+    function StageOf(OrderId: Integer): TStage;
 
     // универсальный CRUD по метаданным
     function List(const Def: TEntityDef; const Filter: string;
@@ -67,6 +90,8 @@ type
     procedure Delete(const Def: TEntityDef; Id: Integer);
     function Count(const Table: string; const Where: string = ''): Integer;
     function Scalar(const SQL: string): Variant;
+    { Открытый запрос для отчётов; освобождает вызывающий код. }
+    function OpenQuery(const SQL: string): TFDQuery;
 
     // справочники для выпадающих списков: пары id / название
     function LookupPairs(Kind: TFieldKind): TArray<TPair<Integer, string>>;
@@ -89,6 +114,9 @@ type
 function FieldDef(const Name, Caption: string; Kind: TFieldKind;
   ListWidth: Integer = 0; Required: Boolean = False; const Enum: string = '';
   const Default: string = ''): TFieldDef;
+{ Значение по умолчанию «today» / «today+N» превращает в дату; остальное
+  возвращает как есть. Используется и редактором, и генератором данных. }
+function ResolveDefault(const S: string): string;
 
 var
   // ── описания сущностей ──
@@ -110,6 +138,10 @@ implementation
 uses
   System.Variants, System.StrUtils, System.DateUtils;
 
+var
+  // числа в базу пишутся с точкой независимо от локали Windows
+  FloatFS: TFormatSettings;
+
 function FieldDef(const Name, Caption: string; Kind: TFieldKind;
   ListWidth: Integer; Required: Boolean; const Enum, Default: string): TFieldDef;
 begin
@@ -120,6 +152,14 @@ begin
   Result.ListWidth := ListWidth;
   Result.Required := Required;
   Result.Default := Default;
+end;
+
+function ResolveDefault(const S: string): string;
+begin
+  if StartsText('today', S) then
+    Result := FormatDateTime('yyyy-mm-dd', Now + StrToIntDef(Copy(S, 6, MaxInt), 0))
+  else
+    Result := S;
 end;
 
 procedure InitDefs;
@@ -185,12 +225,16 @@ begin
   DefOrders.OrderBy := 'id DESC';
   DefOrders.SearchCols := 'number';
   DefOrders.Fields := [
-    FieldDef('number', '№', fkText, 70, True),
-    FieldDef('order_date', 'Дата', fkDate, 90, True),
-    FieldDef('client_id', 'Клиент', fkLookupClient, 220),
-    FieldDef('kind', 'Вид', fkEnum, 110, True, ENUM_ORDER_KIND, 'Продажа'),
-    FieldDef('status', 'Статус', fkEnum, 110, True, ENUM_ORDER_STATUS, 'Черновик'),
-    FieldDef('total', 'Итого, MDL', fkReadOnly, 100),
+    FieldDef('number', '№', fkText, 60, True),
+    FieldDef('order_date', 'Дата', fkDate, 85, True, '', 'today'),
+    FieldDef('client_id', 'Клиент', fkLookupClient, 190),
+    FieldDef('kind', 'Вид', fkEnum, 100, True, ENUM_ORDER_KIND, 'Продажа'),
+    FieldDef('status', 'Статус', fkEnum, 100, True, ENUM_ORDER_STATUS, 'Черновик'),
+    FieldDef('total', 'Итого, MDL', fkReadOnly, 90),
+    FieldDef('advance', 'Аванс', fkMoney, 80),
+    FieldDef('paid', 'Оплачено', fkMoney, 85),
+    FieldDef('due_date', 'Срок', fkDate, 85, False, '', 'today+14'),
+    FieldDef('ship_date', 'Отгружен', fkDate, 85),
     FieldDef('notes', 'Примечание', fkMemo)];
 
   DefTasks.Table := 'tasks';
@@ -201,7 +245,7 @@ begin
   DefTasks.Fields := [
     FieldDef('subject', 'Тема', fkText, 240, True),
     FieldDef('kind', 'Вид', fkEnum, 90, True, ENUM_TASK_KIND, 'Задача'),
-    FieldDef('due_at', 'Срок', fkDate, 100, True),
+    FieldDef('due_at', 'Срок', fkDate, 100, True, '', 'today'),
     FieldDef('client_id', 'Клиент', fkLookupClient, 200),
     FieldDef('deal_id', 'Сделка', fkLookupDeal, 160),
     FieldDef('done', 'Выполнено', fkBool, 90),
@@ -239,7 +283,9 @@ const
     ' vat REAL DEFAULT 20, stock REAL DEFAULT 0, notes TEXT)',
     'CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT,' +
     ' number TEXT NOT NULL, order_date TEXT, client_id INTEGER, kind TEXT, status TEXT,' +
-    ' total REAL DEFAULT 0, notes TEXT, posted INTEGER DEFAULT 0,' +
+    ' total REAL DEFAULT 0, advance REAL DEFAULT 0, paid REAL DEFAULT 0,' +
+    ' due_date TEXT, ship_date TEXT, notes TEXT, posted INTEGER DEFAULT 0,' +
+    ' erp_batch TEXT, erp_sent_at TEXT,' +
     ' created_at TEXT DEFAULT (datetime(''now'',''localtime'')))',
     'CREATE TABLE IF NOT EXISTS order_lines (id INTEGER PRIMARY KEY AUTOINCREMENT,' +
     ' order_id INTEGER NOT NULL, item_id INTEGER NOT NULL, qty REAL DEFAULT 1,' +
@@ -248,34 +294,115 @@ const
     ' subject TEXT NOT NULL, kind TEXT, due_at TEXT, client_id INTEGER, deal_id INTEGER,' +
     ' done INTEGER DEFAULT 0, notes TEXT, created_at TEXT DEFAULT (datetime(''now'',''localtime'')))');
   ClientCols: array[0..4] of string = ('client_type', 'phone', 'email', 'notes', 'contact_person');
+  // колонки процесса исполнения заказа, добавленные позже создания таблицы
+  OrderCols: array[0..5] of string = ('advance REAL DEFAULT 0', 'paid REAL DEFAULT 0',
+    'due_date TEXT', 'ship_date TEXT', 'erp_batch TEXT', 'erp_sent_at TEXT');
 var
   S, C: string;
-  Q: TFDQuery;
-  Have: Boolean;
 begin
   for S in DDL do
     if S <> '' then
       Conn.ExecSQL(S);
 
-  // clients: добавить колонки CRM, если базу создала старая версия
   for C in ClientCols do
-  begin
-    Q := TFDQuery.Create(nil);
-    try
-      Q.Connection := Conn;
-      Q.Open('PRAGMA table_info(clients)');
-      Have := False;
-      while not Q.Eof do
-      begin
-        if SameText(Q.FieldByName('name').AsString, C) then Have := True;
-        Q.Next;
-      end;
-    finally
-      Q.Free;
+    AddColumn('clients', C, 'TEXT');
+  for C in OrderCols do
+    AddColumn('orders', Copy(C, 1, Pos(' ', C + ' ') - 1), Copy(C, Pos(' ', C + ' ') + 1, MaxInt));
+end;
+
+{ Добавляет колонку, если её ещё нет — база могла быть создана старой версией. }
+procedure TCrmData.AddColumn(const Table, Col, Decl: string);
+var
+  Q: TFDQuery;
+  Have: Boolean;
+begin
+  Q := TFDQuery.Create(nil);
+  try
+    Q.Connection := Conn;
+    Q.Open('PRAGMA table_info(' + Table + ')');
+    Have := False;
+    while not Q.Eof do
+    begin
+      if SameText(Q.FieldByName('name').AsString, Col) then Have := True;
+      Q.Next;
     end;
-    if not Have then
-      Conn.ExecSQL(Format('ALTER TABLE clients ADD COLUMN %s TEXT', [C]));
+  finally
+    Q.Free;
   end;
+  if not Have then
+    Conn.ExecSQL(Format('ALTER TABLE %s ADD COLUMN %s %s', [Table, Col, Decl]));
+end;
+
+{ ── этапы процесса ── }
+
+const
+  STAGE_TITLES: array[TStage] of string = (
+    'Предложение', 'Переговоры', 'Готово к заказу',
+    'Ожидает аванс', 'В работе / производство', 'Готово к отгрузке',
+    'Отгружено — ждём оплату', 'Закрыто');
+  STAGE_HINTS: array[TStage] of string = (
+    'КП отправлено клиенту', 'Согласование условий', 'Сделка выиграна — оформить заказ',
+    'Заказ подтверждён, аванс не поступил', 'Аванс есть, идёт исполнение',
+    'Исполнен, отгрузка не оформлена', 'Отгружен, оплата не закрыта',
+    'Отгружен и полностью оплачен');
+  STAGE_TABLES: array[TStage] of string = (
+    'deals', 'deals', 'deals', 'orders', 'orders', 'orders', 'orders', 'orders');
+
+function TCrmData.StageWhere(Stage: TStage): string;
+const
+  NOT_CANCELLED = 't.status <> ''Отменён'' AND ';
+begin
+  case Stage of
+    stDealOffer:     Result := 't.stage = ''Предложение''';
+    stDealTalks:     Result := 't.stage = ''Переговоры''';
+    stDealWon:       Result := 't.stage = ''Выиграна''';
+    stAwaitAdvance:  Result := NOT_CANCELLED + 't.status = ''Подтверждён'' AND COALESCE(t.advance,0) <= 0';
+    stInWork:        Result := NOT_CANCELLED + 't.status IN (''Подтверждён'',''В работе'') AND COALESCE(t.advance,0) > 0';
+    stReadyToShip:   Result := NOT_CANCELLED + 't.status IN (''Выполнен'',''Оплачен'') AND COALESCE(t.ship_date,'''') = ''''';
+    stAwaitPayment:  Result := NOT_CANCELLED + 'COALESCE(t.ship_date,'''') <> '''' AND COALESCE(t.paid,0) < t.total';
+    stClosed:        Result := NOT_CANCELLED + 'COALESCE(t.ship_date,'''') <> '''' AND COALESCE(t.paid,0) >= t.total';
+  else Result := '1=1';
+  end;
+end;
+
+{ Запаздывает: срок в прошлом, а этап ещё не закрыт. }
+function TCrmData.OverdueWhere(Stage: TStage): string;
+begin
+  if Stage in [stDealOffer, stDealTalks, stDealWon] then
+    Result := StageWhere(Stage) +
+      ' AND COALESCE(t.close_date,'''') <> '''' AND t.close_date < date(''now'',''localtime'')'
+  else if Stage = stClosed then
+    Result := StageWhere(Stage) + ' AND 1=0'
+  else
+    Result := StageWhere(Stage) +
+      ' AND COALESCE(t.due_date,'''') <> '''' AND t.due_date < date(''now'',''localtime'')';
+end;
+
+function TCrmData.StageInfo(Stage: TStage): TStageInfo;
+var
+  Tbl, SumCol: string;
+begin
+  Result.Stage := Stage;
+  Result.Title := STAGE_TITLES[Stage];
+  Result.Hint := STAGE_HINTS[Stage];
+  Tbl := STAGE_TABLES[Stage];
+  Result.Table := Tbl;
+  if Tbl = 'deals' then SumCol := 'amount' else SumCol := 'total';
+  Result.Count := Scalar(Format('SELECT COUNT(*) FROM %s t WHERE %s', [Tbl, StageWhere(Stage)]));
+  Result.Sum := Scalar(Format('SELECT COALESCE(SUM(t.%s),0) FROM %s t WHERE %s', [SumCol, Tbl, StageWhere(Stage)]));
+  Result.Overdue := Scalar(Format('SELECT COUNT(*) FROM %s t WHERE %s', [Tbl, OverdueWhere(Stage)]));
+  Result.OverdueSum := Scalar(Format('SELECT COALESCE(SUM(t.%s),0) FROM %s t WHERE %s', [SumCol, Tbl, OverdueWhere(Stage)]));
+end;
+
+function TCrmData.StageOf(OrderId: Integer): TStage;
+var
+  S: TStage;
+begin
+  Result := stAwaitAdvance;
+  for S := stAwaitAdvance to stClosed do
+    if Scalar(Format('SELECT COUNT(*) FROM orders t WHERE t.id = %d AND (%s)',
+      [OrderId, StageWhere(S)])) > 0 then
+      Exit(S);
 end;
 
 function TCrmData.LookupTable(Kind: TFieldKind; out DispCol: string): string;
@@ -392,6 +519,16 @@ begin
             Q.ParamByName('p' + IntToStr(I)).DataType := ftInteger;
             Q.ParamByName('p' + IntToStr(I)).Clear;
           end
+        else if (Values[I] = '') and (Def.Fields[I].Kind in [fkMoney, fkNumber]) then
+          begin
+            // Пустое число — NULL, а не пустая строка: SQLite типизирует
+            // значения по факту, и текст '' ломал бы сравнения COALESCE(...)>0.
+            Q.ParamByName('p' + IntToStr(I)).DataType := ftFloat;
+            Q.ParamByName('p' + IntToStr(I)).Clear;
+          end
+        else if (Values[I] <> '') and (Def.Fields[I].Kind in [fkMoney, fkNumber]) then
+          Q.ParamByName('p' + IntToStr(I)).AsFloat :=
+            StrToFloatDef(StringReplace(Values[I], ',', '.', [rfReplaceAll]), 0, FloatFS)
         else
           Q.ParamByName('p' + IntToStr(I)).AsString := Values[I];
     Q.ExecSQL;
@@ -425,6 +562,16 @@ begin
             Q.ParamByName('p' + IntToStr(I)).DataType := ftInteger;
             Q.ParamByName('p' + IntToStr(I)).Clear;
           end
+        else if (Values[I] = '') and (Def.Fields[I].Kind in [fkMoney, fkNumber]) then
+          begin
+            // Пустое число — NULL, а не пустая строка: SQLite типизирует
+            // значения по факту, и текст '' ломал бы сравнения COALESCE(...)>0.
+            Q.ParamByName('p' + IntToStr(I)).DataType := ftFloat;
+            Q.ParamByName('p' + IntToStr(I)).Clear;
+          end
+        else if (Values[I] <> '') and (Def.Fields[I].Kind in [fkMoney, fkNumber]) then
+          Q.ParamByName('p' + IntToStr(I)).AsFloat :=
+            StrToFloatDef(StringReplace(Values[I], ',', '.', [rfReplaceAll]), 0, FloatFS)
         else
           Q.ParamByName('p' + IntToStr(I)).AsString := Values[I];
     Q.ParamByName('id').AsInteger := Id;
@@ -443,7 +590,9 @@ end;
 
 function TCrmData.Count(const Table, Where: string): Integer;
 begin
-  Result := Scalar('SELECT COUNT(*) FROM ' + Table + IfThen(Where = '', '', ' WHERE ' + Where));
+  // псевдоним t обязателен: условия этапов и пресетов написаны через «t.»
+  Result := Scalar('SELECT COUNT(*) FROM ' + Table + ' t' +
+    IfThen(Where = '', '', ' WHERE ' + Where));
 end;
 
 function TCrmData.Scalar(const SQL: string): Variant;
@@ -460,6 +609,18 @@ begin
       Result := Q.Fields[0].Value;
   finally
     Q.Free;
+  end;
+end;
+
+function TCrmData.OpenQuery(const SQL: string): TFDQuery;
+begin
+  Result := TFDQuery.Create(nil);
+  try
+    Result.Connection := Conn;
+    Result.Open(SQL);
+  except
+    Result.Free;
+    raise;
   end;
 end;
 
@@ -593,6 +754,8 @@ begin
 end;
 
 initialization
+  FloatFS := TFormatSettings.Create;
+  FloatFS.DecimalSeparator := '.';
   InitDefs;
 
 end.
