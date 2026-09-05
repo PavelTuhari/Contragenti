@@ -725,7 +725,11 @@ begin
     if FPages[S] <> nil then
     begin
       FPages[S].Visible := S = Section;
-      if S = Section then FPages[S].Refresh;
+      if S = Section then
+      begin
+        FPages[S].Cancel;    // при входе в раздел — чистый список, без редактора прошлой записи
+        FPages[S].Refresh;
+      end;
     end;
   if Section = nsHome then RefreshHome;
   Caption := 'Demo CRM · ' + Titles[Section];
