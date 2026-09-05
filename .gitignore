@@ -65,8 +65,10 @@ export/
 # Собранные дистрибутивы (cx_Freeze / MSI) — не хранятся в репозитории
 build/
 dist/
-# логи и отчёты мастера настройки (setup_wizard.py)
+# логи и отчёты мастера настройки (setup_wizard.py); .bak — копии файлов,
+# заменённых мастером при обновлении из GitHub
 logs/
+*.bak
 crm_delphi/build.log
 crm_delphi/gui_test.log
 crm_delphi/shots_gui/test_clients.db

@@ -563,7 +563,10 @@ class Wizard:
         except OSError:
             pass
         if self.log_cb:
-            self.log_cb(line)
+            try:
+                self.log_cb(line)
+            except Exception:  # noqa: BLE001 — сбой вывода не должен ронять шаг
+                pass
 
     def step(self, key, status, detail=""):
         self.steps.append(Step(key, status, detail))
@@ -673,8 +676,15 @@ class Wizard:
                     with open(tmp, "rb") as fh:
                         if fh.read(2) != b"MZ" or size < 100000:
                             raise ValueError("не exe (LFS-указатель или обрыв): %d байт" % size)
-                same = os.path.exists(dst) and os.path.getsize(dst) == size and \
-                    open(dst, "rb").read() == open(tmp, "rb").read()
+                same = False
+                if os.path.exists(dst):
+                    with open(dst, "rb") as f1, open(tmp, "rb") as f2:
+                        old_b, new_b = f1.read(), f2.read()
+                    if comp.get("kind") == "exe":
+                        same = old_b == new_b
+                    else:
+                        # текстовые файлы: в установке CRLF (git на Windows), с GitHub — LF
+                        same = old_b.replace(b"\r\n", b"\n") == new_b.replace(b"\r\n", b"\n")
                 if same:
                     os.remove(tmp)
                     self.log("  = %s (без изменений, %d байт)" % (dst_rel, size))
@@ -1240,6 +1250,14 @@ def main(argv=None):
         if i + 1 < len(argv) and argv[i + 1] in LANGS:
             lang = argv[i + 1]
     if "--check" in argv:
+        # stdout frozen-exe при перенаправлении в файл — в кодировке консоли
+        # (cp1251), а в логе есть «→» и кириллица: переключаем на UTF-8
+        for stream in (sys.stdout, sys.stderr):
+            try:
+                if stream is not None:
+                    stream.reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, ValueError):
+                pass
         wiz = Wizard(lang, {"update": "--no-update" not in argv, "db": True,
                             "seed": "--no-seed" not in argv, "selftest": True, "shortcuts": True},
                      log_cb=lambda line: print(line), offline=offline)
