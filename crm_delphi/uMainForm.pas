@@ -1,19 +1,17 @@
 ﻿unit uMainForm;
 {
-  Главное окно демо-CRM в стиле EspoCRM (бесплатная редакция, тема «Espo»):
-  левая навигация, верхняя панель с глобальным поиском и «+», заголовок
-  раздела с основной синей кнопкой, строка фильтров, белая таблица записей
-  с чекбоксами, панель «Обзор» выбранной записи, дашлеты на «Главной».
-  Палитра и размеры взяты из исходников EspoCRM (frontend/less/espo).
+  Главное окно CRM для небольшой фирмы (торговля, услуги, производство)
+  в стиле EspoCRM (бесплатная редакция, тема «Espo»).
 
-  Интерфейс строится в коде (без .dfm), чтобы проект собирался консольным
-  компилятором dcc32 без участия IDE.
+  Разделы: Главная (показатели), Клиенты (из реестра date.gov.md через
+  Contragenti + карточка), Контакты, Лиды (→ клиент), Сделки (воронка),
+  Номенклатура (товар/услуга/изделие, остатки), Заказы (продажа/услуга/
+  производство, строки, проводка остатков), Календарь (задачи/звонки/
+  встречи), Настройки.
 
-  Принцип интерфейса: никаких модальных окон. Все сообщения — в цветной
-  строке внизу окна (зелёный — успех, янтарный — внимание, красный — ошибка),
-  настройки — во встроенной панели, подтверждение удаления — повторным
-  нажатием. Это удобно оператору и делает окно полностью проверяемым
-  встроенным самотестом без внешней автоматизации.
+  Интерфейс строится в коде (без .dfm) — проект собирается консольным dcc32.
+  Никаких модальных окон: сообщения — в цветной строке внизу, редакторы —
+  панели внутри страниц, удаление — подтверждением повторным нажатием.
 }
 
 interface
@@ -22,36 +20,31 @@ uses
   Winapi.Windows, System.SysUtils, System.Classes,
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
   Vcl.Graphics,
-  uClientsDB, uContragenti;
+  uClientsDB, uContragenti, uCrmData, uEntityPage, uEspoTheme;
 
 type
-  TMsgKind = (mkInfo, mkOk, mkWarn, mkErr);
-
-  { Разделы левой навигации }
-  TNavSection = (nsHome, nsAccounts, nsContacts, nsLeads, nsOpportunities,
-    nsCalendar, nsSettings);
+  TNavSection = (nsHome, nsAccounts, nsContacts, nsLeads, nsDeals, nsItems,
+    nsOrders, nsCalendar, nsSettings);
 
   TMainForm = class(TForm)
   private
     FDB: TClientsDB;
+    FCrm: TCrmData;
     FCli: TContragentiClient;
     FIniPath: string;
     FPendingDeleteId: Integer;
     FSection: TNavSection;
 
-    // каркас
     FTestBanner: TPanel;
     FSidebar: TPanel;
-    FSidebarLine: TPanel;
     FNavItems: array[TNavSection] of TPanel;
     FTopBar: TPanel;
     FGlobalSearch: TEdit;
     FContent: TPanel;
     FMsg: TPanel;
 
-    // раздел «Клиенты»
+    // «Клиенты»
     FPageAccounts: TPanel;
-    FTitle: TLabel;
     FBtnAdd, FBtnDelete, FBtnRefresh: TPanel;
     FPreset: TComboBox;
     FSearch: TEdit;
@@ -59,12 +52,17 @@ type
     FList: TListView;
     FOverview: TPanel;
     FOvValues: array[0..5] of TLabel;
+    FOvType: TComboBox;
+    FOvPhone, FOvEmail, FOvContact: TEdit;
 
-    // раздел «Главная»
+    // универсальные страницы
+    FPages: array[TNavSection] of TEntityPage;
+
+    // «Главная»
     FPageHome: TPanel;
-    FDashCount, FDashToday, FDashLast: TLabel;
+    FKpi: array[0..4] of TLabel;
+    FDashOrders, FDashTasks: TLabel;
 
-    // встроенная панель настроек
     FSettingsPanel: TPanel;
     FLauncherEdit: TEdit;
 
@@ -72,11 +70,9 @@ type
     procedure BuildSidebar;
     procedure BuildTopBar;
     procedure BuildAccountsPage;
+    procedure BuildEntityPages;
     procedure BuildHomePage;
     procedure BuildSettingsPanel;
-    function  MakeButton(AParent: TWinControl; const ACaption: string;
-      APrimary: Boolean; AOnClick: TNotifyEvent): TPanel;
-    function  MakePanelBox(AParent: TWinControl; const ATitle: string): TPanel;
     procedure AddNavItem(Section: TNavSection; const Glyph, Title: string);
     procedure SelectSection(Section: TNavSection);
     procedure LoadSettings;
@@ -94,6 +90,10 @@ type
     procedure OnGlobalSearchChange(Sender: TObject);
     procedure OnPresetChange(Sender: TObject);
     procedure OnListSelect(Sender: TObject; Item: TListItem; Selected: Boolean);
+    procedure OnOverviewSave(Sender: TObject);
+    procedure OnLeadConvert(Sender: TObject);
+    procedure OnTaskDone(Sender: TObject);
+    procedure OnPageChanged(Sender: TObject);
     procedure OnFormClose(Sender: TObject; var Action: TCloseAction);
     procedure OnAppException(Sender: TObject; E: Exception);
     function SelectedId: Integer;
@@ -101,73 +101,51 @@ type
     constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
     destructor Destroy; override;
 
-    { ── хуки для встроенного GUI-самотеста (uGuiSelfTest) ──
-      Всё выполняется в процессе и без модальных диалогов, поэтому тест
-      не зависит от внешней автоматизации и работает в headless-сессии. }
+    { ── хуки для встроенного GUI-самотеста (uGuiSelfTest) ── }
     procedure TestShowBanner(Step: Integer; const Title: string);
     procedure TestHideBanner;
     procedure TestSetFilter(const Text: string);
-    { Реальное нажатие «Создать клиента»: запускает Contragenti через SDK. }
     procedure TestClickAdd;
     procedure TestClickNav(Section: TNavSection);
     property Client: TContragentiClient read FCli;
+    property Crm: TCrmData read FCrm;
+    function  Page(Section: TNavSection): TEntityPage;
     function  TestImportXml(const Xml: string; out Card: TCounterpartyCard): TAddResult;
     function  TestSelectFirst: Boolean;
     procedure TestClickDelete;
     procedure TestClickSettings;
+    procedure TestLeadConvert;
+    procedure TestTaskDone;
+    procedure TestOverviewSet(const AType, Phone, Email, Contact: string);
     function  TestListCount: Integer;
     function  TestDbCount: Integer;
     function  TestMessage: string;
     function  TestMessageKind: TMsgKind;
     function  TestSection: TNavSection;
+    function  TestKpi(Index: Integer): string;
   end;
 
 var
-  { Переопределение пути к базе — самотест работает в своей копии,
-    не трогая рабочую clients.db. Задаётся до создания формы. }
   GDBPathOverride: string = '';
 
 implementation
 
 uses
-  System.IOUtils, System.IniFiles, System.StrUtils, System.DateUtils, System.Math;
+  System.IOUtils, System.IniFiles, System.StrUtils, System.DateUtils, System.Math,
+  System.Variants;
 
 const
-  // ── палитра EspoCRM, тема «Espo» (TColor = BGR) ──
-  ESPO_BODY      = $00F5F3F1;  // #f1f3f5 фон страницы и навигации
-  ESPO_BORDER    = $00E3E2E0;  // #e0e2e3 границы
-  ESPO_PANEL_BRD = $00EDEAE7;  // #e7eaed граница панелей
-  ESPO_WHITE     = $00FFFFFF;
-  ESPO_TEXT      = $00262626;  // #262626
-  ESPO_MUTED     = $00969696;  // #969696
-  ESPO_GRAY      = $006A6A6A;  // #6a6a6a иконки
-  ESPO_SOFT      = $00777777;  // #777 заголовки панелей
-  ESPO_PRIMARY   = $00CA8955;  // #5589ca основная кнопка
-  ESPO_NAV_ACT   = $00E7E1DE;  // #dee1e7 активный пункт
-  ESPO_NAV_HOV   = $00EDECEC;  // #ececed
-  ESPO_BTN_BG    = $00FCFCFC;  // #fcfcfc
-  ESPO_BTN_BRD   = $00CCCAC2;  // #c2cacc
-  ESPO_BTN_TXT   = $00585858;  // #585858
-  ESPO_LINK      = $008C5B24;  // #245b8c
-  ESPO_HEAD_BG   = $00F8F4EC;  // #ecf4f8 подсветка строки
-
-  // состояния (label-state): текст / фон
-  ST_PRIMARY_FG = $00CA9339;  ST_PRIMARY_BG = $00FFF3E5;   // #3993ca / #e5f3ff
-  ST_SUCCESS_FG = $004C9A2A;  ST_SUCCESS_BG = $00D1EFC4;   // #2a9a4c / #c4efd1
-  ST_WARNING_FG = $0022719F;  ST_WARNING_BG = $00D6F4FA;   // #9f7122 / #faf4d6
-  ST_DANGER_FG  = $004648AD;  ST_DANGER_BG  = $00DEDEF2;   // #ad4846 / #f2dede
-
   CLR_TEST_BG = $00D9E8FF;  CLR_TEST_FG = $00203A80;
-
   NAV_WIDTH = 232;
   NAV_ITEM_H = 40;
   TOPBAR_H = 32;
-
   OV_LABELS: array[0..5] of string =
     ('Название', 'IDNO', 'Форма', 'Адрес', 'Руководитель', 'Добавлен');
   COL_TITLES: array[0..5] of string =
     ('Название', 'IDNO', 'Форма', 'Адрес', 'Руководитель', 'Добавлен');
   COL_WIDTHS: array[0..5] of Integer = (300, 120, 90, 230, 150, 120);
+  KPI_TITLES: array[0..4] of string =
+    ('Клиенты', 'Открытые сделки, MDL', 'Заказы за месяц, MDL', 'Просроченные задачи', 'Позиций номенклатуры');
 
 function AppDir: string;
 begin
@@ -190,16 +168,17 @@ begin
     DbPath := TPath.Combine(AppDir, 'clients.db');
   FDB := TClientsDB.Create(DbPath);
   FDB.Open;
+  FCrm := TCrmData.Create(FDB);
+  FCrm.EnsureSchema;
 
   FCli := TContragentiClient.Create;
   LoadSettings;
 
   BuildUI;
-  // необработанные исключения — тоже в строку сообщений, а не в MessageBox
   Application.OnException := OnAppException;
   RefreshList;
   SelectSection(nsAccounts);
-  Say(mkInfo, Format('База клиентов: %s   |   записей: %d', [FDB.DBPath, FDB.Count]));
+  Say(mkInfo, Format('База: %s   |   клиентов: %d', [FDB.DBPath, FDB.Count]));
 end;
 
 procedure TMainForm.OnAppException(Sender: TObject; E: Exception);
@@ -210,67 +189,18 @@ end;
 destructor TMainForm.Destroy;
 begin
   FCli.Free;
+  FCrm.Free;
   FDB.Free;
   inherited;
 end;
 
-{ ── строительство интерфейса ── }
-
-function TMainForm.MakeButton(AParent: TWinControl; const ACaption: string;
-  APrimary: Boolean; AOnClick: TNotifyEvent): TPanel;
-begin
-  // кнопки EspoCRM: 36px, btn-primary синяя без рамки, btn-default светлая
-  // с рамкой. TPanel вместо TButton — VCL-кнопка не красится.
-  Result := TPanel.Create(Self);
-  Result.Parent := AParent;
-  Result.Height := 36;
-  Result.Caption := ACaption;
-  Result.BevelOuter := bvNone;
-  Result.ParentBackground := False;
-  Result.Cursor := crHandPoint;
-  Result.Font.Name := 'Segoe UI';
-  Result.Font.Size := 10;
-  Result.Font.Style := [fsBold];
-  if APrimary then
-  begin
-    Result.Color := ESPO_PRIMARY;
-    Result.Font.Color := clWhite;
-  end
-  else
-  begin
-    Result.Color := ESPO_BTN_BG;
-    Result.Font.Color := ESPO_BTN_TXT;
-    Result.BevelKind := bkFlat;
-  end;
-  Result.OnClick := AOnClick;
-end;
-
-function TMainForm.MakePanelBox(AParent: TWinControl; const ATitle: string): TPanel;
-var
-  H: TLabel;
-begin
-  // .panel.panel-default: белый, рамка #e7eaed, заголовок 15px #777
-  Result := TPanel.Create(Self);
-  Result.Parent := AParent;
-  Result.BevelOuter := bvNone;
-  Result.BevelKind := bkFlat;
-  Result.Color := ESPO_WHITE;
-  Result.ParentBackground := False;
-  H := TLabel.Create(Self);
-  H.Parent := Result;
-  H.SetBounds(14, 8, 300, 22);
-  H.Caption := ATitle;
-  H.Font.Name := 'Segoe UI';
-  H.Font.Size := 11;
-  H.Font.Style := [fsBold];
-  H.Font.Color := ESPO_SOFT;
-end;
+{ ── каркас ── }
 
 procedure TMainForm.BuildUI;
 begin
   Caption := 'Demo CRM · Клиенты';
-  Width := 1180;
-  Height := 720;
+  Width := 1280;
+  Height := 800;
   Position := poScreenCenter;
   Color := ESPO_BODY;
   Font.Name := 'Segoe UI';
@@ -278,7 +208,6 @@ begin
   Font.Color := ESPO_TEXT;
   OnClose := OnFormClose;
 
-  // плашка текущего шага самотеста (скрыта в обычной работе) — над всем
   FTestBanner := TPanel.Create(Self);
   FTestBanner.Parent := Self;
   FTestBanner.Align := alTop;
@@ -291,7 +220,6 @@ begin
   FTestBanner.Font.Style := [fsBold];
   FTestBanner.Visible := False;
 
-  // строка сообщений внизу — единственный канал обратной связи
   FMsg := TPanel.Create(Self);
   FMsg.Parent := Self;
   FMsg.Align := alBottom;
@@ -313,6 +241,7 @@ begin
 
   BuildSettingsPanel;
   BuildAccountsPage;
+  BuildEntityPages;
   BuildHomePage;
 end;
 
@@ -325,7 +254,7 @@ begin
   P.Parent := FSidebar;
   P.Align := alTop;
   P.Height := NAV_ITEM_H;
-  P.Top := 1000;                 // в конец стопки alTop
+  P.Top := 1000;
   P.BevelOuter := bvNone;
   P.Color := ESPO_BODY;
   P.ParentBackground := False;
@@ -333,7 +262,7 @@ begin
   P.Tag := Ord(Section);
   P.OnClick := OnNavClick;
 
-  G := TLabel.Create(Self);      // иконка (глиф Segoe UI Symbol)
+  G := TLabel.Create(Self);
   G.Parent := P;
   G.SetBounds(16, 9, 20, 22);
   G.Caption := Glyph;
@@ -360,9 +289,8 @@ end;
 procedure TMainForm.BuildSidebar;
 var
   Logo, Sub, Min: TLabel;
-  Hdr, Sep: TPanel;
+  Hdr, Sep, Line: TPanel;
 begin
-  // #navbar: 232px, фон как у страницы, правая граница 1px #e0e2e3
   FSidebar := TPanel.Create(Self);
   FSidebar.Parent := Self;
   FSidebar.Align := alLeft;
@@ -371,15 +299,14 @@ begin
   FSidebar.Color := ESPO_BODY;
   FSidebar.ParentBackground := False;
 
-  FSidebarLine := TPanel.Create(Self);
-  FSidebarLine.Parent := FSidebar;
-  FSidebarLine.Align := alRight;
-  FSidebarLine.Width := 1;
-  FSidebarLine.BevelOuter := bvNone;
-  FSidebarLine.Color := ESPO_BORDER;
-  FSidebarLine.ParentBackground := False;
+  Line := TPanel.Create(Self);
+  Line.Parent := FSidebar;
+  Line.Align := alRight;
+  Line.Width := 1;
+  Line.BevelOuter := bvNone;
+  Line.Color := ESPO_BORDER;
+  Line.ParentBackground := False;
 
-  // шапка с логотипом, 65px
   Hdr := TPanel.Create(Self);
   Hdr.Parent := FSidebar;
   Hdr.Align := alTop;
@@ -401,14 +328,16 @@ begin
   Sub.Font.Size := 8;
   Sub.Font.Color := ESPO_MUTED;
 
-  AddNavItem(nsHome,          '⌂', 'Главная');
-  AddNavItem(nsAccounts,      '▣', 'Клиенты');
-  AddNavItem(nsContacts,      '☺', 'Контакты');
-  AddNavItem(nsLeads,         '✉', 'Лиды');
-  AddNavItem(nsOpportunities, '$', 'Сделки');
-  AddNavItem(nsCalendar,      '▦', 'Календарь');
+  AddNavItem(nsHome,     '⌂', 'Главная');
+  AddNavItem(nsAccounts, '▣', 'Клиенты');
+  AddNavItem(nsContacts, '☺', 'Контакты');
+  AddNavItem(nsLeads,    '✉', 'Лиды');
+  AddNavItem(nsDeals,    '$', 'Сделки');
+  AddNavItem(nsItems,    '▤', 'Номенклатура');
+  AddNavItem(nsOrders,   '▥', 'Заказы');
+  AddNavItem(nsCalendar, '▦', 'Календарь');
 
-  Sep := TPanel.Create(Self);   // _delimiter_
+  Sep := TPanel.Create(Self);
   Sep.Parent := FSidebar;
   Sep.Align := alTop;
   Sep.Top := 1000;
@@ -424,7 +353,6 @@ begin
 
   AddNavItem(nsSettings, '⚙', 'Настройки');
 
-  // «минимизатор» внизу навигации
   Min := TLabel.Create(Self);
   Min.Parent := FSidebar;
   Min.Align := alBottom;
@@ -441,7 +369,6 @@ var
   Plus, Bell, User: TLabel;
   Line: TPanel;
 begin
-  // верхняя полоса 32px: справа глобальный поиск (260px), «+», уведомления, пользователь
   FTopBar := TPanel.Create(Self);
   FTopBar.Parent := Self;
   FTopBar.Align := alTop;
@@ -467,7 +394,6 @@ begin
   User.Layout := tlCenter;
   User.Alignment := taCenter;
   User.Caption := 'Оператор  ⋮';
-  User.Font.Color := ESPO_TEXT;
 
   Bell := TLabel.Create(Self);
   Bell.Parent := FTopBar;
@@ -491,13 +417,13 @@ begin
   Plus.Font.Size := 14;
   Plus.Font.Color := ESPO_GRAY;
   Plus.Cursor := crHandPoint;
-  Plus.OnClick := OnAddClick;   // quick create → Клиент из реестра
+  Plus.OnClick := OnAddClick;
 
   FGlobalSearch := TEdit.Create(Self);
   FGlobalSearch.Parent := FTopBar;
   FGlobalSearch.SetBounds(0, 4, 260, 24);
   FGlobalSearch.Anchors := [akTop, akRight];
-  FGlobalSearch.TextHint := 'Поиск…';
+  FGlobalSearch.TextHint := 'Поиск клиента…';
   FGlobalSearch.OnChange := OnGlobalSearchChange;
   FGlobalSearch.Left := FTopBar.Width - 260 - 34 - 34 - 120 - 12;
 end;
@@ -508,7 +434,7 @@ var
   Hdr, SearchRow, Line: TPanel;
   I, X: Integer;
   L: TLabel;
-  Mag, Dots: TPanel;
+  Mag, Dots, Btn: TPanel;
 begin
   FPageAccounts := TPanel.Create(Self);
   FPageAccounts.Parent := FContent;
@@ -518,7 +444,6 @@ begin
   FPageAccounts.ParentBackground := False;
   FPageAccounts.Padding.SetBounds(15, 12, 15, 12);
 
-  // .page-header-row: заголовок 22px слева, кнопки справа
   Hdr := TPanel.Create(Self);
   Hdr.Parent := FPageAccounts;
   Hdr.Align := alTop;
@@ -527,38 +452,26 @@ begin
   Hdr.Color := ESPO_BODY;
   Hdr.ParentBackground := False;
 
-  FTitle := TLabel.Create(Self);
-  FTitle.Parent := Hdr;
-  FTitle.SetBounds(0, 6, 400, 30);
-  FTitle.Caption := 'Клиенты';
-  FTitle.Font.Size := 16;
-  FTitle.Font.Color := ESPO_TEXT;
+  L := TLabel.Create(Self);
+  L.Parent := Hdr;
+  L.SetBounds(0, 6, 400, 30);
+  L.Caption := 'Клиенты';
+  L.Font.Size := 16;
 
-  FBtnAdd := MakeButton(Hdr, 'Создать клиента', True, OnAddClick);
-  FBtnAdd.Width := 160;
+  FBtnAdd := MakeButton(Self, Hdr, 'Создать из реестра', True, OnAddClick, 180);
   FBtnAdd.Anchors := [akTop, akRight];
-  FBtnAdd.SetBounds(Hdr.Width - 160, 4, 160, 36);
-
-  Dots := MakeButton(Hdr, '⋯', False, nil);
-  Dots.Width := 36;
+  FBtnAdd.SetBounds(Hdr.Width - 180, 4, 180, 36);
+  Dots := MakeButton(Self, Hdr, '⋯', False, nil, 36);
   Dots.Anchors := [akTop, akRight];
-  Dots.SetBounds(Hdr.Width - 160 - 8 - 36, 4, 36, 36);
+  Dots.SetBounds(Hdr.Width - 180 - 8 - 36, 4, 36, 36);
   Dots.Font.Name := 'Segoe UI Symbol';
-  Dots.Font.Style := [];
-
-  FBtnRefresh := MakeButton(Hdr, 'Обновить', False, OnRefreshClick);
-  FBtnRefresh.Width := 100;
+  FBtnRefresh := MakeButton(Self, Hdr, 'Обновить', False, OnRefreshClick, 100);
   FBtnRefresh.Anchors := [akTop, akRight];
-  FBtnRefresh.SetBounds(Hdr.Width - 160 - 8 - 36 - 8 - 100, 4, 100, 36);
-  FBtnRefresh.Font.Style := [];
-
-  FBtnDelete := MakeButton(Hdr, 'Удалить', False, OnDeleteClick);
-  FBtnDelete.Width := 100;
+  FBtnRefresh.SetBounds(Hdr.Width - 180 - 8 - 36 - 8 - 100, 4, 100, 36);
+  FBtnDelete := MakeButton(Self, Hdr, 'Удалить', False, OnDeleteClick, 100);
   FBtnDelete.Anchors := [akTop, akRight];
-  FBtnDelete.SetBounds(Hdr.Width - 160 - 8 - 36 - 8 - 100 - 8 - 100, 4, 100, 36);
-  FBtnDelete.Font.Style := [];
+  FBtnDelete.SetBounds(Hdr.Width - 180 - 8 - 36 - 8 - 100 - 8 - 100, 4, 100, 36);
 
-  // .search-row: пресет-фильтр, поле поиска, лупа, «⋯», справа пагинация
   SearchRow := TPanel.Create(Self);
   SearchRow.Parent := FPageAccounts;
   SearchRow.Align := alTop;
@@ -584,10 +497,9 @@ begin
   FSearch.TextHint := 'Название, IDNO или руководитель…';
   FSearch.OnChange := OnSearchChange;
 
-  Mag := MakeButton(SearchRow, '🔍', False, OnRefreshClick);
+  Mag := MakeButton(Self, SearchRow, '🔍', False, OnRefreshClick, 36);
   Mag.SetBounds(524, 4, 36, 36);
   Mag.Font.Name := 'Segoe UI Symbol';
-  Mag.Font.Style := [];
 
   FPager := TLabel.Create(Self);
   FPager.Parent := SearchRow;
@@ -597,27 +509,32 @@ begin
   FPager.Alignment := taRightJustify;
   FPager.Font.Color := ESPO_MUTED;
 
-  // панель «Обзор» выбранной записи (detail view, две колонки label/value)
-  FOverview := MakePanelBox(FPageAccounts, 'Обзор');
+  // карточка клиента: реестровые поля (только чтение) + поля CRM (редактируемые)
+  FOverview := MakePanelBox(Self, FPageAccounts, 'Карточка клиента');
   FOverview.Align := alBottom;
-  FOverview.Height := 118;
+  FOverview.Height := 196;
   for I := 0 to 5 do
   begin
-    L := TLabel.Create(Self);
-    L.Parent := FOverview;
-    L.SetBounds(14 + (I mod 3) * 340, 36 + (I div 3) * 40, 300, 16);
-    L.Caption := OV_LABELS[I];
-    L.Font.Size := 9;
-    L.Font.Color := ESPO_MUTED;
-    FOvValues[I] := TLabel.Create(Self);
-    FOvValues[I].Parent := FOverview;
-    FOvValues[I].AutoSize := False;
-    FOvValues[I].SetBounds(14 + (I mod 3) * 340, 52 + (I div 3) * 40, 330, 20);
-    FOvValues[I].Font.Color := ESPO_TEXT;
-    FOvValues[I].Caption := '—';
+    MakeLabel(Self, FOverview, OV_LABELS[I], 14 + (I mod 3) * 340, 36 + (I div 3) * 40, 300);
+    FOvValues[I] := MakeLabel(Self, FOverview, '—', 14 + (I mod 3) * 340, 52 + (I div 3) * 40, 330, ESPO_TEXT, 10);
   end;
+  MakeLabel(Self, FOverview, 'Тип', 14, 118, 150);
+  FOvType := TComboBox.Create(Self);
+  FOvType.Parent := FOverview;
+  FOvType.Style := csDropDownList;
+  FOvType.SetBounds(14, 136, 150, 26);
+  FOvType.Items.AddStrings(ENUM_CLIENT_TYPE.Split([';']));
+  FOvType.ItemIndex := 0;
+  MakeLabel(Self, FOverview, 'Телефон', 178, 118, 150);
+  FOvPhone := TEdit.Create(Self); FOvPhone.Parent := FOverview; FOvPhone.SetBounds(178, 136, 150, 26);
+  MakeLabel(Self, FOverview, 'E-mail', 342, 118, 200);
+  FOvEmail := TEdit.Create(Self); FOvEmail.Parent := FOverview; FOvEmail.SetBounds(342, 136, 200, 26);
+  MakeLabel(Self, FOverview, 'Контактное лицо', 556, 118, 220);
+  FOvContact := TEdit.Create(Self); FOvContact.Parent := FOverview; FOvContact.SetBounds(556, 136, 220, 26);
+  Btn := MakeButton(Self, FOverview, 'Сохранить', True, OnOverviewSave, 120);
+  Btn.SetBounds(790, 131, 120, 36);
 
-  Line := TPanel.Create(Self);   // зазор между таблицей и «Обзором»
+  Line := TPanel.Create(Self);
   Line.Parent := FPageAccounts;
   Line.Align := alBottom;
   Line.Height := 14;
@@ -625,8 +542,6 @@ begin
   Line.Color := ESPO_BODY;
   Line.ParentBackground := False;
 
-  // шапка таблицы — свои метки (th: 11px, разрядка, приглушённый цвет),
-  // стандартный header ListView не попадает в снимок GetFormImage
   Hdr := TPanel.Create(Self);
   Hdr.Parent := FPageAccounts;
   Hdr.Align := alTop;
@@ -640,20 +555,13 @@ begin
     Parent := Hdr; Align := alBottom; Height := 1;
     BevelOuter := bvNone; Color := ESPO_BORDER; ParentBackground := False;
   end;
-  X := 24;   // после колонки чекбоксов
+  X := 24;
   for I := 0 to High(COL_TITLES) do
   begin
-    L := TLabel.Create(Self);
-    L.Parent := Hdr;
-    L.SetBounds(X + 4, 8, COL_WIDTHS[I] - 8, 16);
-    L.AutoSize := False;
-    L.Caption := UpperCase(COL_TITLES[I]);
-    L.Font.Size := 8;
-    L.Font.Color := ESPO_MUTED;
+    MakeLabel(Self, Hdr, UpperCase(COL_TITLES[I]), X + 4, 8, COL_WIDTHS[I] - 8, ESPO_MUTED, 8);
     Inc(X, COL_WIDTHS[I]);
   end;
 
-  // таблица записей: белая, чекбоксы, без сетки (как table.table)
   FList := TListView.Create(Self);
   FList.Parent := FPageAccounts;
   FList.Align := alClient;
@@ -668,7 +576,6 @@ begin
   FList.Color := ESPO_WHITE;
   FList.Font.Color := ESPO_TEXT;
   FList.OnSelectItem := OnListSelect;
-
   for I := 0 to High(COL_TITLES) do
   begin
     Col := FList.Columns.Add;
@@ -677,10 +584,46 @@ begin
   end;
 end;
 
+procedure TMainForm.BuildEntityPages;
+var
+  P: TEntityPage;
+begin
+  FPages[nsContacts] := TEntityPage.Create(Self, FContent, FCrm, DefContacts, Say);
+  FPages[nsLeads]    := TEntityPage.Create(Self, FContent, FCrm, DefLeads, Say);
+  FPages[nsDeals]    := TEntityPage.Create(Self, FContent, FCrm, DefDeals, Say);
+  FPages[nsItems]    := TEntityPage.Create(Self, FContent, FCrm, DefItems, Say);
+  FPages[nsOrders]   := TEntityPage.Create(Self, FContent, FCrm, DefOrders, Say);
+  FPages[nsCalendar] := TEntityPage.Create(Self, FContent, FCrm, DefTasks, Say);
+  for P in FPages do
+    if P <> nil then
+      P.OnChanged := OnPageChanged;
+
+  FPages[nsLeads].AddExtraButton('В клиенты', OnLeadConvert, False, 120);
+  FPages[nsLeads].SetPresets(['Все', 'Новые', 'В работе', 'Конвертированные'],
+    ['', 't.status = ''Новый''', 't.status = ''В работе''', 't.status = ''Конвертирован''']);
+
+  FPages[nsDeals].SetPresets(['Все', 'Открытые', 'Выигранные', 'Проигранные'],
+    ['', 't.stage NOT IN (''Выиграна'',''Проиграна'')', 't.stage = ''Выиграна''', 't.stage = ''Проиграна''']);
+
+  FPages[nsItems].SetPresets(['Все', 'Товары', 'Услуги', 'Изделия', 'Нет на складе'],
+    ['', 't.kind = ''Товар''', 't.kind = ''Услуга''', 't.kind = ''Изделие''',
+     't.kind <> ''Услуга'' AND COALESCE(t.stock,0) <= 0']);
+
+  FPages[nsOrders].SetPresets(['Все', 'Открытые', 'Не проведённые', 'Продажи', 'Услуги', 'Производство'],
+    ['', 't.status NOT IN (''Выполнен'',''Оплачен'',''Отменён'')', 't.posted = 0',
+     't.kind = ''Продажа''', 't.kind = ''Услуга''', 't.kind = ''Производство''']);
+
+  FPages[nsCalendar].AddExtraButton('Выполнено', OnTaskDone, False, 120);
+  FPages[nsCalendar].SetPresets(['Открытые', 'Сегодня', 'Просроченные', 'Все'],
+    ['t.done = 0', 't.done = 0 AND t.due_at = date(''now'',''localtime'')',
+     't.done = 0 AND t.due_at < date(''now'',''localtime'')', '']);
+end;
+
 procedure TMainForm.BuildHomePage;
 var
   T: TLabel;
-  B1, B2, B3: TPanel;
+  B: TPanel;
+  I: Integer;
 begin
   FPageHome := TPanel.Create(Self);
   FPageHome.Parent := FContent;
@@ -696,53 +639,40 @@ begin
   T.Caption := 'Главная';
   T.Font.Size := 16;
 
-  // дашлеты: белые панели 8px-радиуса, сетка 16px
-  B1 := MakePanelBox(FPageHome, 'Клиенты в базе');
-  B1.SetBounds(15, 64, 280, 120);
-  FDashCount := TLabel.Create(Self);
-  FDashCount.Parent := B1;
-  FDashCount.SetBounds(14, 40, 250, 50);
-  FDashCount.Font.Size := 26;
-  FDashCount.Font.Style := [fsBold];
-  FDashCount.Font.Color := ESPO_PRIMARY;
-
-  B2 := MakePanelBox(FPageHome, 'Добавлено сегодня');
-  B2.SetBounds(311, 64, 280, 120);
-  FDashToday := TLabel.Create(Self);
-  FDashToday.Parent := B2;
-  FDashToday.SetBounds(14, 40, 250, 50);
-  FDashToday.Font.Size := 26;
-  FDashToday.Font.Style := [fsBold];
-  FDashToday.Font.Color := ST_SUCCESS_FG;
-
-  B3 := MakePanelBox(FPageHome, 'Последние клиенты');
-  B3.SetBounds(15, 200, 576, 230);
-  FDashLast := TLabel.Create(Self);
-  FDashLast.Parent := B3;
-  FDashLast.AutoSize := False;
-  FDashLast.WordWrap := True;
-  FDashLast.SetBounds(14, 38, 548, 180);
-  FDashLast.Font.Color := ESPO_TEXT;
-
-  with TLabel.Create(Self) do
+  for I := 0 to 4 do
   begin
-    Parent := FPageHome;
-    SetBounds(15, 446, 600, 64);
-    AutoSize := False;
-    WordWrap := True;
-    Font.Color := ESPO_MUTED;
-    Caption := 'Демо: разделы «Контакты», «Лиды», «Сделки» и «Календарь» показаны ' +
-      'для вида навигации EspoCRM; рабочий раздел — «Клиенты» с заведением ' +
-      'из государственного реестра через SDK Contragenti.';
+    B := MakePanelBox(Self, FPageHome, KPI_TITLES[I]);
+    B.SetBounds(15 + I * 200, 64, 188, 100);
+    FKpi[I] := TLabel.Create(Self);
+    FKpi[I].Parent := B;
+    FKpi[I].SetBounds(14, 38, 170, 44);
+    FKpi[I].Font.Size := 20;
+    FKpi[I].Font.Style := [fsBold];
+    FKpi[I].Font.Color := ESPO_PRIMARY;
   end;
+  FKpi[3].Font.Color := ST_DANGER_FG;
+
+  B := MakePanelBox(Self, FPageHome, 'Последние заказы');
+  B.SetBounds(15, 180, 480, 260);
+  FDashOrders := TLabel.Create(Self);
+  FDashOrders.Parent := B;
+  FDashOrders.AutoSize := False;
+  FDashOrders.WordWrap := True;
+  FDashOrders.SetBounds(14, 38, 452, 210);
+
+  B := MakePanelBox(Self, FPageHome, 'Ближайшие задачи');
+  B.SetBounds(511, 180, 480, 260);
+  FDashTasks := TLabel.Create(Self);
+  FDashTasks.Parent := B;
+  FDashTasks.AutoSize := False;
+  FDashTasks.WordWrap := True;
+  FDashTasks.SetBounds(14, 38, 452, 210);
 end;
 
 procedure TMainForm.BuildSettingsPanel;
 var
-  Lbl: TLabel;
   Btn: TPanel;
 begin
-  // встроенная панель настроек (вместо модального окна), над содержимым
   FSettingsPanel := TPanel.Create(Self);
   FSettingsPanel.Parent := FContent;
   FSettingsPanel.Align := alTop;
@@ -751,15 +681,11 @@ begin
   FSettingsPanel.Color := ST_PRIMARY_BG;
   FSettingsPanel.ParentBackground := False;
   FSettingsPanel.Visible := False;
-  Lbl := TLabel.Create(Self);
-  Lbl.Parent := FSettingsPanel;
-  Lbl.SetBounds(15, 18, 190, 18);
-  Lbl.Caption := 'Путь к Contragenti (exe/py):';
-  Lbl.Font.Color := ST_PRIMARY_FG;
+  MakeLabel(Self, FSettingsPanel, 'Путь к Contragenti (exe/py):', 15, 18, 190, ST_PRIMARY_FG, 10);
   FLauncherEdit := TEdit.Create(Self);
   FLauncherEdit.Parent := FSettingsPanel;
   FLauncherEdit.SetBounds(205, 14, 560, 26);
-  Btn := MakeButton(FSettingsPanel, 'Сохранить', True, OnSettingsSave);
+  Btn := MakeButton(Self, FSettingsPanel, 'Сохранить', True, OnSettingsSave, 110);
   Btn.SetBounds(775, 10, 110, 36);
 end;
 
@@ -768,57 +694,52 @@ end;
 procedure TMainForm.SelectSection(Section: TNavSection);
 var
   S: TNavSection;
+  Titles: array[TNavSection] of string;
 begin
-  for S := Low(TNavSection) to High(TNavSection) do
-    if FNavItems[S] <> nil then
-      if S = Section then
-        FNavItems[S].Color := ESPO_NAV_ACT
-      else
-        FNavItems[S].Color := ESPO_BODY;
+  Titles[nsHome] := 'Главная'; Titles[nsAccounts] := 'Клиенты';
+  Titles[nsContacts] := 'Контакты'; Titles[nsLeads] := 'Лиды';
+  Titles[nsDeals] := 'Сделки'; Titles[nsItems] := 'Номенклатура';
+  Titles[nsOrders] := 'Заказы'; Titles[nsCalendar] := 'Календарь';
+  Titles[nsSettings] := 'Настройки';
 
-  case Section of
-    nsHome:
-      begin
-        FSection := nsHome;
-        FPageAccounts.Visible := False;
-        FPageHome.Visible := True;
-        RefreshHome;
-        Caption := 'Demo CRM · Главная';
-      end;
-    nsAccounts:
-      begin
-        FSection := nsAccounts;
-        FPageHome.Visible := False;
-        FPageAccounts.Visible := True;
-        Caption := 'Demo CRM · Клиенты';
-      end;
-    nsSettings:
-      begin
-        // раздел-панель: раскрывается над текущей страницей
-        FSettingsPanel.Visible := not FSettingsPanel.Visible;
-        if FSettingsPanel.Visible then
-        begin
-          FLauncherEdit.Text := FCli.LauncherExe;
-          Say(mkInfo, 'Укажите путь к Contragenti.exe и нажмите «Сохранить».');
-        end
-        else
-          for S := Low(TNavSection) to High(TNavSection) do
-            if FNavItems[S] <> nil then
-              FNavItems[S].Color := IfThen(S = FSection, ESPO_NAV_ACT, ESPO_BODY);
-      end;
-  else
-    // демонстрационные разделы навигации
-    for S := Low(TNavSection) to High(TNavSection) do
-      if FNavItems[S] <> nil then
-        FNavItems[S].Color := IfThen(S = FSection, ESPO_NAV_ACT, ESPO_BODY);
-    Say(mkInfo, 'Раздел показан для вида навигации EspoCRM. Рабочий раздел демо — «Клиенты».');
+  if Section = nsSettings then
+  begin
+    FSettingsPanel.Visible := not FSettingsPanel.Visible;
+    if FSettingsPanel.Visible then
+    begin
+      FLauncherEdit.Text := FCli.LauncherExe;
+      Say(mkInfo, 'Укажите путь к Contragenti.exe и нажмите «Сохранить».');
+    end;
+    FNavItems[nsSettings].Color := IfThen(FSettingsPanel.Visible, ESPO_NAV_ACT, ESPO_BODY);
+    Exit;
   end;
+
+  FSection := Section;
+  for S := Low(TNavSection) to High(TNavSection) do
+    if (FNavItems[S] <> nil) and (S <> nsSettings) then
+      FNavItems[S].Color := IfThen(S = Section, ESPO_NAV_ACT, ESPO_BODY);
+
+  FPageHome.Visible := Section = nsHome;
+  FPageAccounts.Visible := Section = nsAccounts;
+  for S := Low(TNavSection) to High(TNavSection) do
+    if FPages[S] <> nil then
+    begin
+      FPages[S].Visible := S = Section;
+      if S = Section then FPages[S].Refresh;
+    end;
+  if Section = nsHome then RefreshHome;
+  Caption := 'Demo CRM · ' + Titles[Section];
 end;
 
 procedure TMainForm.OnNavClick(Sender: TObject);
 begin
   FPendingDeleteId := 0;
   SelectSection(TNavSection((Sender as TComponent).Tag));
+end;
+
+function TMainForm.Page(Section: TNavSection): TEntityPage;
+begin
+  Result := FPages[Section];
 end;
 
 { ── настройки ── }
@@ -830,9 +751,10 @@ var
 begin
   DefExe := TPath.Combine(AppDir, 'Contragenti.exe');
   if not TFile.Exists(DefExe) then
+    DefExe := TPath.Combine(TPath.Combine(AppDir, '..'), 'Contragenti.exe');
+  if not TFile.Exists(DefExe) then
     DefExe := TPath.Combine(
-      TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'Contragenti'),
-      'Contragenti.exe');
+      TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'Contragenti'), 'Contragenti.exe');
   Ini := TIniFile.Create(FIniPath);
   try
     FCli.LauncherExe := Ini.ReadString('contragenti', 'launcher', DefExe);
@@ -859,7 +781,6 @@ end;
 
 procedure TMainForm.Say(Kind: TMsgKind; const Msg: string);
 begin
-  // цвета label-state EspoCRM: primary / success / warning / danger
   case Kind of
     mkOk:   begin FMsg.Color := ST_SUCCESS_BG; FMsg.Font.Color := ST_SUCCESS_FG; end;
     mkWarn: begin FMsg.Color := ST_WARNING_BG; FMsg.Font.Color := ST_WARNING_FG; end;
@@ -884,7 +805,6 @@ begin
     Rows := FDB.List(FSearch.Text);
     for Row in Rows do
     begin
-      // пресет-фильтры («Все» — без ограничений)
       if (FPreset.ItemIndex = 1) and not StartsText(Today, Row.AddedAt) then Continue;
       if (FPreset.ItemIndex = 2) and (Trim(Row.Adresa) = '') then Continue;
       Item := FList.Items.Add;
@@ -908,42 +828,65 @@ end;
 
 procedure TMainForm.RefreshHome;
 var
-  Rows: TArray<TClientRow>;
-  I, N, TodayN: Integer;
-  Today, S: string;
+  Month: string;
+  V: Variant;
+  Rows: TArray<TRow>;
+  R: TRow;
+  S: string;
+  N: Integer;
 begin
-  Rows := FDB.List('');
-  Today := FormatDateTime('yyyy-mm-dd', Now);
-  TodayN := 0;
-  for I := 0 to High(Rows) do
-    if StartsText(Today, Rows[I].AddedAt) then Inc(TodayN);
-  FDashCount.Caption := IntToStr(Length(Rows));
-  FDashToday.Caption := IntToStr(TodayN);
-  S := '';
-  N := 0;
-  for I := 0 to High(Rows) do
+  Month := FormatDateTime('yyyy-mm', Now);
+  FKpi[0].Caption := IntToStr(FDB.Count);
+  V := FCrm.Scalar('SELECT COALESCE(SUM(amount),0) FROM deals WHERE stage NOT IN (''Выиграна'',''Проиграна'')');
+  FKpi[1].Caption := FormatFloat('#,##0', Double(V)) + '  (' +
+    IntToStr(FCrm.Count('deals', 'stage NOT IN (''Выиграна'',''Проиграна'')')) + ')';
+  V := FCrm.Scalar('SELECT COALESCE(SUM(total),0) FROM orders WHERE order_date LIKE ''' + Month + '%'' AND status <> ''Отменён''');
+  FKpi[2].Caption := FormatFloat('#,##0', Double(V)) + '  (' +
+    IntToStr(FCrm.Count('orders', 'order_date LIKE ''' + Month + '%'' AND status <> ''Отменён''')) + ')';
+  FKpi[3].Caption := IntToStr(FCrm.Count('tasks', 'done = 0 AND due_at < date(''now'',''localtime'')'));
+  FKpi[4].Caption := IntToStr(FCrm.Count('items'));
+
+  S := ''; N := 0;
+  Rows := FCrm.List(DefOrders, '');
+  for R in Rows do
   begin
-    S := S + '• ' + Rows[I].Denumire + '   (' + Rows[I].Idno + ')' + sLineBreak;
-    Inc(N);
-    if N >= 6 then Break;
+    S := S + Format('• №%s от %s — %s, %s, %s MDL  [%s]', [R.Display[0], R.Display[1],
+      IfThen(R.Display[2] = '', 'без клиента', R.Display[2]), R.Display[3], R.Display[5], R.Display[4]]) + sLineBreak;
+    Inc(N); if N >= 7 then Break;
   end;
-  if S = '' then S := 'Пока нет ни одного клиента — нажмите «Создать клиента» в разделе «Клиенты».';
-  FDashLast.Caption := S;
+  FDashOrders.Caption := IfThen(S = '', 'Заказов пока нет — создайте первый в разделе «Заказы».', S);
+
+  S := ''; N := 0;
+  Rows := FCrm.List(DefTasks, '', 't.done = 0');
+  for R in Rows do
+  begin
+    S := S + Format('• %s  %s — %s%s', [R.Display[2], R.Display[1], R.Display[0],
+      IfThen(R.Display[3] = '', '', ' (' + R.Display[3] + ')')]) + sLineBreak;
+    Inc(N); if N >= 7 then Break;
+  end;
+  FDashTasks.Caption := IfThen(S = '', 'Открытых задач нет.', S);
 end;
 
 procedure TMainForm.ShowOverview(Item: TListItem);
 var
-  I: Integer;
+  I, Id: Integer;
 begin
   if Item = nil then
   begin
     for I := 0 to 5 do FOvValues[I].Caption := '—';
+    FOvType.ItemIndex := 0; FOvPhone.Text := ''; FOvEmail.Text := ''; FOvContact.Text := '';
     Exit;
   end;
   FOvValues[0].Caption := Item.Caption;
   for I := 1 to 5 do
     if Item.SubItems.Count >= I then
       FOvValues[I].Caption := IfThen(Trim(Item.SubItems[I - 1]) = '', '—', Item.SubItems[I - 1]);
+  Id := Integer(Item.Data);
+  FOvType.ItemIndex := Max(0, FOvType.Items.IndexOf(
+    VarToStr(FCrm.Scalar('SELECT client_type FROM clients WHERE id = ' + IntToStr(Id)))));
+  FOvPhone.Text := VarToStr(FCrm.Scalar('SELECT phone FROM clients WHERE id = ' + IntToStr(Id)));
+  FOvEmail.Text := VarToStr(FCrm.Scalar('SELECT email FROM clients WHERE id = ' + IntToStr(Id)));
+  FOvContact.Text := VarToStr(FCrm.Scalar('SELECT contact_person FROM clients WHERE id = ' + IntToStr(Id)));
 end;
 
 function TMainForm.SelectedId: Integer;
@@ -965,11 +908,9 @@ begin
     SelectSection(nsAccounts);
   if not TFile.Exists(FCli.LauncherExe) then
   begin
-    Say(mkErr, 'Не найден Contragenti: ' + FCli.LauncherExe +
-      '  — укажите путь в «Настройки»');
+    Say(mkErr, 'Не найден Contragenti: ' + FCli.LauncherExe + '  — укажите путь в «Настройки»');
     Exit;
   end;
-  // начальный фильтр берём из поля поиска — никаких запросов во всплывающих окнах
   Say(mkWarn, 'Открыт Contragenti — выберите контрагента в его окне…');
   FBtnAdd.Enabled := False;
   try
@@ -1004,7 +945,6 @@ begin
     Exit;
   end;
   Name := FList.Selected.Caption;
-  // подтверждение — повторным нажатием, без модального окна
   if FPendingDeleteId <> Id then
   begin
     FPendingDeleteId := Id;
@@ -1029,13 +969,11 @@ begin
   FPendingDeleteId := 0;
   RefreshList;
   if FSearch.Text <> '' then
-    Say(mkInfo, Format('Фильтр «%s»: показано %d из %d',
-      [FSearch.Text, FList.Items.Count, FDB.Count]));
+    Say(mkInfo, Format('Фильтр «%s»: показано %d из %d', [FSearch.Text, FList.Items.Count, FDB.Count]));
 end;
 
 procedure TMainForm.OnGlobalSearchChange(Sender: TObject);
 begin
-  // глобальный поиск верхней панели ведёт в «Клиенты» с тем же фильтром
   if FSection <> nsAccounts then
     SelectSection(nsAccounts);
   FSearch.Text := FGlobalSearch.Text;
@@ -1045,13 +983,11 @@ procedure TMainForm.OnPresetChange(Sender: TObject);
 begin
   FPendingDeleteId := 0;
   RefreshList;
-  Say(mkInfo, Format('Фильтр «%s»: показано %d из %d',
-    [FPreset.Text, FList.Items.Count, FDB.Count]));
+  Say(mkInfo, Format('Фильтр «%s»: показано %d из %d', [FPreset.Text, FList.Items.Count, FDB.Count]));
 end;
 
 procedure TMainForm.OnListSelect(Sender: TObject; Item: TListItem; Selected: Boolean);
 begin
-  // смена выделения снимает незавершённое подтверждение удаления
   if Selected and (Integer(Item.Data) <> FPendingDeleteId) then
     FPendingDeleteId := 0;
   if Selected then
@@ -1060,11 +996,68 @@ begin
     ShowOverview(nil);
 end;
 
+procedure TMainForm.OnOverviewSave(Sender: TObject);
+var
+  Id: Integer;
+begin
+  Id := SelectedId;
+  if Id = 0 then
+  begin
+    Say(mkWarn, 'Выберите клиента в списке.');
+    Exit;
+  end;
+  FDB.Connection.ExecSQL(
+    'UPDATE clients SET client_type = :t, phone = :p, email = :e, contact_person = :c WHERE id = :id',
+    [FOvType.Text, Trim(FOvPhone.Text), Trim(FOvEmail.Text), Trim(FOvContact.Text), Id]);
+  Say(mkOk, 'Карточка клиента «' + FList.Selected.Caption + '» сохранена.');
+end;
+
+procedure TMainForm.OnLeadConvert(Sender: TObject);
+var
+  Id, ClientId: Integer;
+  Msg: string;
+begin
+  Id := FPages[nsLeads].SelectedId;
+  if Id = 0 then
+  begin
+    Say(mkWarn, 'Выберите лид в списке.');
+    Exit;
+  end;
+  Msg := FCrm.ConvertLead(Id, ClientId);
+  FPages[nsLeads].Refresh;
+  RefreshList;
+  if ClientId > 0 then
+    Say(mkOk, 'Лид конвертирован: ' + Msg)
+  else
+    Say(mkWarn, 'Лид не конвертирован: ' + Msg);
+end;
+
+procedure TMainForm.OnTaskDone(Sender: TObject);
+var
+  Id: Integer;
+begin
+  Id := FPages[nsCalendar].SelectedId;
+  if Id = 0 then
+  begin
+    Say(mkWarn, 'Выберите задачу в списке.');
+    Exit;
+  end;
+  FCrm.DB.Connection.ExecSQL('UPDATE tasks SET done = 1 WHERE id = :id', [Id]);
+  FPages[nsCalendar].Cancel;
+  FPages[nsCalendar].Refresh;
+  Say(mkOk, 'Задача отмечена выполненной.');
+end;
+
+procedure TMainForm.OnPageChanged(Sender: TObject);
+begin
+  // изменения в разделах влияют на показатели «Главной» — она пересчитается при открытии
+end;
+
 procedure TMainForm.OnSettingsSave(Sender: TObject);
 begin
   FCli.LauncherExe := Trim(FLauncherEdit.Text);
   SaveSettings;
-  SelectSection(nsSettings);   // скрыть панель
+  SelectSection(nsSettings);
   if TFile.Exists(FCli.LauncherExe) then
     Say(mkOk, 'Настройки сохранены: ' + FCli.LauncherExe)
   else
@@ -1092,7 +1085,7 @@ end;
 
 procedure TMainForm.TestSetFilter(const Text: string);
 begin
-  FSearch.Text := Text;   // OnChange обновит список и сообщение
+  FSearch.Text := Text;
 end;
 
 procedure TMainForm.TestClickAdd;
@@ -1145,6 +1138,25 @@ begin
   OnNavClick(FNavItems[nsSettings]);
 end;
 
+procedure TMainForm.TestLeadConvert;
+begin
+  OnLeadConvert(nil);
+end;
+
+procedure TMainForm.TestTaskDone;
+begin
+  OnTaskDone(nil);
+end;
+
+procedure TMainForm.TestOverviewSet(const AType, Phone, Email, Contact: string);
+begin
+  FOvType.ItemIndex := Max(0, FOvType.Items.IndexOf(AType));
+  FOvPhone.Text := Phone;
+  FOvEmail.Text := Email;
+  FOvContact.Text := Contact;
+  OnOverviewSave(nil);
+end;
+
 function TMainForm.TestListCount: Integer;
 begin
   Result := FList.Items.Count;
@@ -1168,6 +1180,11 @@ end;
 function TMainForm.TestSection: TNavSection;
 begin
   Result := FSection;
+end;
+
+function TMainForm.TestKpi(Index: Integer): string;
+begin
+  Result := FKpi[Index].Caption;
 end;
 
 end.

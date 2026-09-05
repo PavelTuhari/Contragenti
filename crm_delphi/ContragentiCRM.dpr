@@ -23,6 +23,9 @@ uses
   Vcl.Forms,
   uContragenti in 'uContragenti.pas',
   uClientsDB in 'uClientsDB.pas',
+  uEspoTheme in 'uEspoTheme.pas',
+  uCrmData in 'uCrmData.pas',
+  uEntityPage in 'uEntityPage.pas',
   uMainForm in 'uMainForm.pas',
   uGuiSelfTest in 'uGuiSelfTest.pas';
 
@@ -190,21 +193,31 @@ begin
   GDBPathOverride := DbPath;
 
   Application.Initialize;
-  Form := TMainForm.CreateNew(Application);
+  Ok := False;
   try
-    Form.Show;
-    Application.ProcessMessages;
-    Test := TGuiSelfTest.Create(Form, Dir, Launcher);
+    Form := TMainForm.CreateNew(Application);
     try
-      Ok := Test.Run;
-      WriteConsole(Format('GUI self-test: %d/%d — %s',
-        [Test.Passed, Test.Total, BoolToStr(Ok, True)]));
-      WriteConsole('Отчёт: ' + TPath.Combine(Dir, 'report.html'));
+      Form.Show;
+      Application.ProcessMessages;
+      Test := TGuiSelfTest.Create(Form, Dir, Launcher);
+      try
+        Ok := Test.Run;
+        WriteConsole(Format('GUI self-test: %d/%d — %s',
+          [Test.Passed, Test.Total, BoolToStr(Ok, True)]));
+        WriteConsole('Отчёт: ' + TPath.Combine(Dir, 'report.html'));
+      finally
+        Test.Free;
+      end;
     finally
-      Test.Free;
+      Form.Free;
     end;
-  finally
-    Form.Free;
+  except
+    // в тестовом режиме никаких модальных диалогов: причина — в лог и код 2
+    on E: Exception do
+    begin
+      WriteConsole('GUI self-test EXCEPTION: ' + E.ClassName + ': ' + E.Message);
+      Exit(2);
+    end;
   end;
   if Ok then Result := 0 else Result := 1;
 end;

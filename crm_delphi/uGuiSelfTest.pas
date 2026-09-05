@@ -16,7 +16,7 @@
 interface
 
 uses
-  Winapi.Windows, System.SysUtils, System.Classes, uMainForm;
+  Winapi.Windows, System.SysUtils, System.Classes, uEspoTheme, uMainForm;
 
 type
   TStepResult = record
@@ -62,7 +62,8 @@ implementation
 uses
   Vcl.Forms, Vcl.Graphics, Vcl.Imaging.pngimage,
   System.IOUtils, System.StrUtils, System.Generics.Collections, System.Generics.Defaults,
-  uContragenti, uClientsDB;
+  System.Variants, System.Math, System.DateUtils,
+  uContragenti, uClientsDB, uCrmData, uEntityPage;
 
 const
   PW_RENDERFULLCONTENT = $00000002;
@@ -408,6 +409,9 @@ var
   Before: Integer;
   SdkOk: Boolean;
   Detail: string;
+  P: TEntityPage;
+  AlfaId, AgroId: Integer;
+  V: Variant;
 begin
   FSteps := nil;
   FNum := 0;
@@ -483,9 +487,10 @@ begin
   Inc(FNum);
   FForm.TestClickNav(nsLeads);
   Pump;
-  Step('Навигация: демо-раздел «Лиды» — информационное сообщение, без смены страницы',
-    (FForm.TestSection = nsHome) and (FForm.TestMessageKind = mkInfo),
-    'сообщение: ' + FForm.TestMessage, 'nav_demo');
+  Step('Навигация: раздел «Лиды» открывается — пустой список с кнопками «Создать лид» и «В клиенты»',
+    (FForm.TestSection = nsLeads) and (FForm.Page(nsLeads).ListCount = 0),
+    Format('раздел=%d, записей %d', [Ord(FForm.TestSection), FForm.Page(nsLeads).ListCount]),
+    'nav_leads_empty');
 
   Inc(FNum);
   FForm.TestClickNav(nsAccounts);
@@ -583,12 +588,206 @@ begin
        BoolToStr(FForm.TestMessageKind = mkWarn, True), FForm.Client.LastError]),
     'sdk_duplicate');
 
+  // ── часть 3: разделы CRM для торговли, услуг и производства ──
+
   Inc(FNum);
+  FForm.TestSetFilter('');
+  Pump;
+  FForm.TestSelectFirst;
+  Pump;
+  FForm.TestOverviewSet('Клиент', '+373 22 123-456', 'office@alfa-vis.md', 'Bubis Yevgeny');
+  Pump;
+  Step('Клиенты: в карточке сохранены тип, телефон, e-mail и контактное лицо',
+    FForm.TestMessageKind = mkOk, FForm.TestMessage, 'client_card');
+  AlfaId := FForm.Crm.Scalar('SELECT id FROM clients WHERE denumire LIKE ''%ALFA-VIS%''');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsContacts);
+  Pump;
+  P := FForm.Page(nsContacts);
+  P.NewRecord;
+  Pump;
+  P.SetField('name', 'Yevgeny Bubis');
+  P.SetField('client_id', IntToStr(AlfaId));
+  P.SetField('position', 'Директор');
+  P.SetField('phone', '+373 69 000-000');
+  P.SetField('email', 'y.bubis@alfa-vis.md');
+  P.Save;
+  Pump;
+  Step('Контакты: создан контакт «Yevgeny Bubis», привязан к клиенту ALFA-VIS',
+    (P.ListCount = 1) and (FForm.TestMessageKind = mkOk),
+    Format('контактов %d; %s', [P.ListCount, FForm.TestMessage]), 'contact_new');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsLeads);
+  Pump;
+  P := FForm.Page(nsLeads);
+  P.NewRecord;
+  Pump;
+  P.SetField('name', 'Ion Popescu');
+  P.SetField('company', 'Agro-Prim SRL');
+  P.SetField('status', 'В работе');
+  P.SetField('source', 'Выставка');
+  P.SetField('phone', '+373 79 111-222');
+  P.SetField('email', 'ion@agro-prim.md');
+  P.SetField('notes', 'Интерес к дозирующему оборудованию для фермы');
+  P.Save;
+  Pump;
+  Step('Лиды: создан лид «Agro-Prim SRL» — в работе, источник «Выставка»',
+    (P.ListCount = 1) and (FForm.TestMessageKind = mkOk),
+    Format('лидов %d', [P.ListCount]), 'lead_new');
+
+  Inc(FNum);
+  Before := FForm.TestDbCount;
+  P.SelectFirst;
+  Pump;
+  FForm.TestLeadConvert;
+  Pump;
+  V := FForm.Crm.Scalar('SELECT status FROM leads WHERE company = ''Agro-Prim SRL''');
+  AgroId := FForm.Crm.Scalar('SELECT id FROM clients WHERE denumire = ''Agro-Prim SRL''');
+  Step('Лиды: «В клиенты» — создан клиент Agro-Prim SRL, статус лида «Конвертирован»',
+    (FForm.TestDbCount = Before + 1) and (VarToStr(V) = 'Конвертирован') and (AgroId > 0),
+    Format('клиентов %d → %d, статус лида: %s', [Before, FForm.TestDbCount, VarToStr(V)]),
+    'lead_convert');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsDeals);
+  Pump;
+  P := FForm.Page(nsDeals);
+  P.NewRecord;
+  Pump;
+  P.SetField('title', 'Поставка дозирующей установки');
+  P.SetField('client_id', IntToStr(AgroId));
+  P.SetField('stage', 'Предложение');
+  P.SetField('amount', '48500');
+  P.SetField('close_date', FormatDateTime('yyyy-mm-dd', IncMonth(Now, 1)));
+  P.SetField('notes', 'Коммерческое предложение отправлено');
+  P.Save;
+  Pump;
+  Step('Сделки: создана сделка 48 500 MDL для Agro-Prim на этапе «Предложение»',
+    (P.ListCount = 1) and (FForm.TestMessageKind = mkOk),
+    Format('сделок %d', [P.ListCount]), 'deal_new');
+
+  Inc(FNum);
+  P.SelectFirst;
+  Pump;
+  P.SetField('stage', 'Выиграна');
+  P.Save;
+  Pump;
+  V := FForm.Crm.Scalar('SELECT stage FROM deals WHERE title LIKE ''Поставка%''');
+  Step('Сделки: этап переведён в «Выиграна» (воронка)',
+    VarToStr(V) = 'Выиграна', 'этап в базе: ' + VarToStr(V), 'deal_won');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsItems);
+  Pump;
+  P := FForm.Page(nsItems);
+  P.NewRecord; Pump;
+  P.SetField('code', 'T-001'); P.SetField('name', 'Насос дозирующий ND-25');
+  P.SetField('kind', 'Товар'); P.SetField('unit_', 'шт');
+  P.SetField('price', '12500'); P.SetField('stock', '5');
+  P.Save; Pump;
+  P.NewRecord; Pump;
+  P.SetField('code', 'S-001'); P.SetField('name', 'Монтаж и пусконаладка');
+  P.SetField('kind', 'Услуга'); P.SetField('unit_', 'час'); P.SetField('price', '350');
+  P.Save; Pump;
+  P.NewRecord; Pump;
+  P.SetField('code', 'P-001'); P.SetField('name', 'Установка дозирования УД-1');
+  P.SetField('kind', 'Изделие'); P.SetField('unit_', 'компл');
+  P.SetField('price', '42000'); P.SetField('stock', '0');
+  P.Save; Pump;
+  Step('Номенклатура: товар (остаток 5), услуга (час) и изделие собственного производства',
+    P.ListCount = 3, Format('позиций %d', [P.ListCount]), 'items');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsOrders);
+  Pump;
+  P := FForm.Page(nsOrders);
+  P.NewRecord; Pump;
+  P.SetField('number', '0001');
+  P.SetField('client_id', IntToStr(AgroId));
+  P.SetField('kind', 'Продажа');
+  P.SetField('status', 'Подтверждён');
+  P.Save; Pump;
+  P.LineSet(P.LineItemIndex('Насос'), 2, 12500); P.LineAdd; Pump;
+  P.LineSet(P.LineItemIndex('Монтаж'), 8, 350); P.LineAdd; Pump;
+  Step('Заказы: заказ на продажу №0001 — две строки (2 насоса + 8 ч монтажа), итого 27 800 MDL',
+    (P.LinesCount = 2) and (Abs(P.LinesTotal - 27800) < 0.01),
+    Format('строк %d, итого %.2f', [P.LinesCount, P.LinesTotal]), 'order_lines');
+
+  Inc(FNum);
+  P.SetField('status', 'Выполнен');
+  P.PostOrder;
+  Pump;
+  V := FForm.Crm.Scalar('SELECT stock FROM items WHERE code = ''T-001''');
+  Step('Заказы: статус «Выполнен» + «Провести» — остаток насосов списан 5 → 3',
+    (Abs(Double(V) - 3) < 0.01) and (FForm.TestMessageKind = mkOk),
+    Format('остаток T-001 = %s; %s', [VarToStr(V), FForm.TestMessage]), 'order_posted');
+
+  Inc(FNum);
+  P.NewRecord; Pump;
+  P.SetField('number', '0002');
+  P.SetField('kind', 'Производство');
+  P.SetField('status', 'Выполнен');
+  P.SetField('notes', 'Выпуск изделий на склад');
+  P.Save; Pump;
+  P.LineSet(P.LineItemIndex('Установка'), 2, 42000); P.LineAdd; Pump;
+  P.PostOrder; Pump;
+  V := FForm.Crm.Scalar('SELECT stock FROM items WHERE code = ''P-001''');
+  Step('Заказы: производственный заказ №0002 проведён — оприходовано 2 изделия (0 → 2)',
+    (Abs(Double(V) - 2) < 0.01) and (FForm.TestMessageKind = mkOk),
+    Format('остаток P-001 = %s; %s', [VarToStr(V), FForm.TestMessage]), 'order_production');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsCalendar);
+  Pump;
+  P := FForm.Page(nsCalendar);
+  P.NewRecord; Pump;
+  P.SetField('subject', 'Позвонить по оплате заказа №0001');
+  P.SetField('kind', 'Звонок');
+  P.SetField('due_at', FormatDateTime('yyyy-mm-dd', Now - 2));
+  P.SetField('client_id', IntToStr(AgroId));
+  P.Save; Pump;
+  P.NewRecord; Pump;
+  P.SetField('subject', 'Встреча: приёмка установки УД-1');
+  P.SetField('kind', 'Встреча');
+  P.SetField('due_at', FormatDateTime('yyyy-mm-dd', Now + 3));
+  P.SetField('client_id', IntToStr(AgroId));
+  P.Save; Pump;
+  Step('Календарь: звонок (просрочен на 2 дня) и встреча через 3 дня',
+    P.ListCount = 2, Format('открытых задач %d', [P.ListCount]), 'tasks');
+
+  Inc(FNum);
+  P.SelectPreset(2);   // «Просроченные»
+  Pump;
+  Step('Календарь: фильтр «Просроченные» — одна задача',
+    P.ListCount = 1, Format('в списке %d', [P.ListCount]), 'tasks_overdue');
+
+  Inc(FNum);
+  P.SelectFirst; Pump;
+  FForm.TestTaskDone; Pump;
+  Step('Календарь: «Выполнено» — просроченная задача закрыта, список пуст',
+    (P.ListCount = 0) and (FForm.TestMessageKind = mkOk),
+    Format('в списке %d; %s', [P.ListCount, FForm.TestMessage]), 'task_done');
+  P.SelectPreset(0);
+
+  Inc(FNum);
+  FForm.TestClickNav(nsHome);
+  Pump;
+  Step('Главная: показатели — клиенты, открытые сделки, заказы месяца, просроченные задачи, номенклатура',
+    (FForm.TestKpi(0) = '3') and (FForm.TestKpi(3) = '0') and (FForm.TestKpi(4) = '3')
+      and (Abs(Double(FForm.Crm.Scalar('SELECT SUM(total) FROM orders')) - 111800) < 0.01),
+    Format('клиенты=%s, сделки=%s, заказы=%s, просрочено=%s, номенклатура=%s',
+      [FForm.TestKpi(0), FForm.TestKpi(1), FForm.TestKpi(2), FForm.TestKpi(3), FForm.TestKpi(4)]),
+    'dashboard');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsAccounts);
   FForm.TestSetFilter('');
   FForm.TestHideBanner;
   Pump;
-  Step('Итоговое состояние окна', FForm.TestDbCount = 2,
-    Format('в базе %d', [FForm.TestDbCount]), 'final');
+  Step('Итоговое состояние окна', FForm.TestDbCount = 3,
+    Format('в базе %d клиентов', [FForm.TestDbCount]), 'final');
 
   WriteReport;
   Result := Passed = Total;
@@ -669,9 +868,9 @@ begin
      .Append('</style></head><body><div class="wrap">')
      .Append('<h1>Demo CRM — отчёт GUI-самотеста</h1>')
      .Append('<p class="sub">Тест выполнен самим приложением: оно вело собственное окно по шагам, '
-           + 'рисовало номер шага на плашке и снимало себя через GetFormImage. Шаги 12–15 — реальный '
-           + 'вызов SDK: нажата настоящая кнопка «Добавить из реестра», запущен Contragenti '
-           + '(Chrome + date.gov.md); его окна сняты через PrintWindow во время работы.<br>'
+           + 'рисовало номер шага на плашке и снимало себя. Шаги 15–18 — реальный вызов SDK: '
+           + 'нажата настоящая кнопка «Создать из реестра», запущен Contragenti; шаги 19–33 — разделы CRM: '
+           + 'клиенты, контакты, лиды, сделки, номенклатура, заказы с проводкой остатков, календарь, главная.<br>'
            + 'Launcher: <code>').Append(HtmlEsc(FLauncher)).Append('</code></p>')
      .Append('<div class="verdict ').Append(IfThen(AllOk, 'pass', 'fail')).Append('">')
      .Append(Format('Пройдено %d из %d', [Passed, Total])).Append('</div>');
