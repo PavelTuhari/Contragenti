@@ -466,7 +466,7 @@ begin
   if Button <> mbLeft then Exit;
   FDragId := (Sender as TComponent).Tag;
   FDragActive := False;
-  FDragOrigin := Mouse.CursorPos;
+  FDragOrigin := (Sender as TControl).ClientToScreen(Point(X, Y));
 end;
 
 procedure TCalendarPage.TaskMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
@@ -474,7 +474,7 @@ var
   P: TPoint;
 begin
   if (FDragId < 0) or not (ssLeft in Shift) then Exit;
-  P := Mouse.CursorPos;
+  P := (Sender as TControl).ClientToScreen(Point(X, Y));
   if not FDragActive and (Abs(P.X - FDragOrigin.X) + Abs(P.Y - FDragOrigin.Y) < 8) then
     Exit;
   FDragActive := True;
@@ -489,7 +489,7 @@ var
 begin
   if FDragActive then
   begin
-    Cell := CellAtScreen(Mouse.CursorPos);
+    Cell := CellAtScreen((Sender as TControl).ClientToScreen(Point(X, Y)));
     HideGhost;
     HighlightCell(-1);
     if (Cell >= 0) and (FDragId >= 0) then
@@ -628,16 +628,13 @@ begin
     if FTaskLabels[I].Tag = TaskId then
     begin
       Src := FTaskLabels[I];
-      // тот же путь, что и у мыши
-      P := Src.ClientToScreen(Point(Src.Width div 2, Src.Height div 2));
-      Mouse.CursorPos := P;
-      TaskMouseDown(Src, mbLeft, [ssLeft], 0, 0);
-      P := FGrid.ClientToScreen(Point(
+      // тот же путь, что и у мыши; координаты относительно подписи задачи
+      TaskMouseDown(Src, mbLeft, [ssLeft], Src.Width div 2, Src.Height div 2);
+      P := Src.ScreenToClient(FGrid.ClientToScreen(Point(
         FCells[Cell].Panel.Left + FCells[Cell].Panel.Width div 2,
-        FCells[Cell].Panel.Top + FCells[Cell].Panel.Height div 2));
-      Mouse.CursorPos := P;
-      TaskMouseMove(Src, [ssLeft], 0, 0);
-      TaskMouseUp(Src, mbLeft, [], 0, 0);
+        FCells[Cell].Panel.Top + FCells[Cell].Panel.Height div 2)));
+      TaskMouseMove(Src, [ssLeft], P.X, P.Y);
+      TaskMouseUp(Src, mbLeft, [], P.X, P.Y);
       Exit(True);
     end;
 end;

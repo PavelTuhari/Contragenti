@@ -6,7 +6,6 @@
     { "code": "en", "name": "English" },
     { "code": "ru", "name": "Русский" }
   ],
-
   "ro": {
     "strings": {
       "app.title": "Demo CRM",
@@ -25,6 +24,7 @@
       "login.logout": "Ieșire",
       "nav.workspace": "Tablou de lucru",
       "nav.kanban": "Kanban",
+      "nav.process": "Proces de afaceri",
       "nav.gantt": "Plan de lucrări",
       "nav.clients": "Clienți",
       "nav.contacts": "Contacte",
@@ -134,27 +134,118 @@
       "msg.contragenti_missing": "Contragenti nu a fost găsit: %s  — indicați calea în «Setări»",
       "msg.pick_cancelled": "Alegere anulată: %s",
       "msg.duplicate": "Deja în bază: %s (IDNO %s)",
-      "msg.client_added": "Client adăugat: %s (IDNO %s)"
+      "msg.client_added": "Client adăugat: %s (IDNO %s)",
+      "kanban.task_cols": "Restante;Azi;Mai târziu;Îndeplinite",
+      "kanban.no_client": "(fără client)",
+      "kanban.done_badge": "îndeplinit",
+      "kanban.days_late": "−%d z",
+      "kanban.days_left": "%d z",
+      "kanban.today": "azi",
+      "kanban.paid_pct": "plătit %d%%",
+      "kanban.col_late": "întârzie %d",
+      "kanban.board": "Panou: %s",
+      "kanban.selected": "Selectat: %s  ·  coloana „%s”",
+      "kanban.select_card": "Selectați un card pe panou.",
+      "kanban.edge": "Nu se poate muta mai departe: „%s” este ultima etapă.",
+      "kanban.moved": "„%s” → etapa „%s”",
+      "kanban.cancelled": "Mutare anulată: cardul rămâne în etapa sa.",
+      "kanban.refreshed": "Panou actualizat.",
+      "process.title": "Proces de afaceri",
+      "process.hint": "clic pe etapă — cardurile și descrierea ei  ·  dublu clic pe etapă — secțiunea cu acest filtru  ·  trageți cardul cu mouse-ul pe altă etapă",
+      "process.desc": "Descrierea etapei",
+      "process.cards": "Cardurile etapei",
+      "process.save": "Salvează descrierea",
+      "process.owner": "Responsabil: %s",
+      "process.sla": "Normativ: %d zile",
+      "process.count": "%d",
+      "process.node_info": "Etapa „%s”: %d carduri, întârzie %d",
+      "process.saved": "Descrierea etapei „%s” salvată în %s.",
+      "process.select_node": "Selectați o etapă pe schemă.",
+      "process.missing": "Fișierul cu descrierea proceselor nu a fost găsit: %s",
+      "process.opened": "Secțiune deschisă cu filtrul etapei: %d înregistrări"
     },
     "enums": {
-      "client_type": ["Client", "Furnizor", "Partener"],
-      "lead_status": ["Nou", "În lucru", "Convertit", "Refuz"],
-      "lead_source": ["Site", "Apel", "Recomandare", "Expoziție", "Publicitate", "Altele"],
-      "deal_stage": ["Nouă", "Ofertă", "Negocieri", "Câștigată", "Pierdută"],
-      "item_kind": ["Marfă", "Serviciu", "Produs"],
-      "unit": ["buc", "oră", "kg", "m", "m2", "l", "set", "serviciu"],
-      "order_kind": ["Vânzare", "Serviciu", "Producție"],
-      "order_status": ["Ciornă", "Confirmată", "În lucru", "Executată", "Plătită", "Anulată"],
-      "task_kind": ["Sarcină", "Apel", "Întâlnire"],
-      "stage_title": ["Ofertă", "Negocieri", "Gata de comandă", "Așteaptă avans",
-                      "În lucru / producție", "Gata de livrare", "Livrat — așteptăm plata", "Închis"],
-      "stage_hint": ["Oferta trimisă clientului", "Coordonarea condițiilor",
-                     "Oportunitate câștigată — creați comanda", "Comandă confirmată, avansul nu a intrat",
-                     "Avansul este, executarea în curs", "Executată, livrarea nu este întocmită",
-                     "Livrată, plata nu este închisă", "Livrată și plătită integral"]
+      "client_type": [
+        "Client",
+        "Furnizor",
+        "Partener"
+      ],
+      "lead_status": [
+        "Nou",
+        "În lucru",
+        "Convertit",
+        "Refuz"
+      ],
+      "lead_source": [
+        "Site",
+        "Apel",
+        "Recomandare",
+        "Expoziție",
+        "Publicitate",
+        "Altele"
+      ],
+      "deal_stage": [
+        "Nouă",
+        "Ofertă",
+        "Negocieri",
+        "Câștigată",
+        "Pierdută"
+      ],
+      "item_kind": [
+        "Marfă",
+        "Serviciu",
+        "Produs"
+      ],
+      "unit": [
+        "buc",
+        "oră",
+        "kg",
+        "m",
+        "m2",
+        "l",
+        "set",
+        "serviciu"
+      ],
+      "order_kind": [
+        "Vânzare",
+        "Serviciu",
+        "Producție"
+      ],
+      "order_status": [
+        "Ciornă",
+        "Confirmată",
+        "În lucru",
+        "Executată",
+        "Plătită",
+        "Anulată"
+      ],
+      "task_kind": [
+        "Sarcină",
+        "Apel",
+        "Întâlnire"
+      ],
+      "stage_title": [
+        "Ofertă",
+        "Negocieri",
+        "Gata de comandă",
+        "Așteaptă avans",
+        "În lucru / producție",
+        "Gata de livrare",
+        "Livrat — așteptăm plata",
+        "Închis"
+      ],
+      "stage_hint": [
+        "Oferta trimisă clientului",
+        "Coordonarea condițiilor",
+        "Oportunitate câștigată — creați comanda",
+        "Comandă confirmată, avansul nu a intrat",
+        "Avansul este, executarea în curs",
+        "Executată, livrarea nu este întocmită",
+        "Livrată, plata nu este închisă",
+        "Livrată și plătită integral"
+      ]
     }
   },
-
   "en": {
     "strings": {
       "app.title": "Demo CRM",
@@ -173,6 +264,7 @@
       "login.logout": "Sign out",
       "nav.workspace": "Workspace",
       "nav.kanban": "Kanban",
+      "nav.process": "Business process",
       "nav.gantt": "Work plan",
       "nav.clients": "Clients",
       "nav.contacts": "Contacts",
@@ -282,27 +374,118 @@
       "msg.contragenti_missing": "Contragenti not found: %s  — set the path in «Settings»",
       "msg.pick_cancelled": "Selection cancelled: %s",
       "msg.duplicate": "Already in the database: %s (IDNO %s)",
-      "msg.client_added": "Client added: %s (IDNO %s)"
+      "msg.client_added": "Client added: %s (IDNO %s)",
+      "kanban.task_cols": "Overdue;Today;Later;Done",
+      "kanban.no_client": "(no client)",
+      "kanban.done_badge": "done",
+      "kanban.days_late": "−%d d",
+      "kanban.days_left": "%d d",
+      "kanban.today": "today",
+      "kanban.paid_pct": "paid %d%%",
+      "kanban.col_late": "late %d",
+      "kanban.board": "Board: %s",
+      "kanban.selected": "Selected: %s  ·  column “%s”",
+      "kanban.select_card": "Select a card on the board.",
+      "kanban.edge": "Cannot move further: “%s” is the last stage.",
+      "kanban.moved": "“%s” → stage “%s”",
+      "kanban.cancelled": "Move cancelled: the card stays on its stage.",
+      "kanban.refreshed": "Board refreshed.",
+      "process.title": "Business process",
+      "process.hint": "click a stage — its cards and description  ·  double click a stage — section with this filter  ·  drag a card onto another stage",
+      "process.desc": "Stage description",
+      "process.cards": "Stage cards",
+      "process.save": "Save description",
+      "process.owner": "Owner: %s",
+      "process.sla": "Target: %d days",
+      "process.count": "%d",
+      "process.node_info": "Stage “%s”: %d cards, late %d",
+      "process.saved": "Description of “%s” saved to %s.",
+      "process.select_node": "Select a stage on the diagram.",
+      "process.missing": "Process description file not found: %s",
+      "process.opened": "Section opened with the stage filter: %d records"
     },
     "enums": {
-      "client_type": ["Client", "Supplier", "Partner"],
-      "lead_status": ["New", "In progress", "Converted", "Rejected"],
-      "lead_source": ["Website", "Call", "Referral", "Trade show", "Advertising", "Other"],
-      "deal_stage": ["New", "Proposal", "Negotiation", "Won", "Lost"],
-      "item_kind": ["Goods", "Service", "Product"],
-      "unit": ["pcs", "hour", "kg", "m", "m2", "l", "set", "service"],
-      "order_kind": ["Sale", "Service", "Production"],
-      "order_status": ["Draft", "Confirmed", "In progress", "Completed", "Paid", "Cancelled"],
-      "task_kind": ["Task", "Call", "Meeting"],
-      "stage_title": ["Proposal", "Negotiation", "Ready to order", "Awaiting advance",
-                      "In progress / production", "Ready to ship", "Shipped — awaiting payment", "Closed"],
-      "stage_hint": ["Proposal sent to the client", "Terms are being agreed",
-                     "Deal won — create the order", "Order confirmed, advance not received",
-                     "Advance received, work in progress", "Completed, shipment not recorded",
-                     "Shipped, payment not closed", "Shipped and fully paid"]
+      "client_type": [
+        "Client",
+        "Supplier",
+        "Partner"
+      ],
+      "lead_status": [
+        "New",
+        "In progress",
+        "Converted",
+        "Rejected"
+      ],
+      "lead_source": [
+        "Website",
+        "Call",
+        "Referral",
+        "Trade show",
+        "Advertising",
+        "Other"
+      ],
+      "deal_stage": [
+        "New",
+        "Proposal",
+        "Negotiation",
+        "Won",
+        "Lost"
+      ],
+      "item_kind": [
+        "Goods",
+        "Service",
+        "Product"
+      ],
+      "unit": [
+        "pcs",
+        "hour",
+        "kg",
+        "m",
+        "m2",
+        "l",
+        "set",
+        "service"
+      ],
+      "order_kind": [
+        "Sale",
+        "Service",
+        "Production"
+      ],
+      "order_status": [
+        "Draft",
+        "Confirmed",
+        "In progress",
+        "Completed",
+        "Paid",
+        "Cancelled"
+      ],
+      "task_kind": [
+        "Task",
+        "Call",
+        "Meeting"
+      ],
+      "stage_title": [
+        "Proposal",
+        "Negotiation",
+        "Ready to order",
+        "Awaiting advance",
+        "In progress / production",
+        "Ready to ship",
+        "Shipped — awaiting payment",
+        "Closed"
+      ],
+      "stage_hint": [
+        "Proposal sent to the client",
+        "Terms are being agreed",
+        "Deal won — create the order",
+        "Order confirmed, advance not received",
+        "Advance received, work in progress",
+        "Completed, shipment not recorded",
+        "Shipped, payment not closed",
+        "Shipped and fully paid"
+      ]
     }
   },
-
   "ru": {
     "strings": {
       "app.title": "Demo CRM",
@@ -321,6 +504,7 @@
       "login.logout": "Выход",
       "nav.workspace": "Рабочий стол",
       "nav.kanban": "Канбан",
+      "nav.process": "Бизнес-процесс",
       "nav.gantt": "План работ",
       "nav.clients": "Клиенты",
       "nav.contacts": "Контакты",
@@ -430,24 +614,116 @@
       "msg.contragenti_missing": "Не найден Contragenti: %s  — укажите путь в «Настройках»",
       "msg.pick_cancelled": "Выбор отменён: %s",
       "msg.duplicate": "Уже в базе: %s (IDNO %s)",
-      "msg.client_added": "Добавлен клиент: %s (IDNO %s)"
+      "msg.client_added": "Добавлен клиент: %s (IDNO %s)",
+      "kanban.task_cols": "Просрочено;Сегодня;Позже;Выполнено",
+      "kanban.no_client": "(без клиента)",
+      "kanban.done_badge": "выполнено",
+      "kanban.days_late": "−%d д",
+      "kanban.days_left": "%d д",
+      "kanban.today": "сегодня",
+      "kanban.paid_pct": "оплачено %d%%",
+      "kanban.col_late": "запаздывает %d",
+      "kanban.board": "Доска: %s",
+      "kanban.selected": "Выбрано: %s  ·  колонка «%s»",
+      "kanban.select_card": "Выберите карточку на доске.",
+      "kanban.edge": "Дальше двигать некуда: «%s» — крайний этап.",
+      "kanban.moved": "«%s» → этап «%s»",
+      "kanban.cancelled": "Перенос отменён: карточка осталась на прежнем этапе.",
+      "kanban.refreshed": "Доска обновлена.",
+      "process.title": "Бизнес-процесс",
+      "process.hint": "щелчок по этапу — его карточки и описание  ·  двойной щелчок по этапу — раздел с фильтром  ·  карточку можно перетащить мышью на другой этап",
+      "process.desc": "Описание этапа",
+      "process.cards": "Карточки этапа",
+      "process.save": "Сохранить описание",
+      "process.owner": "Ответственный: %s",
+      "process.sla": "Норматив: %d дн.",
+      "process.count": "%d",
+      "process.node_info": "Этап «%s»: %d карточек, запаздывает %d",
+      "process.saved": "Описание этапа «%s» сохранено в %s.",
+      "process.select_node": "Выберите этап на схеме.",
+      "process.missing": "Не найден файл описания процессов: %s",
+      "process.opened": "Открыт раздел с фильтром этапа: записей %d"
     },
     "enums": {
-      "client_type": ["Клиент", "Поставщик", "Партнёр"],
-      "lead_status": ["Новый", "В работе", "Конвертирован", "Отказ"],
-      "lead_source": ["Сайт", "Звонок", "Рекомендация", "Выставка", "Реклама", "Другое"],
-      "deal_stage": ["Новая", "Предложение", "Переговоры", "Выиграна", "Проиграна"],
-      "item_kind": ["Товар", "Услуга", "Изделие"],
-      "unit": ["шт", "час", "кг", "м", "м2", "л", "компл", "услуга"],
-      "order_kind": ["Продажа", "Услуга", "Производство"],
-      "order_status": ["Черновик", "Подтверждён", "В работе", "Выполнен", "Оплачен", "Отменён"],
-      "task_kind": ["Задача", "Звонок", "Встреча"],
-      "stage_title": ["Предложение", "Переговоры", "Готово к заказу", "Ожидает аванс",
-                      "В работе / производство", "Готово к отгрузке", "Отгружено — ждём оплату", "Закрыто"],
-      "stage_hint": ["КП отправлено клиенту", "Согласование условий",
-                     "Сделка выиграна — оформить заказ", "Заказ подтверждён, аванс не поступил",
-                     "Аванс есть, идёт исполнение", "Исполнен, отгрузка не оформлена",
-                     "Отгружен, оплата не закрыта", "Отгружен и полностью оплачен"]
+      "client_type": [
+        "Клиент",
+        "Поставщик",
+        "Партнёр"
+      ],
+      "lead_status": [
+        "Новый",
+        "В работе",
+        "Конвертирован",
+        "Отказ"
+      ],
+      "lead_source": [
+        "Сайт",
+        "Звонок",
+        "Рекомендация",
+        "Выставка",
+        "Реклама",
+        "Другое"
+      ],
+      "deal_stage": [
+        "Новая",
+        "Предложение",
+        "Переговоры",
+        "Выиграна",
+        "Проиграна"
+      ],
+      "item_kind": [
+        "Товар",
+        "Услуга",
+        "Изделие"
+      ],
+      "unit": [
+        "шт",
+        "час",
+        "кг",
+        "м",
+        "м2",
+        "л",
+        "компл",
+        "услуга"
+      ],
+      "order_kind": [
+        "Продажа",
+        "Услуга",
+        "Производство"
+      ],
+      "order_status": [
+        "Черновик",
+        "Подтверждён",
+        "В работе",
+        "Выполнен",
+        "Оплачен",
+        "Отменён"
+      ],
+      "task_kind": [
+        "Задача",
+        "Звонок",
+        "Встреча"
+      ],
+      "stage_title": [
+        "Предложение",
+        "Переговоры",
+        "Готово к заказу",
+        "Ожидает аванс",
+        "В работе / производство",
+        "Готово к отгрузке",
+        "Отгружено — ждём оплату",
+        "Закрыто"
+      ],
+      "stage_hint": [
+        "КП отправлено клиенту",
+        "Согласование условий",
+        "Сделка выиграна — оформить заказ",
+        "Заказ подтверждён, аванс не поступил",
+        "Аванс есть, идёт исполнение",
+        "Исполнен, отгрузка не оформлена",
+        "Отгружен, оплата не закрыта",
+        "Отгружен и полностью оплачен"
+      ]
     }
   }
 }

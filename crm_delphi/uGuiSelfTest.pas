@@ -65,7 +65,7 @@ uses
   System.IOUtils, System.StrUtils, System.Generics.Collections, System.Generics.Defaults,
   System.Variants, System.Math, System.DateUtils,
   uContragenti, uClientsDB, uCrmData, uEntityPage, uTestData, uWorkspace,
-  uReports, uReportTable, uKanban, uGantt, uCalendarView, uI18n;
+  uReports, uReportTable, uKanban, uGantt, uCalendarView, uI18n, uBoardCards, uProcess;
 
 const
   PW_RENDERFULLCONTENT = $00000002;
@@ -277,6 +277,35 @@ begin
   end;
 end;
 
+{ Сохранение снимка с повторами: если PNG открыт просмотрщиком (user-mapped
+  section), запись падает — ждём и пробуем ещё, затем пишем под именем с
+  суффиксом, чтобы самотест не обрывался из-за чужого окна. Возвращает имя
+  файла, под которым снимок реально сохранён. }
+function SavePngRetry(Png: TPngImage; const Dir, Name: string): string;
+var
+  Attempt: Integer;
+  Alt: string;
+begin
+  Result := Name;
+  for Attempt := 1 to 6 do
+  try
+    Png.SaveToFile(TPath.Combine(Dir, Result));
+    Exit;
+  except
+    on E: EFCreateError do
+    begin
+      Sleep(250);
+      if Attempt = 3 then
+      begin
+        Alt := ChangeFileExt(Name, '') + '_r.png';
+        Result := Alt;
+      end;
+    end;
+  end;
+  // последняя попытка — пусть исключение уйдёт наверх с понятным текстом
+  Png.SaveToFile(TPath.Combine(Dir, Result));
+end;
+
 function TGuiSelfTest.Capture(const Slug: string): string;
 var
   Bmp: TBitmap;
@@ -306,7 +335,7 @@ begin
     Png := TPngImage.Create;
     try
       Png.Assign(Bmp);
-      Png.SaveToFile(TPath.Combine(FOutDir, Result));
+      Result := SavePngRetry(Png, FOutDir, Result);
     finally
       Png.Free;
     end;
@@ -350,7 +379,7 @@ begin
     Png := TPngImage.Create;
     try
       Png.Assign(Bmp);
-      Png.SaveToFile(TPath.Combine(FOutDir, Result));
+      Result := SavePngRetry(Png, FOutDir, Result);
     finally
       Png.Free;
     end;
@@ -468,6 +497,8 @@ var
   Id: Integer;
   D1, D2: TDateTime;
   Nav: string;
+  BC: TBoardCard;
+  ProcFile: string;
 begin
   FSteps := nil;
   FNum := 0;
@@ -1049,6 +1080,96 @@ begin
       [FForm.Kanban.ColumnCount, FForm.Kanban.CardsInColumn(0), FForm.Kanban.CardsInColumn(1),
        FForm.Kanban.CardsInColumn(2), FForm.Kanban.CardsInColumn(3)]),
     'kanban_tasks');
+
+  // ── карточки информативные, перенос анимирован ──
+
+  Inc(FNum);
+  FForm.Kanban.SelectBoard(bkOrders);
+  Pump;
+  Id := FForm.Crm.Scalar('SELECT t.id FROM orders t WHERE ' +
+    FForm.Crm.StageWhere(stAwaitPayment) + ' ORDER BY t.id LIMIT 1');
+  BC := Default(TBoardCard);
+  FForm.Kanban.CardById(Id, BC);
+  Step('Канбан: карточка информативна — значок вида, клиент, сумма, прогресс оплаты, бейдж срока',
+    (Id > 0) and (BC.Id = Id) and (BC.Total > 0) and (BC.Paid > 0) and (BC.KindText <> '')
+      and (BC.Icon <> '') and (DaysBadgeText(BC) <> ''),
+    Format('«%s» %s %s · %s · оплачено %.0f из %.0f · бейдж «%s»',
+      [BC.Title, BC.Icon, BC.KindText, BC.Subtitle, BC.Paid, BC.Total, DaysBadgeText(BC)]),
+    'kanban_card_info');
+
+  Inc(FNum);
+  FForm.Kanban.SelectFirstCard(0);
+  Id := FForm.Kanban.SelectedId;
+  Before := FForm.Kanban.AnimFrames;
+  FForm.Kanban.DragCardById(Id, 1);
+  Pump;
+  Step('Канбан: перенос анимирован — карточка перелетает в новую колонку и вспыхивает',
+    (FForm.Kanban.AnimFrames > Before) and (FForm.Crm.StageOf(Id) = stInWork),
+    Format('кадров анимации %d, этап %d', [FForm.Kanban.AnimFrames - Before, Ord(FForm.Crm.StageOf(Id))]),
+    'kanban_anim');
+  FForm.Kanban.DragCardById(Id, 0);   // вернуть на прежний этап
+  Pump;
+
+  // ── часть 5а: схема бизнес-процесса ──
+
+  Inc(FNum);
+  // самотест работает с копией processes.json, чтобы не трогать файл проекта
+  ProcFile := TPath.Combine(FOutDir, 'processes_test.json');
+  TFile.Copy(FForm.Process.FileName, ProcFile, True);
+  FForm.Process.LoadFrom(ProcFile);
+  FForm.TestClickNav(nsProcess);
+  Pump;
+  FForm.Process.SelectProcess(0);
+  Pump;
+  Step('Бизнес-процесс: схема «Сделка → заказ → оплата» из processes.json — дорожки, узлы, развилки, стрелки',
+    (FForm.Process.LoadError = '') and (FForm.Process.ProcessCount = 2) and
+    (FForm.Process.NodeCount = 13) and (FForm.Process.EdgeCount = 14),
+    Format('процессов %d, узлов %d, связей %d', [FForm.Process.ProcessCount,
+      FForm.Process.NodeCount, FForm.Process.EdgeCount]),
+    'process_scheme');
+
+  Inc(FNum);
+  FForm.Process.ClickNode('work');
+  Pump;
+  Step('Бизнес-процесс: щелчок по этапу «В работе» показывает те же карточки, что колонка канбана',
+    (FForm.Process.SelectedNodeId = 'work') and (FForm.Process.CardsShown > 0) and
+    (FForm.Process.CardsShown = FForm.Process.NodeCards('work')) and
+    (FForm.Process.NodeCards('work') = FForm.Crm.Count('orders', FForm.Crm.StageWhere(stInWork))),
+    Format('узел «%s»: карточек %d, в базе на этапе %d, запаздывает %d',
+      [FForm.Process.NodeTitle('work'), FForm.Process.CardsShown,
+       FForm.Crm.Count('orders', FForm.Crm.StageWhere(stInWork)), FForm.Process.NodeOverdue('work')]),
+    'process_node_click');
+
+  Inc(FNum);
+  Id := FForm.Crm.Scalar('SELECT t.id FROM orders t WHERE ' +
+    FForm.Crm.StageWhere(stInWork) + ' ORDER BY t.due_date, t.id LIMIT 1');
+  Before := FForm.Process.NodeCards('ready');
+  FForm.Process.DragCardToNode(Id, 'ready');   // тот же путь, что и мышь
+  Pump;
+  Step('Бизнес-процесс: карточка перетащена мышью на этап «Готово к отгрузке» — этап в базе изменён',
+    (FForm.Crm.StageOf(Id) = stReadyToShip) and (FForm.Process.NodeCards('ready') = Before + 1)
+      and (FForm.Process.AnimFrames > 0),
+    Format('на этапе «готово» было %d, стало %d; этап заказа %d; кадров анимации %d',
+      [Before, FForm.Process.NodeCards('ready'), Ord(FForm.Crm.StageOf(Id)), FForm.Process.AnimFrames]),
+    'process_drag');
+  FForm.Process.ClickNode('ready');
+  FForm.Process.DragCardToNode(Id, 'work');    // и обратно
+  Pump;
+
+  Inc(FNum);
+  FForm.Process.ClickNode('advance');
+  Pump;
+  Stub := FForm.Process.Description;
+  FForm.Process.SetDescription(Stub + ' [самотест ' + FormatDateTime('hh:nn:ss', Now) + ']');
+  FForm.Process.SaveDescription;
+  Pump;
+  Detail := TFile.ReadAllText(ProcFile, TEncoding.UTF8);
+  Step('Бизнес-процесс: описание этапа отредактировано и сохранено обратно в JSON',
+    (Pos('[самотест', Detail) > 0) and (Pos('"sales_to_cash"', Detail) > 0) and (Stub <> ''),
+    Format('файл %s, %d байт, описание «%s…»', [ExtractFileName(ProcFile), Length(Detail),
+      Copy(Stub, 1, 40)]),
+    'process_desc_saved');
+  FForm.Process.LoadFrom('');   // вернуть штатный processes.json
 
   Inc(FNum);
   FForm.TestClickNav(nsCalendar);

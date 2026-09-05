@@ -1,0 +1,286 @@
+﻿{
+  "_comment": "Описание бизнес-процессов Demo CRM. Файл внешний: правьте узлы, связи и описания без пересборки. Узел с board/col привязан к колонке канбана (board: deals | orders | tasks; col — номер колонки с нуля) и показывает те же карточки, что и канбан. kind: start | step | gate | end. x — слот в ряду, y — ряд (дорожка). Тексты title/desc/owner/label — по языкам ro/en/ru; описание этапа можно править и из программы (кнопка «Сохранить описание»).",
+  "processes": [
+    {
+      "id": "sales_to_cash",
+      "title": { "ro": "Ofertă → comandă → plată", "en": "Deal → order → payment", "ru": "Сделка → заказ → оплата" },
+      "lanes": [
+        {
+          "title": { "ro": "VÂNZĂRI (oportunități)", "en": "SALES (deals)", "ru": "ПРОДАЖИ (сделки)" }
+        },
+        {
+          "title": { "ro": "EXECUTARE (comenzi)", "en": "EXECUTION (orders)", "ru": "ИСПОЛНЕНИЕ (заказы)" }
+        }
+      ],
+      "nodes": [
+        {
+          "id": "new",
+          "kind": "start",
+          "board": "deals",
+          "col": "0",
+          "x": "0",
+          "y": "0",
+          "title": { "ro": "Oportunitate nouă", "en": "New deal", "ru": "Новая сделка" },
+          "owner": { "ro": "manager vânzări", "en": "sales manager", "ru": "менеджер продаж" },
+          "sla_days": "1",
+          "desc": { "ro": "Cererea clientului este înregistrată ca oportunitate. În termen de o zi managerul sună clientul, clarifică necesitatea și pregătește oferta.", "en": "The client's request is registered as a deal. Within one day the manager calls the client, clarifies the need and prepares a proposal.", "ru": "Обращение клиента зарегистрировано как сделка. В течение дня менеджер связывается с клиентом, уточняет потребность и готовит предложение." }
+        },
+        {
+          "id": "offer",
+          "kind": "step",
+          "board": "deals",
+          "col": "1",
+          "x": "1",
+          "y": "0",
+          "title": { "ro": "Ofertă", "en": "Proposal", "ru": "Предложение" },
+          "owner": { "ro": "manager vânzări", "en": "sales manager", "ru": "менеджер продаж" },
+          "sla_days": "3",
+          "desc": { "ro": "Oferta comercială este trimisă clientului. Termen de răspuns — 3 zile; dacă nu există răspuns, managerul sună clientul.", "en": "The commercial proposal has been sent to the client. Reply within 3 days; if there is no reply, the manager calls the client.", "ru": "Коммерческое предложение отправлено клиенту. Срок ответа — 3 дня; если ответа нет, менеджер звонит клиенту." }
+        },
+        {
+          "id": "talks",
+          "kind": "step",
+          "board": "deals",
+          "col": "2",
+          "x": "2",
+          "y": "0",
+          "title": { "ro": "Negocieri", "en": "Negotiation", "ru": "Переговоры" },
+          "owner": { "ro": "manager vânzări", "en": "sales manager", "ru": "менеджер продаж" },
+          "sla_days": "7",
+          "desc": { "ro": "Se agreează prețul, termenul și condițiile de plată. Rezultatul: contract semnat sau refuz.", "en": "Price, deadline and payment terms are agreed. Result: a signed contract or a refusal.", "ru": "Согласуются цена, срок и условия оплаты. Результат: подписанный договор или отказ." }
+        },
+        {
+          "id": "agree",
+          "kind": "gate",
+          "x": "3",
+          "y": "0",
+          "title": { "ro": "Acceptat?", "en": "Agreed?", "ru": "Согласовано?" }
+        },
+        {
+          "id": "won",
+          "kind": "step",
+          "board": "deals",
+          "col": "3",
+          "x": "4",
+          "y": "0",
+          "title": { "ro": "Câștigată", "en": "Won", "ru": "Выиграна" },
+          "owner": { "ro": "manager vânzări", "en": "sales manager", "ru": "менеджер продаж" },
+          "sla_days": "1",
+          "desc": { "ro": "Contractul este semnat. Managerul creează comanda din oportunitate — ea trece pe banda de execuție.", "en": "The contract is signed. The manager creates an order from the deal — it moves to the execution lane.", "ru": "Договор подписан. Менеджер оформляет заказ из сделки — она переходит на дорожку исполнения." }
+        },
+        {
+          "id": "lost",
+          "kind": "end",
+          "board": "deals",
+          "col": "4",
+          "x": "5",
+          "y": "0",
+          "title": { "ro": "Pierdută", "en": "Lost", "ru": "Проиграна" },
+          "owner": { "ro": "manager vânzări", "en": "sales manager", "ru": "менеджер продаж" },
+          "desc": { "ro": "Clientul a refuzat. Motivul se notează în oportunitate; peste 3 luni — revenire.", "en": "The client declined. The reason is noted in the deal; follow up in 3 months.", "ru": "Клиент отказался. Причина записывается в сделке; через 3 месяца — повторный контакт." }
+        },
+        {
+          "id": "advance",
+          "kind": "step",
+          "board": "orders",
+          "col": "0",
+          "x": "0",
+          "y": "1",
+          "title": { "ro": "Așteaptă avans", "en": "Awaiting advance", "ru": "Ожидает аванс" },
+          "owner": { "ro": "contabil", "en": "accountant", "ru": "бухгалтер" },
+          "sla_days": "5",
+          "desc": { "ro": "Comanda este confirmată, factura de avans (30%) este emisă. Lucrările încep numai după încasarea avansului.", "en": "The order is confirmed, the advance invoice (30%) is issued. Work starts only after the advance is received.", "ru": "Заказ подтверждён, выставлен счёт на аванс (30%). Работы начинаются только после поступления аванса. [самотест 20:35:51]" }
+        },
+        {
+          "id": "adv_gate",
+          "kind": "gate",
+          "x": "1",
+          "y": "1",
+          "title": { "ro": "Avans încasat?", "en": "Advance received?", "ru": "Аванс получен?" }
+        },
+        {
+          "id": "work",
+          "kind": "step",
+          "board": "orders",
+          "col": "1",
+          "x": "2",
+          "y": "1",
+          "title": { "ro": "În lucru / producție", "en": "In progress / production", "ru": "В работе / производство" },
+          "owner": { "ro": "șef producție", "en": "production manager", "ru": "начальник производства" },
+          "sla_days": "14",
+          "desc": { "ro": "Avansul este încasat. Comanda este în producție sau serviciul se prestează; succesiunea lucrărilor — în planul de lucrări (Gantt).", "en": "The advance is received. The order is in production or the service is being delivered; the sequence of works is in the work plan (Gantt).", "ru": "Аванс получен. Заказ в производстве или услуга оказывается; последовательность работ — в плане работ (Гант)." }
+        },
+        {
+          "id": "ready",
+          "kind": "step",
+          "board": "orders",
+          "col": "2",
+          "x": "3",
+          "y": "1",
+          "title": { "ro": "Gata de livrare", "en": "Ready to ship", "ru": "Готово к отгрузке" },
+          "owner": { "ro": "depozit / logistică", "en": "warehouse / logistics", "ru": "склад / логистика" },
+          "sla_days": "2",
+          "desc": { "ro": "Lucrările sunt finalizate, comanda a fost proceseată (stocurile actualizate). Se pregătesc factura și livrarea.", "en": "Work is complete and the order has been posted (stock updated). Invoice and shipment are being prepared.", "ru": "Работы завершены, заказ проведён (остатки обновлены). Готовятся накладная и отгрузка." }
+        },
+        {
+          "id": "shipped",
+          "kind": "step",
+          "board": "orders",
+          "col": "3",
+          "x": "4",
+          "y": "1",
+          "title": { "ro": "Livrat — așteptăm plata", "en": "Shipped — awaiting payment", "ru": "Отгружено — ждём оплату" },
+          "owner": { "ro": "contabil", "en": "accountant", "ru": "бухгалтер" },
+          "sla_days": "10",
+          "desc": { "ro": "Marfa este livrată, factura finală emisă. Contabilul urmărește încasarea restului; întârzierea apare în raportul de creanțe.", "en": "Goods are shipped and the final invoice is issued. The accountant tracks the remaining payment; delays appear in the receivables report.", "ru": "Товар отгружен, выставлен итоговый счёт. Бухгалтер контролирует поступление остатка; задержка видна в отчёте по дебиторке." }
+        },
+        {
+          "id": "pay_gate",
+          "kind": "gate",
+          "x": "5",
+          "y": "1",
+          "title": { "ro": "Plată integrală?", "en": "Paid in full?", "ru": "Оплата полная?" }
+        },
+        {
+          "id": "closed",
+          "kind": "end",
+          "board": "orders",
+          "col": "4",
+          "x": "6",
+          "y": "1",
+          "title": { "ro": "Închis", "en": "Closed", "ru": "Закрыто" },
+          "owner": { "ro": "contabil", "en": "accountant", "ru": "бухгалтер" },
+          "desc": { "ro": "Comanda este livrată și plătită integral. Documentele sunt arhivate; clientul primește o cerere de feedback.", "en": "The order is shipped and fully paid. Documents are archived; the client is asked for feedback.", "ru": "Заказ отгружен и полностью оплачен. Документы в архиве; клиенту отправляется запрос отзыва." }
+        }
+      ],
+      "edges": [
+        { "from": "new", "to": "offer" },
+        { "from": "offer", "to": "talks" },
+        { "from": "talks", "to": "agree" },
+        {
+          "from": "agree",
+          "to": "won",
+          "label": { "ro": "da", "en": "yes", "ru": "да" }
+        },
+        {
+          "from": "agree",
+          "to": "lost",
+          "label": { "ro": "nu", "en": "no", "ru": "нет" }
+        },
+        {
+          "from": "won",
+          "to": "advance",
+          "label": { "ro": "creează comanda", "en": "create order", "ru": "оформить заказ" }
+        },
+        { "from": "advance", "to": "adv_gate" },
+        {
+          "from": "adv_gate",
+          "to": "work",
+          "label": { "ro": "da", "en": "yes", "ru": "да" }
+        },
+        {
+          "from": "adv_gate",
+          "to": "advance",
+          "label": { "ro": "nu — reamintire", "en": "no — reminder", "ru": "нет — напоминание" }
+        },
+        { "from": "work", "to": "ready" },
+        { "from": "ready", "to": "shipped" },
+        { "from": "shipped", "to": "pay_gate" },
+        {
+          "from": "pay_gate",
+          "to": "closed",
+          "label": { "ro": "da", "en": "yes", "ru": "да" }
+        },
+        {
+          "from": "pay_gate",
+          "to": "shipped",
+          "label": { "ro": "nu — creanță", "en": "no — receivable", "ru": "нет — дебиторка" }
+        }
+      ]
+    },
+    {
+      "id": "tasks",
+      "title": { "ro": "Sarcini și lucrări după termen", "en": "Tasks and works by due date", "ru": "Задачи и работы по срокам" },
+      "lanes": [
+        {
+          "title": { "ro": "LUCRĂRI (sarcini)", "en": "WORKS (tasks)", "ru": "РАБОТЫ (задачи)" }
+        }
+      ],
+      "nodes": [
+        {
+          "id": "created",
+          "kind": "start",
+          "x": "0",
+          "y": "0",
+          "title": { "ro": "Sarcină nouă", "en": "New task", "ru": "Новая задача" },
+          "owner": { "ro": "oricine", "en": "anyone", "ru": "любой сотрудник" },
+          "desc": { "ro": "Sarcina, apelul sau întâlnirea se creează din client, oportunitate sau comandă, cu termen și responsabil.", "en": "A task, call or meeting is created from a client, deal or order, with a due date and an assignee.", "ru": "Задача, звонок или встреча создаются из клиента, сделки или заказа — со сроком и ответственным." }
+        },
+        {
+          "id": "later",
+          "kind": "step",
+          "board": "tasks",
+          "col": "2",
+          "x": "1",
+          "y": "0",
+          "title": { "ro": "Mai târziu", "en": "Later", "ru": "Позже" },
+          "owner": { "ro": "responsabil", "en": "assignee", "ru": "ответственный" },
+          "desc": { "ro": "Termenul nu a venit încă. Sarcina este în calendar; se poate muta cu mouse-ul pe altă zi.", "en": "The due date has not come yet. The task is in the calendar; drag it to another day if needed.", "ru": "Срок ещё не наступил. Задача в календаре; при необходимости перетаскивается на другой день." }
+        },
+        {
+          "id": "today",
+          "kind": "step",
+          "board": "tasks",
+          "col": "1",
+          "x": "2",
+          "y": "0",
+          "title": { "ro": "Azi", "en": "Today", "ru": "Сегодня" },
+          "owner": { "ro": "responsabil", "en": "assignee", "ru": "ответственный" },
+          "sla_days": "0",
+          "desc": { "ro": "Sarcinile zilei. La sfârșitul zilei fiecare este marcată ca îndeplinită sau amânată — altfel devine restantă.", "en": "Today's tasks. By the end of the day each is marked done or rescheduled — otherwise it becomes overdue.", "ru": "Задачи на сегодня. К концу дня каждая отмечается выполненной или переносится — иначе станет просроченной." }
+        },
+        {
+          "id": "overdue",
+          "kind": "step",
+          "board": "tasks",
+          "col": "0",
+          "x": "3",
+          "y": "0",
+          "title": { "ro": "Restante", "en": "Overdue", "ru": "Просрочено" },
+          "owner": { "ro": "conducător", "en": "manager", "ru": "руководитель" },
+          "desc": { "ro": "Termenul a trecut, sarcina nu este închisă. Conducătorul verifică zilnic lista și redistribuie sarcinile.", "en": "The due date has passed and the task is not closed. The manager reviews the list daily and reassigns tasks.", "ru": "Срок прошёл, задача не закрыта. Руководитель ежедневно просматривает список и перераспределяет задачи." }
+        },
+        {
+          "id": "done",
+          "kind": "end",
+          "board": "tasks",
+          "col": "3",
+          "x": "4",
+          "y": "0",
+          "title": { "ro": "Îndeplinită", "en": "Done", "ru": "Выполнено" },
+          "owner": { "ro": "responsabil", "en": "assignee", "ru": "ответственный" },
+          "desc": { "ro": "Sarcina este închisă. Rezultatul se notează în comentariu.", "en": "The task is closed. The result is noted in a comment.", "ru": "Задача закрыта. Результат фиксируется в комментарии." }
+        }
+      ],
+      "edges": [
+        { "from": "created", "to": "later" },
+        {
+          "from": "later",
+          "to": "today",
+          "label": { "ro": "a venit ziua", "en": "day has come", "ru": "наступил день" }
+        },
+        {
+          "from": "today",
+          "to": "overdue",
+          "label": { "ro": "termen depășit", "en": "deadline passed", "ru": "срок прошёл" }
+        },
+        { "from": "overdue", "to": "done" },
+        {
+          "from": "today",
+          "to": "done",
+          "label": { "ro": "îndeplinită", "en": "done", "ru": "выполнена" }
+        }
+      ]
+    }
+  ]
+}

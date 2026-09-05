@@ -21,10 +21,10 @@ uses
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
   Vcl.Graphics,
   uClientsDB, uContragenti, uCrmData, uEntityPage, uEspoTheme, uErpApi,
-  uWorkspace, uReports, uKanban, uGantt, uCalendarView, uI18n;
+  uWorkspace, uReports, uKanban, uGantt, uCalendarView, uI18n, uBoardCards, uProcess;
 
 type
-  TNavSection = (nsWorkspace, nsKanban, nsGantt, nsAccounts, nsContacts, nsLeads,
+  TNavSection = (nsWorkspace, nsKanban, nsProcess, nsGantt, nsAccounts, nsContacts, nsLeads,
     nsDeals, nsItems, nsOrders, nsCalendar, nsReports, nsSettings);
 
   TMainForm = class(TForm)
@@ -66,6 +66,7 @@ type
     FWorkspace: TWorkspacePage;
     FReportsPage: TReportsPage;
     FKanbanPage: TKanbanPage;
+    FProcessPage: TProcessPage;
     FGanttPage: TGanttPage;
     FCalendarPage: TCalendarPage;
     FCalendarAsGrid: Boolean;
@@ -102,6 +103,7 @@ type
     function  ResolveLauncher: string;
     procedure OpenRecord(Section: TNavSection; Id: Integer);
     procedure OnKanbanOpen(Board: TBoardKind; Id: Integer);
+    procedure OnProcessOpenColumn(Board: TBoardKind; Col: Integer);
     procedure OnGanttOpen(OrderId: Integer);
     procedure OnCalendarOpenTask(TaskId: Integer);
     procedure OnCalendarNewTask(const ADate: TDateTime);
@@ -145,6 +147,7 @@ type
     property Workspace: TWorkspacePage read FWorkspace;
     property Reports: TReportsPage read FReportsPage;
     property Kanban: TKanbanPage read FKanbanPage;
+    property Process: TProcessPage read FProcessPage;
     property Gantt: TGanttPage read FGanttPage;
     property Calendar: TCalendarPage read FCalendarPage;
     property User: string read FUser;
@@ -387,6 +390,7 @@ begin
 
   AddNavItem(nsWorkspace, '⌂', T.S('nav.workspace'));
   AddNavItem(nsKanban,    '▦', T.S('nav.kanban'));
+  AddNavItem(nsProcess,   '⇶', T.S('nav.process'));
   AddNavItem(nsGantt,     '▤', T.S('nav.gantt'));
   AddNavItem(nsAccounts,  '▣', T.S('nav.clients'));
   AddNavItem(nsContacts,  '☺', T.S('nav.contacts'));
@@ -707,6 +711,9 @@ begin
     TPath.Combine(AppDir, 'reports'));
   FKanbanPage := TKanbanPage.Create(Self, FContent, FCrm, Say);
   FKanbanPage.OnOpenRecord := OnKanbanOpen;
+  FProcessPage := TProcessPage.Create(Self, FContent, FCrm, Say);
+  FProcessPage.OnOpenRecord := OnKanbanOpen;
+  FProcessPage.OnOpenColumn := OnProcessOpenColumn;
   FGanttPage := TGanttPage.Create(Self, FContent, FCrm, Say);
   FGanttPage.OnOpenOrder := OnGanttOpen;
   FCalendarPage := TCalendarPage.Create(Self, FContent, FCrm, Say);
@@ -795,7 +802,7 @@ end;
   их подписи применяются после перезапуска — об этом и говорит сообщение. }
 procedure TMainForm.ApplyNavCaptions;
 const
-  KEYS: array[TNavSection] of string = ('nav.workspace', 'nav.kanban', 'nav.gantt',
+  KEYS: array[TNavSection] of string = ('nav.workspace', 'nav.kanban', 'nav.process', 'nav.gantt',
     'nav.clients', 'nav.contacts', 'nav.leads', 'nav.deals', 'nav.items',
     'nav.orders', 'nav.calendar', 'nav.reports', 'nav.settings');
 var
@@ -850,6 +857,36 @@ const
   SECTIONS: array[TBoardKind] of TNavSection = (nsOrders, nsDeals, nsCalendar);
 begin
   OpenRecord(SECTIONS[Board], Id);
+end;
+
+{ Двойной щелчок по узлу схемы процесса: раздел с фильтром этого этапа —
+  те же пресеты, что у плиток рабочего стола. }
+procedure TMainForm.OnProcessOpenColumn(Board: TBoardKind; Col: Integer);
+begin
+  case Board of
+    bkOrders:
+      begin
+        SelectSection(nsOrders);
+        FPages[nsOrders].SelectPreset(Col + 1);
+      end;
+    bkDeals:
+      begin
+        SelectSection(nsDeals);
+        // пресеты сделок: Все, Предложение, Переговоры, Выиграна, Проиграна
+        FPages[nsDeals].SelectPreset(IfThen(Col >= 1, Col, 0));
+      end;
+  else
+    FCalendarAsGrid := False;
+    SelectSection(nsCalendar);
+    // пресеты задач: Открытые, Сегодня, Просроченные, Все
+    case Col of
+      0: FPages[nsCalendar].SelectPreset(2);
+      1: FPages[nsCalendar].SelectPreset(1);
+      3: FPages[nsCalendar].SelectPreset(3);
+    else FPages[nsCalendar].SelectPreset(0);
+    end;
+  end;
+  Say(mkInfo, T.F('process.opened', [FPages[FSection].ListCount]));
 end;
 
 procedure TMainForm.OnGanttOpen(OrderId: Integer);
@@ -965,6 +1002,7 @@ var
 begin
   Titles[nsWorkspace] := T.S('nav.workspace'); Titles[nsAccounts] := T.S('nav.clients');
   Titles[nsKanban] := T.S('nav.kanban'); Titles[nsGantt] := T.S('nav.gantt');
+  Titles[nsProcess] := T.S('nav.process');
   Titles[nsContacts] := T.S('nav.contacts'); Titles[nsLeads] := T.S('nav.leads');
   Titles[nsDeals] := T.S('nav.deals'); Titles[nsItems] := T.S('nav.items');
   Titles[nsOrders] := T.S('nav.orders'); Titles[nsCalendar] := T.S('nav.calendar');
@@ -993,6 +1031,7 @@ begin
   FWorkspace.Visible := Section = nsWorkspace;
   FReportsPage.Visible := Section = nsReports;
   FKanbanPage.Visible := Section = nsKanban;
+  FProcessPage.Visible := Section = nsProcess;
   FGanttPage.Visible := Section = nsGantt;
   FCalendarPage.Visible := (Section = nsCalendar) and FCalendarAsGrid;
   for S := Low(TNavSection) to High(TNavSection) do
@@ -1008,6 +1047,7 @@ begin
   if Section = nsWorkspace then FWorkspace.Refresh;
   if Section = nsReports then FReportsPage.Refresh;
   if Section = nsKanban then FKanbanPage.Refresh;
+  if Section = nsProcess then FProcessPage.Refresh;
   if Section = nsGantt then FGanttPage.Refresh;
   if FCalendarPage.Visible then FCalendarPage.Refresh;
   Caption := 'Demo CRM · ' + Titles[Section];

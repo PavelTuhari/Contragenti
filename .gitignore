@@ -59,10 +59,14 @@ export/
 # Архивы и временные файлы
 *.zip
 *.log
+# стартовая база компаний для мастера настройки — исключение из *.zip
+!data/companies_seed.zip
 
 # Собранные дистрибутивы (cx_Freeze / MSI) — не хранятся в репозитории
 build/
 dist/
+# логи и отчёты мастера настройки (setup_wizard.py)
+logs/
 crm_delphi/build.log
 crm_delphi/gui_test.log
 crm_delphi/shots_gui/test_clients.db

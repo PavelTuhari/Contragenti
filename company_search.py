@@ -50,7 +50,7 @@ from selenium.common.exceptions import TimeoutException
 
 import openpyxl
 
-APP_VERSION = "1.0"
+APP_VERSION = "1.1.0"
 SEARCH_URL = "https://date.gov.md/open/company-search"
 DETAILS_URL = "https://date.gov.md/open/company-details"
 def _app_dir():

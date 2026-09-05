@@ -12,13 +12,21 @@ Demo CRM (crm_delphi/) — готовый Delphi-бинарник ContragentiCRM
 исходников, нужен RAD Studio/dcc32 — см. crm_delphi/build.bat. Если файла
 нет, сборка просто пропускает Demo CRM с предупреждением (Contragenti
 собирается и без неё).
+
+Мастер настройки (setup_wizard.py → «Contragenti Setup.exe») идёт первым в
+списке Executable: именно первый exe cx_Freeze запускает по галочке «Launch
+on finish» в конце установки (launch_on_finish=True). Мастер докачивает из
+GitHub свежие компоненты и стартовую базу (release.json, data/), настраивает
+crm.ini и реестр, заполняет демо-данные, прогоняет самопроверку и при ошибках
+собирает отчёт (паспорт системы + лог) для отправки разработчику. Он же
+доступен из меню «Пуск» — «Contragenti — настройка и обновление».
 """
 
 import os
 import sys
 from cx_Freeze import setup, Executable
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"   # то же значение — в VERSION, release.json и company_search.py
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DEMO_CRM_EXE = os.path.join(_HERE, "crm_delphi", "ContragentiCRM.exe")
@@ -52,15 +60,26 @@ build_exe_options = {
         ("GUIDE_ru.md", "GUIDE_ru.md"),
         ("API_ru.md", "API_ru.md"),
         ("INTEGRATION.md", "INTEGRATION.md"),
+        ("INSTALL_WINDOWS_ru.md", "INSTALL_WINDOWS_ru.md"),
         ("LICENSE", "LICENSE"),
+        ("app_icon.ico", "app_icon.ico"),
+        # версия установки и манифест обновления — их сравнивает мастер настройки
+        ("VERSION", "VERSION"),
+        ("release.json", "release.json"),
+        # стартовая база компаний: запасная копия на случай компьютера без интернета
+        ("data/companies_seed.zip", "data/companies_seed.zip"),
+        # SDK для Python/C++ — чтобы интеграция была под рукой сразу после установки
+        ("sdk", "sdk"),
     ],
 }
 
 if _HAS_DEMO_CRM:
     build_exe_options["include_files"] += [
         (_DEMO_CRM_EXE, "DemoCRM/ContragentiCRM.exe"),
-        # переводы интерфейса лежат рядом с exe и правятся без пересборки
+        # переводы интерфейса и описания бизнес-процессов лежат рядом с exe
+        # и правятся без пересборки
         ("crm_delphi/lang.json", "DemoCRM/lang.json"),
+        ("crm_delphi/processes.json", "DemoCRM/processes.json"),
         ("crm_delphi/README_ru.md", "DemoCRM/README_ru.md"),
         ("crm_delphi/sample_card.xml", "DemoCRM/sample_card.xml"),
     ]
@@ -69,6 +88,16 @@ if _HAS_DEMO_CRM:
 base = "Win32GUI" if sys.platform == "win32" else None
 
 executables = [
+    # Первым — мастер настройки: cx_Freeze запускает executables[0] по галочке
+    # «Launch on finish» в конце установки.
+    Executable(
+        "setup_wizard.py",
+        base=base,
+        target_name="Contragenti Setup.exe",
+        icon="app_icon.ico",
+        shortcut_name="Contragenti — настройка и обновление",
+        shortcut_dir="ProgramMenuFolder",
+    ),
     Executable(
         "company_search.py",
         base=base,
@@ -76,7 +105,7 @@ executables = [
         icon="app_icon.ico",
         shortcut_name="Contragenti",
         shortcut_dir="DesktopFolder",
-    )
+    ),
 ]
 
 if _HAS_DEMO_CRM:
@@ -100,6 +129,8 @@ bdist_msi_options = {
     "all_users": False,
     "initial_target_dir": r"[LocalAppDataFolder]\Contragenti",
     "install_icon": "app_icon.ico",
+    # в конце установки — галочка «Launch on finish»: запускает мастер настройки
+    "launch_on_finish": True,
     "summary_data": {
         "author": "Pavel Tuhari",
         "comments": "Contragenti — поиск юридических лиц Молдовы (date.gov.md)",

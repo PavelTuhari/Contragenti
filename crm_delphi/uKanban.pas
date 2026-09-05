@@ -1,37 +1,35 @@
 ﻿unit uKanban;
 {
-  Канбан-доска: карточки работ по колонкам-этапам и перенос карточки
-  кнопками «← Назад» / «Вперёд →».
+  Канбан-доска: информативные карточки по колонкам-этапам, перенос мышью
+  с анимацией и кнопками «← Назад» / «Вперёд →».
 
   Три доски в одном экране (переключатель вверху):
     Заказы  — исполнение: аванс → работа → отгрузка → оплата → закрыто;
     Сделки  — продажи по этапам воронки;
     Задачи  — работы по срокам: просрочено / сегодня / позже / выполнено.
 
-  Перенос не просто меняет подпись, а выставляет те же поля, по которым
-  считаются этапы на рабочем столе (аванс, статус, дата отгрузки, оплата),
-  поэтому доска и плитки всегда показывают одно и то же.
+  Карточка: цветная полоса и значок по виду записи, клиент, сумма, прогресс
+  оплаты, бейдж срока («−3 д», «сегодня», «5 д», «✔»). Данные карточек и
+  единственная точка смены этапа — в uBoardCards, общем с схемой
+  бизнес-процесса (uProcess), поэтому обе страницы показывают одно и то же.
+
+  Анимация: при перетаскивании под курсором едет копия карточки, целевая
+  колонка подсвечивается и показывает слот для вставки; после переноса
+  (мышью или кнопкой) карточка «перелетает» на новое место и коротко
+  вспыхивает. Кадры анимации считаются (AnimFrames) — самотест проверяет,
+  что она действительно отработала.
 }
 
 interface
 
 uses
-  Winapi.Windows, System.SysUtils, System.Classes, System.Generics.Collections,
-  Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls, Vcl.Graphics,
-  uCrmData, uEspoTheme;
+  Winapi.Windows, System.SysUtils, System.Classes, System.Types,
+  Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
+  uCrmData, uEspoTheme, uBoardCards;
 
 type
-  TBoardKind = (bkOrders, bkDeals, bkTasks);
-
   { Двойной клик по карточке открывает запись в её разделе. }
   TOpenRecordEvent = procedure(Board: TBoardKind; Id: Integer) of object;
-
-  TKanbanCard = record
-    Id: Integer;
-    Col: Integer;
-    Title, Subtitle, Amount, Due: string;
-    Overdue: Boolean;
-  end;
 
   TKanbanPage = class(TPanel)
   private
@@ -43,22 +41,24 @@ type
     FColBodies: TArray<TScrollBox>;
     FColHeads: TArray<TLabel>;
     FColCounts: TArray<TLabel>;
-    FCards: TArray<TKanbanCard>;
+    FColLate: TArray<TLabel>;
+    FCards: TBoardCards;
     FCardPanels: TArray<TPanel>;
     FSelected: Integer;      // индекс в FCards, -1 — ничего не выбрано
     FKind: TBoardKind;
     FOnOpenRecord: TOpenRecordEvent;
+    FTitle, FHint: TLabel;
     // перетаскивание карточки мышью
     FDragIdx: Integer;
     FDragActive: Boolean;
     FDragOrigin: TPoint;
+    FDragOffset: TPoint;
     FGhost: TPanel;
-    FGhostText: TLabel;
+    FSlot: TPanel;
     FHoverCol: Integer;
+    FAnimFrames: Integer;
+    FAnimEnabled: Boolean;
     procedure Say(Kind: TMsgKind; const Msg: string);
-    function  ColumnTitles: TArray<string>;
-    function  ColumnWhere(Col: Integer): string;
-    function  TableName: string;
     procedure BuildUI;
     procedure RebuildColumns;
     procedure LoadCards;
@@ -72,10 +72,14 @@ type
       Shift: TShiftState; X, Y: Integer);
     procedure HookMouse(Ctrl: TControl; CardIndex: Integer);
     function  ColumnAtScreen(const P: TPoint): Integer;
+    function  PageRect(Ctrl: TControl): TRect;
     procedure ShowGhost(const P: TPoint);
     procedure HideGhost;
     procedure HighlightColumn(Col: Integer);
-    procedure MoveCardTo(Index, NewCol: Integer);
+    procedure PaintCard(Index: Integer);
+    procedure AnimateMove(const FromR, ToR: TRect; const C: TBoardCard);
+    procedure Pulse(P: TPanel; const Base: TColor);
+    procedure MoveCardTo(Index, NewCol: Integer; const FromR: TRect);
     procedure OnBackClick(Sender: TObject);
     procedure OnForwardClick(Sender: TObject);
     procedure OnRefreshClick(Sender: TObject);
@@ -92,6 +96,7 @@ type
     function  SelectFirstCard(Col: Integer): Boolean;
     function  SelectedColumn: Integer;
     function  SelectedId: Integer;
+    function  CardById(Id: Integer; out C: TBoardCard): Boolean;
     procedure MoveForward;
     procedure MoveBack;
     { Проводит карточку тем же путём, что и мышь: нажатие, перемещение и
@@ -101,19 +106,20 @@ type
     function  DragCardById(Id, ToCol: Integer): Boolean;
     function  DragCardIndex(Index, ToCol: Integer): Boolean;
     property Board: TBoardKind read FKind;
+    property AnimFrames: Integer read FAnimFrames;
+    property AnimEnabled: Boolean read FAnimEnabled write FAnimEnabled;
     property OnOpenRecord: TOpenRecordEvent read FOnOpenRecord write FOnOpenRecord;
   end;
 
 implementation
 
 uses
-  System.StrUtils, System.Math, System.DateUtils, System.Variants,
-  FireDAC.Comp.Client;
+  System.StrUtils, System.Math, uI18n;
 
 const
-  COL_W = 196;
+  COL_W = 202;
   COL_GAP = 8;
-  CARD_H = 74;
+  CARD_GAP = 6;
 
 { TKanbanPage }
 
@@ -128,6 +134,9 @@ begin
   FOnSay := ASay;
   FKind := bkOrders;
   FSelected := -1;
+  FDragIdx := -1;
+  FHoverCol := -1;
+  FAnimEnabled := True;
   BevelOuter := bvNone;
   Color := ESPO_BODY;
   ParentBackground := False;
@@ -142,52 +151,24 @@ begin
   if Assigned(FOnSay) then FOnSay(Kind, Msg);
 end;
 
-function TKanbanPage.TableName: string;
-begin
-  case FKind of
-    bkDeals: Result := 'deals';
-    bkTasks: Result := 'tasks';
-  else Result := 'orders';
-  end;
-end;
-
-function TKanbanPage.ColumnTitles: TArray<string>;
-begin
-  case FKind of
-    bkOrders: Result := ['Ожидает аванс', 'В работе / производство', 'Готово к отгрузке',
-                         'Отгружено — ждём оплату', 'Закрыто'];
-    bkDeals:  Result := ENUM_DEAL_STAGE.Split([';']);
-  else        Result := ['Просрочено', 'Сегодня', 'Позже', 'Выполнено'];
-  end;
-end;
-
-function TKanbanPage.ColumnWhere(Col: Integer): string;
-var
-  Stages: TArray<string>;
-begin
-  case FKind of
-    bkOrders:
-      Result := FData.StageWhere(TStage(Ord(stAwaitAdvance) + Col));
-    bkDeals:
-      begin
-        Stages := ENUM_DEAL_STAGE.Split([';']);
-        Result := 't.stage = ''' + Stages[Col] + '''';
-      end;
-  else
-    case Col of
-      0: Result := 't.done = 0 AND t.due_at < date(''now'',''localtime'')';
-      1: Result := 't.done = 0 AND t.due_at = date(''now'',''localtime'')';
-      2: Result := 't.done = 0 AND t.due_at > date(''now'',''localtime'')';
-    else Result := 't.done = 1';
-    end;
-  end;
-end;
-
 procedure TKanbanPage.BuildUI;
 var
   Hdr: TPanel;
-  L: TLabel;
   Btn: TPanel;
+  X: Integer;
+
+  procedure Legend(const Glyph, Text: string; Color: TColor);
+  var
+    L: TLabel;
+  begin
+    L := MakeLabel(Self, Hdr, Glyph, X, 50, 16, Color, 10);
+    L.Font.Style := [fsBold];
+    L.Anchors := [akTop, akRight];
+    L := MakeLabel(Self, Hdr, Text, X + 16, 51, 90, ESPO_MUTED, 8);
+    L.Anchors := [akTop, akRight];
+    Inc(X, 16 + Canvas.TextWidth(Text) + 14);
+  end;
+
 begin
   Hdr := TPanel.Create(Self);
   Hdr.Parent := Self;
@@ -197,35 +178,41 @@ begin
   Hdr.Color := ESPO_BODY;
   Hdr.ParentBackground := False;
 
-  L := TLabel.Create(Self);
-  L.Parent := Hdr;
-  L.SetBounds(15, 10, 200, 30);
-  L.Caption := 'Канбан';
-  L.Font.Size := 16;
+  FTitle := MakeLabel(Self, Hdr, T.S('kanban.title'), 15, 10, 110, ESPO_TEXT, 16);
+  FTitle.Height := 30;
 
   FBoard := TComboBox.Create(Self);
   FBoard.Parent := Hdr;
   FBoard.Style := csDropDownList;
   FBoard.SetBounds(125, 14, 260, 28);
-  FBoard.Items.Add('Заказы — исполнение');
-  FBoard.Items.Add('Сделки — продажи');
-  FBoard.Items.Add('Задачи — работы');
+  FBoard.Items.Add(T.S('kanban.board_orders'));
+  FBoard.Items.Add(T.S('kanban.board_deals'));
+  FBoard.Items.Add(T.S('kanban.board_tasks'));
   FBoard.ItemIndex := 0;
   FBoard.OnChange := OnBoardChange;
 
-  Btn := MakeButton(Self, Hdr, 'Вперёд →', True, OnForwardClick, 130);
+  Btn := MakeButton(Self, Hdr, T.S('btn.forward'), True, OnForwardClick, 130);
   Btn.Anchors := [akTop, akRight];
   Btn.SetBounds(Hdr.Width - 145, 10, 130, 36);
-  Btn := MakeButton(Self, Hdr, '← Назад', False, OnBackClick, 120);
+  Btn := MakeButton(Self, Hdr, T.S('btn.back'), False, OnBackClick, 120);
   Btn.Anchors := [akTop, akRight];
   Btn.SetBounds(Hdr.Width - 145 - 8 - 120, 10, 120, 36);
-  Btn := MakeButton(Self, Hdr, 'Обновить', False, OnRefreshClick, 110);
+  Btn := MakeButton(Self, Hdr, T.S('btn.refresh'), False, OnRefreshClick, 110);
   Btn.Anchors := [akTop, akRight];
   Btn.SetBounds(Hdr.Width - 145 - 8 - 120 - 8 - 110, 10, 110, 36);
 
   // подсказка отдельной строкой — иначе наезжает на кнопки
-  MakeLabel(Self, Hdr, 'тяните карточку мышью между колонками  ·  двойной клик по карточке открывает запись',
-    15, 50, 700, ESPO_MUTED, 9);
+  FHint := MakeLabel(Self, Hdr, T.S('kanban.hint'), 15, 50, 560, ESPO_MUTED, 9);
+
+  // легенда цветов справа
+  Canvas.Font.Name := 'Segoe UI';
+  Canvas.Font.Size := 8;
+  X := Hdr.Width - 15 - 4 * 100;
+  Legend('■', T.EnumAt('order_kind', 0), $00CA8955);
+  Legend('■', T.EnumAt('order_kind', 1), $00A28F2B);
+  Legend('■', T.EnumAt('order_kind', 2), $002E9BE0);
+  Legend('■', T.S('kanban.overdue'), ST_DANGER_FG);
+  Legend('■', T.S('kanban.done_badge'), ST_SUCCESS_FG);
 
   FBody := TPanel.Create(Self);
   FBody.Parent := Self;
@@ -241,15 +228,16 @@ procedure TKanbanPage.RebuildColumns;
 var
   Titles: TArray<string>;
   I, X: Integer;
-  P: TPanel;
+  P, Stripe: TPanel;
   SB: TScrollBox;
 begin
+  HideGhost;
   for I := 0 to High(FCols) do
     FCols[I].Free;
-  FCols := nil; FColBodies := nil; FColHeads := nil; FColCounts := nil;
-  FCardPanels := nil; FCards := nil; FSelected := -1;
+  FCols := nil; FColBodies := nil; FColHeads := nil; FColCounts := nil; FColLate := nil;
+  FCardPanels := nil; FCards := nil; FSelected := -1; FHoverCol := -1;
 
-  Titles := ColumnTitles;
+  Titles := BoardColumnTitles(FKind);
   X := 15;
   for I := 0 to High(Titles) do
   begin
@@ -263,13 +251,23 @@ begin
     P.ParentBackground := False;
     FCols := FCols + [P];
 
-    FColHeads := FColHeads + [MakeLabel(Self, P, Titles[I], 10, 10, COL_W - 20, ESPO_SOFT, 9)];
+    // цветная кромка колонки — тот же цвет, что у узла схемы процесса
+    Stripe := TPanel.Create(Self);
+    Stripe.Parent := P;
+    Stripe.SetBounds(0, 0, COL_W - 4, 4);
+    Stripe.Anchors := [akLeft, akTop, akRight];
+    Stripe.BevelOuter := bvNone;
+    Stripe.Color := BoardColumnColor(FKind, I);
+    Stripe.ParentBackground := False;
+
+    FColHeads := FColHeads + [MakeLabel(Self, P, Titles[I], 10, 12, COL_W - 20, ESPO_SOFT, 9)];
     FColHeads[I].Font.Style := [fsBold];
-    FColCounts := FColCounts + [MakeLabel(Self, P, '', 10, 28, COL_W - 20, ESPO_MUTED, 8)];
+    FColCounts := FColCounts + [MakeLabel(Self, P, '', 10, 30, COL_W - 20, ESPO_MUTED, 8)];
+    FColLate := FColLate + [MakeLabel(Self, P, '', 10, 44, COL_W - 20, ST_DANGER_FG, 8)];
 
     SB := TScrollBox.Create(Self);
     SB.Parent := P;
-    SB.SetBounds(6, 48, COL_W - 12, P.Height - 56);
+    SB.SetBounds(6, 62, COL_W - 12, P.Height - 70);
     SB.Anchors := [akLeft, akTop, akRight, akBottom];
     SB.BorderStyle := bsNone;
     SB.Color := ESPO_WHITE;
@@ -284,96 +282,42 @@ end;
 
 procedure TKanbanPage.LoadCards;
 var
-  Q: TFDQuery;
-  SQL: string;
-  Col, Y, I: Integer;
-  C: TKanbanCard;
+  Col, Y, I, Idx, Late: Integer;
+  Cards: TBoardCards;
+  C: TBoardCard;
   P: TPanel;
   Titles: TArray<string>;
   Sum: Double;
-  Cnt: Integer;
 begin
+  HideGhost;
   for I := 0 to High(FCardPanels) do
     FCardPanels[I].Free;
   FCardPanels := nil;
   FCards := nil;
   FSelected := -1;
-  Titles := ColumnTitles;
+  Titles := BoardColumnTitles(FKind);
 
   for Col := 0 to High(Titles) do
   begin
     Y := 4;
-    Sum := 0; Cnt := 0;
-    case FKind of
-      bkOrders:
-        SQL := 'SELECT t.id, t.number AS a, COALESCE(c.denumire,''(без клиента)'') AS b, ' +
-               ' COALESCE(t.total,0) AS amt, COALESCE(t.due_date,'''') AS due, t.kind AS k ' +
-               'FROM orders t LEFT JOIN clients c ON c.id = t.client_id WHERE ' +
-               ColumnWhere(Col) + ' ORDER BY t.due_date, t.id';
-      bkDeals:
-        SQL := 'SELECT t.id, t.title AS a, COALESCE(c.denumire,''(без клиента)'') AS b, ' +
-               ' COALESCE(t.amount,0) AS amt, COALESCE(t.close_date,'''') AS due, '''' AS k ' +
-               'FROM deals t LEFT JOIN clients c ON c.id = t.client_id WHERE ' +
-               ColumnWhere(Col) + ' ORDER BY t.close_date, t.id';
-    else
-      SQL := 'SELECT t.id, t.subject AS a, COALESCE(c.denumire,'''') AS b, 0 AS amt, ' +
-             ' COALESCE(t.due_at,'''') AS due, t.kind AS k ' +
-             'FROM tasks t LEFT JOIN clients c ON c.id = t.client_id WHERE ' +
-             ColumnWhere(Col) + ' ORDER BY t.due_at, t.id';
+    Cards := LoadBoardCards(FData, FKind, Col);
+    for C in Cards do
+    begin
+      Idx := Length(FCards);
+      P := MakeBoardCard(Self, FColBodies[Col], C, 4, Y, COL_W - 34,
+        procedure(Ctrl: TControl) begin HookMouse(Ctrl, Idx); end);
+      FCards := FCards + [C];
+      FCardPanels := FCardPanels + [P];
+      Inc(Y, CARD_H + CARD_GAP);
     end;
 
-    Q := FData.OpenQuery(SQL);
-    try
-      while not Q.Eof do
-      begin
-        C.Id := Q.FieldByName('id').AsInteger;
-        C.Col := Col;
-        C.Title := Q.FieldByName('a').AsString;
-        if FKind = bkOrders then
-          C.Title := '№' + C.Title + '  ·  ' + Q.FieldByName('k').AsString;
-        C.Subtitle := Q.FieldByName('b').AsString;
-        if FKind = bkTasks then
-          C.Subtitle := Trim(Q.FieldByName('k').AsString + '  ' + C.Subtitle);
-        if Q.FieldByName('amt').AsFloat > 0 then
-          C.Amount := FormatFloat('#,##0.00', Q.FieldByName('amt').AsFloat) + ' MDL'
-        else
-          C.Amount := '';
-        C.Due := Q.FieldByName('due').AsString;
-        C.Overdue := (C.Due <> '') and (C.Due < FormatDateTime('yyyy-mm-dd', Now))
-                     and (Col < High(Titles));
-        Sum := Sum + Q.FieldByName('amt').AsFloat;
-        Inc(Cnt);
-
-        P := TPanel.Create(Self);
-        P.Parent := FColBodies[Col];
-        P.SetBounds(4, Y, COL_W - 34, CARD_H);
-        P.BevelOuter := bvNone;
-        P.BevelKind := bkFlat;
-        P.Color := IfThen(C.Overdue, ST_DANGER_BG, ESPO_HEAD_BG);
-        P.ParentBackground := False;
-        P.Cursor := crHandPoint;
-        HookMouse(P, Length(FCards));
-
-        HookMouse(MakeLabel(Self, P, C.Title, 8, 6, P.Width - 16, ESPO_TEXT, 9), Length(FCards));
-        TLabel(P.Controls[0]).Font.Style := [fsBold];
-        HookMouse(MakeLabel(Self, P, C.Subtitle, 8, 24, P.Width - 16, ESPO_MUTED, 8), Length(FCards));
-        HookMouse(MakeLabel(Self, P, C.Amount, 8, 42, P.Width - 16, ESPO_TEXT, 9), Length(FCards));
-        HookMouse(MakeLabel(Self, P, IfThen(C.Due = '', '', IfThen(C.Overdue, 'просрочен ', 'срок ') + C.Due),
-          8, 56, P.Width - 16, IfThen(C.Overdue, ST_DANGER_FG, ESPO_MUTED), 8), Length(FCards));
-
-        FCards := FCards + [C];
-        FCardPanels := FCardPanels + [P];
-        Inc(Y, CARD_H + 6);
-        Q.Next;
-      end;
-    finally
-      Q.Free;
-    end;
-
-    // подпись под заголовком колонки: количество и сумма
+    // подпись под заголовком колонки: количество, сумма, просрочка
+    Sum := BoardColumnSum(Cards);
+    Late := BoardColumnOverdue(Cards);
     FColCounts[Col].Caption :=
-      IfThen(Sum > 0, Format('%d  ·  %s MDL', [Cnt, FormatFloat('#,##0', Sum)]),
-                      Format('%d', [Cnt]));
+      IfThen(Sum > 0, Format('%d  ·  %s MDL', [Length(Cards), FormatFloat('#,##0', Sum)]),
+                      Format('%d', [Length(Cards)]));
+    FColLate[Col].Caption := IfThen(Late > 0, T.F('kanban.col_late', [Late]), '');
   end;
 end;
 
@@ -387,7 +331,7 @@ begin
   FKind := TBoardKind(FBoard.ItemIndex);
   RebuildColumns;
   LoadCards;
-  Say(mkInfo, 'Доска: ' + FBoard.Text);
+  Say(mkInfo, T.F('kanban.board', [FBoard.Text]));
 end;
 
 procedure TKanbanPage.SelectBoard(Kind: TBoardKind);
@@ -430,25 +374,32 @@ begin
       Exit(I);
 end;
 
+{ Прямоугольник контрола в координатах страницы — для анимации перелёта. }
+function TKanbanPage.PageRect(Ctrl: TControl): TRect;
+var
+  TL: TPoint;
+begin
+  if Ctrl = nil then Exit(TRect.Empty);
+  TL := ScreenToClient(Ctrl.ClientToScreen(Point(0, 0)));
+  Result := Rect(TL.X, TL.Y, TL.X + Ctrl.Width, TL.Y + Ctrl.Height);
+end;
+
+{ Под курсором едет копия карточки; оригинал остаётся на месте приглушённым. }
 procedure TKanbanPage.ShowGhost(const P: TPoint);
 var
   L: TPoint;
 begin
+  if (FDragIdx < 0) or (FDragIdx > High(FCards)) then Exit;
   if FGhost = nil then
   begin
-    FGhost := TPanel.Create(Self);
-    FGhost.Parent := Self;
-    FGhost.BevelOuter := bvNone;
-    FGhost.BevelKind := bkFlat;
+    FGhost := MakeBoardCard(Self, Self, FCards[FDragIdx], 0, 0, COL_W - 34, nil);
     FGhost.Color := ST_PRIMARY_BG;
-    FGhost.ParentBackground := False;
-    FGhost.SetBounds(0, 0, 180, 30);
-    FGhostText := MakeLabel(Self, FGhost, '', 8, 7, 164, ST_PRIMARY_FG, 9);
-    FGhostText.Font.Style := [fsBold];
+    FGhost.BevelKind := bkFlat;
+    FGhost.BevelOuter := bvRaised;
+    FCardPanels[FDragIdx].Color := ESPO_BODY;
   end;
-  FGhostText.Caption := FCards[FDragIdx].Title;
   L := ScreenToClient(P);
-  FGhost.SetBounds(L.X + 12, L.Y + 8, 180, 30);
+  FGhost.SetBounds(L.X - FDragOffset.X, L.Y - FDragOffset.Y, FGhost.Width, FGhost.Height);
   FGhost.Visible := True;
   FGhost.BringToFront;
 end;
@@ -456,26 +407,76 @@ end;
 procedure TKanbanPage.HideGhost;
 begin
   if FGhost <> nil then
-    FGhost.Visible := False;
+  begin
+    FGhost.Free;
+    FGhost := nil;
+  end;
+  if FSlot <> nil then
+  begin
+    FSlot.Free;
+    FSlot := nil;
+  end;
+  if (FDragIdx >= 0) and (FDragIdx <= High(FCardPanels)) then
+    PaintCard(FDragIdx);
 end;
 
+{ Целевая колонка подсвечивается и показывает слот, куда ляжет карточка. }
 procedure TKanbanPage.HighlightColumn(Col: Integer);
 var
-  I: Integer;
+  I, Y: Integer;
 begin
   if Col = FHoverCol then Exit;
   FHoverCol := Col;
   for I := 0 to High(FCols) do
     FCols[I].Color := IfThen(I = Col, ST_PRIMARY_BG, ESPO_WHITE);
+  if FSlot <> nil then
+  begin
+    FSlot.Free;
+    FSlot := nil;
+  end;
+  if (Col >= 0) and (FDragIdx >= 0) and (Col <> FCards[FDragIdx].Col) then
+  begin
+    Y := 4;
+    for I := 0 to High(FCards) do
+      if FCards[I].Col = Col then Inc(Y, CARD_H + CARD_GAP);
+    FSlot := TPanel.Create(Self);
+    FSlot.Parent := FColBodies[Col];
+    FSlot.SetBounds(4, Y, COL_W - 34, CARD_H);
+    FSlot.BevelOuter := bvNone;
+    FSlot.BevelKind := bkFlat;
+    FSlot.Color := ESPO_HEAD_BG;
+    FSlot.ParentBackground := False;
+    FSlot.Caption := '⇩';
+    FSlot.Font.Size := 16;
+    FSlot.Font.Color := ESPO_PRIMARY;
+  end;
+end;
+
+procedure TKanbanPage.PaintCard(Index: Integer);
+begin
+  if (Index < 0) or (Index > High(FCardPanels)) then Exit;
+  if Index = FSelected then
+    FCardPanels[Index].Color := ST_PRIMARY_BG
+  else
+    FCardPanels[Index].Color := CardBaseColor(FCards[Index]);
 end;
 
 procedure TKanbanPage.CardMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
+var
+  Card: TPanel;
 begin
   if Button <> mbLeft then Exit;
   FDragIdx := (Sender as TComponent).Tag;
   FDragActive := False;
-  FDragOrigin := Mouse.CursorPos;
+  FDragOrigin := (Sender as TControl).ClientToScreen(Point(X, Y));
+  if (FDragIdx >= 0) and (FDragIdx <= High(FCardPanels)) then
+  begin
+    Card := FCardPanels[FDragIdx];
+    FDragOffset := Card.ScreenToClient(FDragOrigin);
+    FDragOffset.X := Max(0, Min(FDragOffset.X, Card.Width));
+    FDragOffset.Y := Max(0, Min(FDragOffset.Y, Card.Height));
+  end;
   OnCardClick(Sender);
 end;
 
@@ -484,7 +485,7 @@ var
   P: TPoint;
 begin
   if (FDragIdx < 0) or not (ssLeft in Shift) then Exit;
-  P := Mouse.CursorPos;
+  P := (Sender as TControl).ClientToScreen(Point(X, Y));
   // старт перетаскивания только после заметного сдвига — чтобы обычный
   // клик по карточке не превращался в перенос
   if not FDragActive and (Abs(P.X - FDragOrigin.X) + Abs(P.Y - FDragOrigin.Y) < 8) then
@@ -498,17 +499,19 @@ procedure TKanbanPage.CardMouseUp(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 var
   Col: Integer;
+  FromR: TRect;
 begin
   if FDragActive then
   begin
-    Col := ColumnAtScreen(Mouse.CursorPos);
+    Col := ColumnAtScreen((Sender as TControl).ClientToScreen(Point(X, Y)));
+    FromR := PageRect(FGhost);
     HideGhost;
     HighlightColumn(-1);
     if (Col >= 0) and (FDragIdx >= 0) and (FDragIdx <= High(FCards)) and
        (Col <> FCards[FDragIdx].Col) then
-      MoveCardTo(FDragIdx, Col)
+      MoveCardTo(FDragIdx, Col, FromR)
     else
-      Say(mkInfo, 'Перенос отменён: карточка осталась на прежнем этапе.');
+      Say(mkInfo, T.S('kanban.cancelled'));
   end;
   FDragActive := False;
   FDragIdx := -1;
@@ -529,92 +532,112 @@ var
   I: Integer;
 begin
   FSelected := (Sender as TComponent).Tag;
+  if (FSelected < 0) or (FSelected > High(FCards)) then Exit;
   for I := 0 to High(FCardPanels) do
-    if I = FSelected then
-      FCardPanels[I].Color := ST_PRIMARY_BG
-    else
-      FCardPanels[I].Color := IfThen(FCards[I].Overdue, ST_DANGER_BG, ESPO_HEAD_BG);
-  Say(mkInfo, Format('Выбрано: %s  ·  колонка «%s»',
-    [FCards[FSelected].Title, ColumnTitles[FCards[FSelected].Col]]));
+    PaintCard(I);
+  Say(mkInfo, T.F('kanban.selected',
+    [FCards[FSelected].Title, BoardColumnTitles(FKind)[FCards[FSelected].Col]]));
 end;
 
 procedure TKanbanPage.MoveSelected(Delta: Integer);
 begin
   if (FSelected < 0) or (FSelected > High(FCards)) then
   begin
-    Say(mkWarn, 'Выберите карточку на доске.');
+    Say(mkWarn, T.S('kanban.select_card'));
     Exit;
   end;
-  MoveCardTo(FSelected, FCards[FSelected].Col + Delta);
+  MoveCardTo(FSelected, FCards[FSelected].Col + Delta, PageRect(FCardPanels[FSelected]));
 end;
 
-{ Единственное место, где карточка меняет этап: сюда приходят и кнопки
-  «Назад» / «Вперёд», и перетаскивание мышью. }
-procedure TKanbanPage.MoveCardTo(Index, NewCol: Integer);
+{ Перелёт копии карточки из FromR в ToR с замедлением в конце. }
+procedure TKanbanPage.AnimateMove(const FromR, ToR: TRect; const C: TBoardCard);
+const
+  FRAMES = 14;
 var
-  C: TKanbanCard;
+  Fly: TPanel;
+  I: Integer;
+  K: Double;
+begin
+  if not FAnimEnabled or FromR.IsEmpty or ToR.IsEmpty then Exit;
+  Fly := MakeBoardCard(Self, Self, C, FromR.Left, FromR.Top, FromR.Width, nil);
+  try
+    Fly.Color := ST_PRIMARY_BG;
+    Fly.BringToFront;
+    for I := 1 to FRAMES do
+    begin
+      K := I / FRAMES;
+      K := 1 - Sqr(1 - K);   // ease-out
+      Fly.SetBounds(Round(FromR.Left + (ToR.Left - FromR.Left) * K),
+                    Round(FromR.Top + (ToR.Top - FromR.Top) * K),
+                    FromR.Width, FromR.Height);
+      Fly.Update;
+      Application.ProcessMessages;
+      Sleep(12);
+      Inc(FAnimFrames);
+    end;
+  finally
+    Fly.Free;
+  end;
+end;
+
+{ Короткая вспышка приземлившейся карточки. }
+procedure TKanbanPage.Pulse(P: TPanel; const Base: TColor);
+const
+  STEPS: array[0..2] of TColor = (ST_SUCCESS_BG, ST_PRIMARY_BG, ST_SUCCESS_BG);
+var
+  I: Integer;
+begin
+  if not FAnimEnabled or (P = nil) then Exit;
+  for I := 0 to High(STEPS) do
+  begin
+    P.Color := STEPS[I];
+    P.Update;
+    Application.ProcessMessages;
+    Sleep(45);
+    Inc(FAnimFrames);
+  end;
+  P.Color := Base;
+end;
+
+{ Единственное место на доске, где карточка меняет этап: сюда приходят и
+  кнопки «Назад» / «Вперёд», и перетаскивание мышью. Сама запись в базу —
+  MoveBoardCard, общая со схемой бизнес-процесса. }
+procedure TKanbanPage.MoveCardTo(Index, NewCol: Integer; const FromR: TRect);
+var
+  C: TBoardCard;
   Titles: TArray<string>;
-  Total: Double;
   Id, I: Integer;
 begin
   if (Index < 0) or (Index > High(FCards)) then
   begin
-    Say(mkWarn, 'Выберите карточку на доске.');
+    Say(mkWarn, T.S('kanban.select_card'));
     Exit;
   end;
   C := FCards[Index];
-  Titles := ColumnTitles;
+  Titles := BoardColumnTitles(FKind);
   if (NewCol < 0) or (NewCol > High(Titles)) then
   begin
-    Say(mkWarn, 'Дальше двигать некуда: «' + Titles[C.Col] + '» — крайний этап.');
+    Say(mkWarn, T.F('kanban.edge', [Titles[C.Col]]));
     Exit;
   end;
   if NewCol = C.Col then Exit;
   Id := C.Id;
 
-  case FKind of
-    bkOrders:
-      begin
-        Total := FData.Scalar('SELECT COALESCE(total,0) FROM orders WHERE id = ' + IntToStr(Id));
-        // выставляем те же поля, по которым считаются этапы процесса
-        case NewCol of
-          0: FData.DB.Connection.ExecSQL(
-               'UPDATE orders SET status = ''Подтверждён'', advance = 0, paid = 0, ship_date = NULL WHERE id = :i', [Id]);
-          1: FData.DB.Connection.ExecSQL(
-               'UPDATE orders SET status = ''В работе'', advance = :a, paid = 0, ship_date = NULL WHERE id = :i',
-               [Max(0.01, Round(Total * 0.3 * 100) / 100), Id]);
-          2: FData.DB.Connection.ExecSQL(
-               'UPDATE orders SET status = ''Выполнен'', advance = :a, ship_date = NULL WHERE id = :i',
-               [Max(0.01, Round(Total * 0.3 * 100) / 100), Id]);
-          3: FData.DB.Connection.ExecSQL(
-               'UPDATE orders SET status = ''Выполнен'', ship_date = :s, paid = :p WHERE id = :i',
-               [FormatDateTime('yyyy-mm-dd', Now), Round(Total * 0.3 * 100) / 100, Id]);
-          4: FData.DB.Connection.ExecSQL(
-               'UPDATE orders SET status = ''Оплачен'', paid = :p, ship_date = COALESCE(NULLIF(ship_date,''''), :s) WHERE id = :i',
-               [Total, FormatDateTime('yyyy-mm-dd', Now), Id]);
-        end;
-      end;
-    bkDeals:
-      FData.DB.Connection.ExecSQL('UPDATE deals SET stage = :s WHERE id = :i',
-        [Titles[NewCol], Id]);
-  else
-    if NewCol = High(Titles) then
-      FData.DB.Connection.ExecSQL('UPDATE tasks SET done = 1 WHERE id = :i', [Id])
-    else
-      FData.DB.Connection.ExecSQL('UPDATE tasks SET done = 0, due_at = :d WHERE id = :i',
-        [FormatDateTime('yyyy-mm-dd', Now + IfThen(NewCol = 0, -1, IfThen(NewCol = 1, 0, 7))), Id]);
-  end;
-
+  MoveBoardCard(FData, FKind, Id, NewCol);
   LoadCards;
-  // вернуть выделение на ту же запись в новой колонке
+
+  // вернуть выделение на ту же запись в новой колонке и показать перелёт
   for I := 0 to High(FCards) do
     if FCards[I].Id = Id then
     begin
       FSelected := I;
-      FCardPanels[I].Color := ST_PRIMARY_BG;
+      FCardPanels[I].Visible := False;
+      AnimateMove(FromR, PageRect(FCardPanels[I]), FCards[I]);
+      FCardPanels[I].Visible := True;
+      Pulse(FCardPanels[I], ST_PRIMARY_BG);
       Break;
     end;
-  Say(mkOk, Format('«%s» → этап «%s»', [C.Title, Titles[NewCol]]));
+  Say(mkOk, T.F('kanban.moved', [C.Title, Titles[NewCol]]));
 end;
 
 function TKanbanPage.DragCardIndex(Index, ToCol: Integer): Boolean;
@@ -626,16 +649,16 @@ begin
             (ToCol >= 0) and (ToCol <= High(FCols));
   if not Result then Exit;
   Src := FCardPanels[Index];
-  // тот же путь, что и у мыши: нажатие на карточке, сдвиг, отпускание
-  // над серединой целевой колонки
-  P := Src.ClientToScreen(Point(Src.Width div 2, Src.Height div 2));
-  Mouse.CursorPos := P;
-  CardMouseDown(Src, mbLeft, [ssLeft], 0, 0);
-  P := FBody.ClientToScreen(Point(FCols[ToCol].Left + FCols[ToCol].Width div 2,
-    FCols[ToCol].Top + 80));
-  Mouse.CursorPos := P;
-  CardMouseMove(Src, [ssLeft], 0, 0);
-  CardMouseUp(Src, mbLeft, [], 0, 0);
+  // тот же путь, что и у мыши: нажатие на карточке, сдвиг, отпускание над
+  // серединой целевой колонки. Координаты передаются относительно карточки,
+  // как их даёт VCL реальной мыши (SetCursorPos в заблокированном сеансе
+  // не работает, поэтому на физический курсор не полагаемся).
+  CardMouseDown(Src, mbLeft, [ssLeft], Src.Width div 2, Src.Height div 2);
+  P := Src.ScreenToClient(FBody.ClientToScreen(Point(
+    FCols[ToCol].Left + FCols[ToCol].Width div 2, FCols[ToCol].Top + 80)));
+  CardMouseMove(Src, [ssLeft], P.X, P.Y);
+  Application.ProcessMessages;
+  CardMouseUp(Src, mbLeft, [], P.X, P.Y);
 end;
 
 function TKanbanPage.DragCard(FromCol, ToCol: Integer): Boolean;
@@ -671,7 +694,7 @@ end;
 procedure TKanbanPage.OnRefreshClick(Sender: TObject);
 begin
   LoadCards;
-  Say(mkInfo, 'Доска обновлена.');
+  Say(mkInfo, T.S('kanban.refreshed'));
 end;
 
 { ── хуки самотеста ── }
@@ -683,7 +706,7 @@ end;
 
 function TKanbanPage.CardsInColumn(Col: Integer): Integer;
 var
-  C: TKanbanCard;
+  C: TBoardCard;
 begin
   Result := 0;
   for C in FCards do
@@ -717,6 +740,19 @@ begin
     Result := FCards[FSelected].Id
   else
     Result := 0;
+end;
+
+function TKanbanPage.CardById(Id: Integer; out C: TBoardCard): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to High(FCards) do
+    if FCards[I].Id = Id then
+    begin
+      C := FCards[I];
+      Exit(True);
+    end;
 end;
 
 procedure TKanbanPage.MoveForward;

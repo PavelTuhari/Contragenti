@@ -99,6 +99,24 @@ python3.12 -m venv .venv
 **[INSTALL_WINDOWS_ru.md](INSTALL_WINDOWS_ru.md)**
 ([HTML](docs/ustanovka-demo-crm-windows.html)).
 
+### Windows: MSI-установщик и мастер настройки
+
+Для чистого Windows без Python и Git есть MSI (`python setup.py bdist_msi`
+→ `dist/Contragenti-<версия>-win64.msi`). Он ставит Contragenti.exe, Demo
+CRM и SDK, а в конце запускает **мастер настройки** («Contragenti
+Setup.exe», он же в меню «Пуск» — «Contragenti — настройка и обновление»):
+
+- технический паспорт компьютера (ОС, память, Chrome, Python, версии файлов);
+- докачивает из этого репозитория свежие компоненты по `release.json`
+  (Demo CRM, переводы `lang.json`, процессы `processes.json`, SDK) и
+  стартовую базу компаний `data/companies_seed.zip`; если вышла новая
+  версия MSI — предлагает скачать;
+- настраивает `crm.ini`, язык в реестре, демо-данные, гоняет самопроверку;
+- при ошибках сохраняет отчёт (паспорт + лог + события Windows Installer)
+  и предлагает отправить его разработчику — issue на GitHub или письмо.
+
+Подробно — раздел «Быстрый путь» в [INSTALL_WINDOWS_ru.md](INSTALL_WINDOWS_ru.md).
+
 ---
 
 ## Запуск
