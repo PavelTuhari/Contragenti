@@ -21,11 +21,11 @@ uses
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
   Vcl.Graphics,
   uClientsDB, uContragenti, uCrmData, uEntityPage, uEspoTheme, uErpApi,
-  uWorkspace, uReports;
+  uWorkspace, uReports, uKanban, uGantt;
 
 type
-  TNavSection = (nsWorkspace, nsAccounts, nsContacts, nsLeads, nsDeals, nsItems,
-    nsOrders, nsCalendar, nsReports, nsSettings);
+  TNavSection = (nsWorkspace, nsKanban, nsGantt, nsAccounts, nsContacts, nsLeads,
+    nsDeals, nsItems, nsOrders, nsCalendar, nsReports, nsSettings);
 
   TMainForm = class(TForm)
   private
@@ -35,6 +35,8 @@ type
     FIniPath: string;
     FPendingDeleteId: Integer;
     FSection: TNavSection;
+    FAdding: Boolean;      // защита от повторного входа, пока открыт Contragenti
+    FWaitTicks: Integer;
 
     FTestBanner: TPanel;
     FSidebar: TPanel;
@@ -63,6 +65,8 @@ type
     FErp: TErpClient;
     FWorkspace: TWorkspacePage;
     FReportsPage: TReportsPage;
+    FKanbanPage: TKanbanPage;
+    FGanttPage: TGanttPage;
 
     FSettingsPanel: TPanel;
     FLauncherEdit, FErpUrlEdit, FErpKeyEdit: TEdit;
@@ -82,6 +86,8 @@ type
     procedure RefreshList;
     procedure ShowOverview(Item: TListItem);
     procedure OnStageClick(Stage: TStage);
+    procedure OnContragentiWait;
+    function  ResolveLauncher: string;
     procedure Say(Kind: TMsgKind; const Msg: string);
     procedure OnNavClick(Sender: TObject);
     procedure OnAddClick(Sender: TObject);
@@ -114,6 +120,8 @@ type
     property Erp: TErpClient read FErp;
     property Workspace: TWorkspacePage read FWorkspace;
     property Reports: TReportsPage read FReportsPage;
+    property Kanban: TKanbanPage read FKanbanPage;
+    property Gantt: TGanttPage read FGanttPage;
     function  Page(Section: TNavSection): TEntityPage;
     function  TestImportXml(const Xml: string; out Card: TCounterpartyCard): TAddResult;
     function  TestSelectFirst: Boolean;
@@ -127,6 +135,9 @@ type
     function  TestMessage: string;
     function  TestMessageKind: TMsgKind;
     function  TestSection: TNavSection;
+    { Сколько раз сработал обработчик ожидания Contragenti — по нему видно,
+      что окно продолжало обрабатывать сообщения, а не висело. }
+    function  TestWaitTicks: Integer;
   end;
 
 var
@@ -333,6 +344,8 @@ begin
   Sub.Font.Color := ESPO_MUTED;
 
   AddNavItem(nsWorkspace, '⌂', 'Рабочий стол');
+  AddNavItem(nsKanban,    '▦', 'Канбан');
+  AddNavItem(nsGantt,     '▤', 'План работ');
   AddNavItem(nsAccounts,  '▣', 'Клиенты');
   AddNavItem(nsContacts,  '☺', 'Контакты');
   AddNavItem(nsLeads,     '✉', 'Лиды');
@@ -650,6 +663,8 @@ begin
   FWorkspace.OnStageClick := OnStageClick;
   FReportsPage := TReportsPage.Create(Self, FContent, FCrm, Say,
     TPath.Combine(AppDir, 'reports'));
+  FKanbanPage := TKanbanPage.Create(Self, FContent, FCrm, Say);
+  FGanttPage := TGanttPage.Create(Self, FContent, FCrm, Say);
   SetStagePresets;
 end;
 
@@ -715,6 +730,7 @@ var
   Titles: array[TNavSection] of string;
 begin
   Titles[nsWorkspace] := 'Рабочий стол'; Titles[nsAccounts] := 'Клиенты';
+  Titles[nsKanban] := 'Канбан'; Titles[nsGantt] := 'План работ';
   Titles[nsContacts] := 'Контакты'; Titles[nsLeads] := 'Лиды';
   Titles[nsDeals] := 'Сделки'; Titles[nsItems] := 'Номенклатура';
   Titles[nsOrders] := 'Заказы'; Titles[nsCalendar] := 'Календарь';
@@ -742,6 +758,8 @@ begin
   FPageAccounts.Visible := Section = nsAccounts;
   FWorkspace.Visible := Section = nsWorkspace;
   FReportsPage.Visible := Section = nsReports;
+  FKanbanPage.Visible := Section = nsKanban;
+  FGanttPage.Visible := Section = nsGantt;
   for S := Low(TNavSection) to High(TNavSection) do
     if FPages[S] <> nil then
     begin
@@ -754,6 +772,8 @@ begin
     end;
   if Section = nsWorkspace then FWorkspace.Refresh;
   if Section = nsReports then FReportsPage.Refresh;
+  if Section = nsKanban then FKanbanPage.Refresh;
+  if Section = nsGantt then FGanttPage.Refresh;
   Caption := 'Demo CRM · ' + Titles[Section];
 end;
 
@@ -891,19 +911,63 @@ end;
 
 { ── действия ── }
 
+{ Пока открыт Contragenti, SDK зовёт это каждые 200 мс: без прокачки очереди
+  сообщений окно CRM переставало перерисовываться и Windows помечала его
+  «не отвечает». Заодно показываем, сколько уже ждём. }
+procedure TMainForm.OnContragentiWait;
+begin
+  Inc(FWaitTicks);
+  if FWaitTicks mod 5 = 0 then
+    Say(mkWarn, Format('Открыт Contragenti — выберите контрагента в его окне…   (%d с)',
+      [FWaitTicks div 5]));
+  Application.ProcessMessages;
+end;
+
+{ Путь из настроек, а если его нет — известные места: рядом с программой,
+  собранный exe и исходник в репозитории. }
+function TMainForm.ResolveLauncher: string;
+var
+  C: string;
+  Candidates: TArray<string>;
+begin
+  Result := FCli.LauncherExe;
+  if TFile.Exists(Result) then Exit;
+  Candidates := [
+    TPath.Combine(AppDir, 'Contragenti.exe'),
+    TPath.Combine(TPath.GetFullPath(TPath.Combine(AppDir, '..')), 'Contragenti.exe'),
+    TPath.Combine(TPath.GetFullPath(TPath.Combine(AppDir, '..\build\exe.win-amd64-3.12')), 'Contragenti.exe'),
+    TPath.Combine(TPath.GetFullPath(TPath.Combine(AppDir, '..')), 'company_search.py'),
+    TPath.Combine(TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'Contragenti'), 'Contragenti.exe')];
+  for C in Candidates do
+    if TFile.Exists(C) then
+    begin
+      FCli.LauncherExe := C;
+      SaveSettings;
+      Exit(C);
+    end;
+end;
+
 procedure TMainForm.OnAddClick(Sender: TObject);
 var
   Card: TCounterpartyCard;
   NewId: Integer;
 begin
+  if FAdding then
+  begin
+    Say(mkWarn, 'Contragenti уже открыт — завершите выбор в его окне.');
+    Exit;
+  end;
   if FSection <> nsAccounts then
     SelectSection(nsAccounts);
-  if not TFile.Exists(FCli.LauncherExe) then
+  if not TFile.Exists(ResolveLauncher) then
   begin
     Say(mkErr, 'Не найден Contragenti: ' + FCli.LauncherExe + '  — укажите путь в «Настройки»');
     Exit;
   end;
   Say(mkWarn, 'Открыт Contragenti — выберите контрагента в его окне…');
+  FAdding := True;
+  FWaitTicks := 0;
+  FCli.OnWait := OnContragentiWait;
   FBtnAdd.Enabled := False;
   try
     if FCli.Pick(Trim(FSearch.Text), Card) then
@@ -922,6 +986,8 @@ begin
       Say(mkWarn, 'Выбор отменён: ' + FCli.LastError);
   finally
     FBtnAdd.Enabled := True;
+    FCli.OnWait := nil;
+    FAdding := False;
   end;
 end;
 
@@ -1174,6 +1240,11 @@ end;
 function TMainForm.TestSection: TNavSection;
 begin
   Result := FSection;
+end;
+
+function TMainForm.TestWaitTicks: Integer;
+begin
+  Result := FWaitTicks;
 end;
 
 

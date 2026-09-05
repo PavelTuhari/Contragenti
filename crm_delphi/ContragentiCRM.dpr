@@ -35,6 +35,8 @@ uses
   uReports in 'uReports.pas',
   uErpApi in 'uErpApi.pas',
   uWorkspace in 'uWorkspace.pas',
+  uKanban in 'uKanban.pas',
+  uGantt in 'uGantt.pas',
   uMainForm in 'uMainForm.pas',
   uGuiSelfTest in 'uGuiSelfTest.pas',
   uTestData in 'uTestData.pas';

@@ -65,7 +65,7 @@ uses
   System.IOUtils, System.StrUtils, System.Generics.Collections, System.Generics.Defaults,
   System.Variants, System.Math, System.DateUtils,
   uContragenti, uClientsDB, uCrmData, uEntityPage, uTestData, uWorkspace,
-  uReports, uReportTable;
+  uReports, uReportTable, uKanban, uGantt;
 
 const
   PW_RENDERFULLCONTENT = $00000002;
@@ -464,7 +464,8 @@ var
   AlfaId, AgroId: Integer;
   V: Variant;
   Stats: TSeedStats;
-  Xlsx, Pdf: string;
+  Xlsx, Pdf, Stub, SavedLauncher: string;
+  Id: Integer;
 begin
   FSteps := nil;
   FNum := 0;
@@ -640,6 +641,26 @@ begin
       [FWaitTicks div 5, FForm.TestDbCount,
        BoolToStr(FForm.TestMessageKind = mkWarn, True), FForm.Client.LastError]),
     'sdk_duplicate');
+
+  // Пока Contragenti открыт, окно CRM обязано оставаться живым: приложение
+  // назначает свой обработчик ожидания и прокачивает очередь сообщений.
+  // Проверяем на заглушке, чтобы лишний раз не дёргать портал.
+  Inc(FNum);
+  Stub := TPath.Combine(FOutDir, 'sdk_stub.py');
+  TFile.WriteAllText(Stub, 'import time' + sLineBreak + 'time.sleep(3)' + sLineBreak,
+    TEncoding.UTF8);
+  SavedLauncher := FForm.Client.LauncherExe;
+  FForm.Client.LauncherExe := Stub;
+  FForm.Client.OnWait := nil;          // обработчик должен назначить сам CRM
+  FForm.TestClickAdd;
+  Pump;
+  Step('Окно CRM не зависает, пока открыт Contragenti: обработчик ожидания отработал',
+    (FForm.TestWaitTicks >= 10) and (FForm.TestMessageKind = mkWarn),
+    Format('тактов ожидания %d (по 200 мс), сообщение: %s',
+      [FForm.TestWaitTicks, FForm.TestMessage]),
+    'sdk_responsive');
+  FForm.Client.LauncherExe := SavedLauncher;
+  TFile.Delete(Stub);
 
   // ── часть 3: разделы CRM для торговли, услуг и производства ──
 
@@ -901,7 +922,74 @@ begin
     P.ListCount > 0, Format('просроченных %d', [P.ListCount]), 'seed_tasks_overdue');
   P.SelectPreset(0);
 
-  // ── часть 5: отчёты и выгрузка в Excel и PDF ──
+  // ── часть 5: канбан и план работ ──
+
+  Inc(FNum);
+  FForm.TestClickNav(nsKanban);
+  Pump;
+  FForm.Kanban.SelectBoard(bkOrders);
+  Pump;
+  Before := FForm.Kanban.CardsInColumn(0);
+  Step('Канбан «Заказы»: пять колонок процесса, карточки разложены по этапам',
+    (FForm.Kanban.ColumnCount = 5) and (FForm.Kanban.CardsInColumn(1) > 0),
+    Format('колонок %d; по этапам: %d / %d / %d / %d / %d',
+      [FForm.Kanban.ColumnCount, FForm.Kanban.CardsInColumn(0), FForm.Kanban.CardsInColumn(1),
+       FForm.Kanban.CardsInColumn(2), FForm.Kanban.CardsInColumn(3), FForm.Kanban.CardsInColumn(4)]),
+    'kanban_orders');
+
+  Inc(FNum);
+  FForm.Kanban.SelectFirstCard(1);
+  Pump;
+  Id := FForm.Kanban.SelectedId;
+  FForm.Kanban.MoveForward;
+  Pump;
+  V := FForm.Crm.Scalar('SELECT status FROM orders WHERE id = ' + IntToStr(Id));
+  Step('Канбан: карточка перенесена «В работе» → «Готово к отгрузке», статус в базе изменён',
+    (FForm.Kanban.SelectedColumn = 2) and (VarToStr(V) = 'Выполнен')
+      and (FForm.Crm.StageOf(Id) = stReadyToShip),
+    Format('колонка %d, статус «%s», этап %d',
+      [FForm.Kanban.SelectedColumn, VarToStr(V), Ord(FForm.Crm.StageOf(Id))]),
+    'kanban_move');
+
+  Inc(FNum);
+  FForm.Kanban.MoveBack;
+  Pump;
+  Step('Канбан: «← Назад» возвращает карточку на прежний этап',
+    (FForm.Kanban.SelectedColumn = 1) and (FForm.Crm.StageOf(Id) = stInWork),
+    Format('колонка %d, этап %d', [FForm.Kanban.SelectedColumn, Ord(FForm.Crm.StageOf(Id))]),
+    'kanban_back');
+
+  Inc(FNum);
+  FForm.Kanban.SelectBoard(bkTasks);
+  Pump;
+  Step('Канбан «Задачи»: колонки по срокам — просрочено / сегодня / позже / выполнено',
+    (FForm.Kanban.ColumnCount = 4) and (FForm.Kanban.CardsInColumn(0) > 0),
+    Format('колонок %d; просрочено %d, сегодня %d, позже %d, выполнено %d',
+      [FForm.Kanban.ColumnCount, FForm.Kanban.CardsInColumn(0), FForm.Kanban.CardsInColumn(1),
+       FForm.Kanban.CardsInColumn(2), FForm.Kanban.CardsInColumn(3)]),
+    'kanban_tasks');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsGantt);
+  Pump;
+  FForm.Gantt.SelectFilter(0);
+  Pump;
+  Step('План работ (Гант): производственные заказы и их операции на шкале времени',
+    (FForm.Gantt.RowCount > 0) and (FForm.Gantt.WorkCount > 0),
+    Format('строк %d, из них работ %d, просрочено заказов %d; период %s',
+      [FForm.Gantt.RowCount, FForm.Gantt.WorkCount, FForm.Gantt.OverdueCount,
+       FForm.Gantt.RangeText]),
+    'gantt_production');
+
+  Inc(FNum);
+  FForm.Gantt.SelectFilter(1);
+  Pump;
+  Step('План работ: фильтр «Все заказы» — строк становится больше',
+    FForm.Gantt.RowCount > 0,
+    Format('строк %d, работ %d', [FForm.Gantt.RowCount, FForm.Gantt.WorkCount]),
+    'gantt_all');
+
+  // ── часть 6: отчёты и выгрузка в Excel и PDF ──
 
   Inc(FNum);
   FForm.TestClickNav(nsReports);
