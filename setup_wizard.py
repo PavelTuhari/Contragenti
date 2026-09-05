@@ -7,16 +7,19 @@
 копии и без ручных шагов:
 
   1. технический паспорт компьютера (ОС, память, диск, Chrome, Python, сеть);
-  2. обновление компонентов из GitHub (Demo CRM, переводы, описания
+  2. Python: если команда python ещё не работает, мастер в PowerShell
+     запускает `python` — на свежих Windows интерпретатор ставится сам
+     (App Installer / Store), без привязки к версии 3.12 и без exe с python.org;
+  3. обновление компонентов из GitHub (Demo CRM, переводы, описания
      процессов, инструкции) — по списку из release.json репозитория;
      если в репозитории вышла новая версия MSI — предлагает скачать её;
-  3. стартовая база компаний date.gov.md: zip из репозитория (data/
+  4. стартовая база компаний date.gov.md: zip из репозитория (data/
      companies_seed.zip), сливается с локальной companies.db по ключу IDNO —
      существующие записи не трогаются;
-  4. настройка: crm.ini для Demo CRM (путь к Contragenti.exe, язык), язык в
+  5. настройка: crm.ini для Demo CRM (путь к Contragenti.exe, язык), язык в
      реестре (HKCU\\Software\\DemoCRM\\Language), каталог логов;
-  5. демонстрационные данные Demo CRM (--seed-demo) — по желанию;
-  6. самопроверка обеих программ (--selftest).
+  6. демонстрационные данные Demo CRM (--seed-demo) — по желанию;
+  7. самопроверка обеих программ (--selftest).
 
 Каждый шаг пишется в install.log. Если что-то не так — собирается отчёт
 (паспорт + лог + ошибки + последние события Windows Installer) и предлагается
@@ -27,7 +30,8 @@
     "Contragenti Setup.exe"            окно мастера (по умолчанию)
     "Contragenti Setup.exe" --check    без окна: все шаги, лог, код возврата
     "Contragenti Setup.exe" --lang ro  язык мастера (ro | en | ru)
-    "Contragenti Setup.exe" --offline  не ходить в GitHub (только настройка)
+    "Contragenti Setup.exe" --offline  не ходить в GitHub и не вызывать python
+    "Contragenti Setup.exe" --no-python  не запускать команду python, даже если его нет
     "Contragenti Setup.exe" --auto --shot файл.png
                                        окно, шаги запускаются сами, в конце
                                        снимок своего окна (PrintWindow) и выход —
@@ -47,6 +51,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import traceback
 import urllib.parse
 import urllib.request
@@ -63,6 +68,7 @@ RAW_BASE = f"https://raw.githubusercontent.com/{REPO}/main/"
 RELEASE_URL = RAW_BASE + "release.json"
 REG_KEY = r"Software\DemoCRM"
 NET_TIMEOUT = 12
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 # ────────────────────────────── i18n ──────────────────────────────
 
@@ -75,6 +81,7 @@ TR = {
         "intro": "Мастер настроит компьютер так, чтобы Contragenti, Demo CRM и SDK заработали сразу. "
                  "Отметьте нужные шаги и нажмите «Выполнить».",
         "language": "Язык:",
+        "opt_python": "Если нет Python — выполнить в PowerShell команду python (Windows ставит сам)",
         "opt_update": "Обновить компоненты из GitHub (Demo CRM, переводы, описания процессов)",
         "opt_db": "Загрузить стартовую базу компаний date.gov.md (zip из GitHub)",
         "opt_seed": "Заполнить Demo CRM демонстрационными данными",
@@ -90,7 +97,7 @@ TR = {
         "start_apps": "Запустить Contragenti и Demo CRM",
         "st_passport": "Технический паспорт системы",
         "st_chrome": "Google Chrome",
-        "st_python": "Python для SDK",
+        "st_python": "Python",
         "st_net": "Доступ к GitHub",
         "st_release": "Новая версия в репозитории",
         "st_update": "Обновление компонентов",
@@ -110,9 +117,10 @@ TR = {
         "chrome_missing": "Chrome не найден. Он нужен Contragenti для портала date.gov.md — "
                           "установите с google.com/chrome.",
         "chrome_get": "Скачать Chrome",
-        "python_missing": "Python 3 не найден — это нужно только для SDK на Python "
-                          "(sdk/python). Contragenti.exe и Demo CRM работают без него.",
-        "python_get": "Скачать Python",
+        "python_missing": "Команда python не работает. Contragenti.exe и Demo CRM работают без него; "
+                          "нужен для sdk/python. В PowerShell выполните: python",
+        "python_get": "Установить Python (команда python)",
+        "python_offline": "Python не найден, команда python пропущена (нет сети / --offline).",
         "net_fail": "GitHub недоступен (%s). Обновление и загрузка базы пропущены; "
                     "программы работают и без них.",
         "new_version": "В репозитории версия %s (установлена %s). Скачать новый установщик?",
@@ -127,6 +135,7 @@ TR = {
         "intro": "This wizard configures the computer so that Contragenti, Demo CRM and the SDK work right away. "
                  "Tick the steps you need and press Run.",
         "language": "Language:",
+        "opt_python": "If Python is missing, run python in PowerShell (Windows installs it)",
         "opt_update": "Update components from GitHub (Demo CRM, translations, process descriptions)",
         "opt_db": "Download the starter company database from date.gov.md (zip from GitHub)",
         "opt_seed": "Fill Demo CRM with demo data",
@@ -142,7 +151,7 @@ TR = {
         "start_apps": "Start Contragenti and Demo CRM",
         "st_passport": "System passport",
         "st_chrome": "Google Chrome",
-        "st_python": "Python for the SDK",
+        "st_python": "Python",
         "st_net": "GitHub access",
         "st_release": "New version in the repository",
         "st_update": "Component update",
@@ -162,9 +171,10 @@ TR = {
         "chrome_missing": "Chrome not found. Contragenti needs it for the date.gov.md portal — "
                           "install it from google.com/chrome.",
         "chrome_get": "Get Chrome",
-        "python_missing": "Python 3 not found — it is needed only for the Python SDK (sdk/python). "
-                          "Contragenti.exe and Demo CRM work without it.",
-        "python_get": "Get Python",
+        "python_missing": "The python command does not work. Contragenti.exe and Demo CRM work without it; "
+                          "it is needed for sdk/python. In PowerShell run: python",
+        "python_get": "Install Python (python command)",
+        "python_offline": "Python not found; python command skipped (offline / --offline).",
         "net_fail": "GitHub is unreachable (%s). Update and database download skipped; "
                     "the programs work without them.",
         "new_version": "The repository has version %s (installed %s). Download the new installer?",
@@ -179,6 +189,7 @@ TR = {
         "intro": "Asistentul configurează calculatorul astfel încât Contragenti, Demo CRM și SDK să funcționeze imediat. "
                  "Bifați pașii necesari și apăsați „Execută”.",
         "language": "Limba:",
+        "opt_python": "Dacă lipsește Python — execută python în PowerShell (Windows îl instalează)",
         "opt_update": "Actualizează componentele din GitHub (Demo CRM, traduceri, descrieri de procese)",
         "opt_db": "Descarcă baza inițială de companii date.gov.md (zip din GitHub)",
         "opt_seed": "Completează Demo CRM cu date demonstrative",
@@ -194,7 +205,7 @@ TR = {
         "start_apps": "Pornește Contragenti și Demo CRM",
         "st_passport": "Pașaportul tehnic al sistemului",
         "st_chrome": "Google Chrome",
-        "st_python": "Python pentru SDK",
+        "st_python": "Python",
         "st_net": "Acces la GitHub",
         "st_release": "Versiune nouă în repozitoriu",
         "st_update": "Actualizarea componentelor",
@@ -214,9 +225,10 @@ TR = {
         "chrome_missing": "Chrome nu a fost găsit. Contragenti are nevoie de el pentru portalul date.gov.md — "
                           "instalați-l de pe google.com/chrome.",
         "chrome_get": "Descarcă Chrome",
-        "python_missing": "Python 3 nu a fost găsit — este necesar doar pentru SDK-ul Python (sdk/python). "
-                          "Contragenti.exe și Demo CRM funcționează fără el.",
-        "python_get": "Descarcă Python",
+        "python_missing": "Comanda python nu funcționează. Contragenti.exe și Demo CRM funcționează fără ea; "
+                          "este necesară pentru sdk/python. În PowerShell: python",
+        "python_get": "Instalează Python (comanda python)",
+        "python_offline": "Python nu a fost găsit; comanda python a fost omisă (offline / --offline).",
         "net_fail": "GitHub nu este accesibil (%s). Actualizarea și descărcarea bazei au fost omise; "
                     "programele funcționează și fără ele.",
         "new_version": "În repozitoriu este versiunea %s (instalată %s). Descărcați noul instalator?",
@@ -360,18 +372,77 @@ def find_chrome():
 
 
 def find_python():
-    """Python для SDK: py-лаунчер или python в PATH (не Store-заглушка)."""
-    for cmd in (["py", "-3", "-c", "import sys;print(sys.version.split()[0])"],
-                ["python", "-c", "import sys;print(sys.version.split()[0])"]):
+    """Рабочий интерпретатор: команда python (как в PowerShell), иначе py -3.
+
+    Заглушка Windows «Python was not found» даёт код ≠ 0 и не печатает версию —
+    это считается «Python нет». После автоустановки Windows та же команда python
+    начинает возвращать номер версии (3.13, 3.14, … — не обязательно 3.12).
+    """
+    for cmd in (["python", "-c", "import sys;print(sys.version.split()[0])"],
+                ["py", "-3", "-c", "import sys;print(sys.version.split()[0])"],
+                ["python3", "-c", "import sys;print(sys.version.split()[0])"]):
         try:
-            out = subprocess.run(cmd, capture_output=True, text=True, timeout=15,
-                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            v = (out.stdout or "").strip()
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=20,
+                                 creationflags=_NO_WINDOW, errors="replace")
+            v = (out.stdout or "").strip().splitlines()
+            v = v[-1].strip() if v else ""
             if out.returncode == 0 and v and v[0].isdigit():
-                return " ".join(cmd[:2]), v
+                return cmd[0], v
         except (OSError, subprocess.SubprocessError):
             continue
     return "", ""
+
+
+def _powershell():
+    root = os.environ.get("SystemRoot", r"C:\Windows")
+    return os.path.join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+
+
+def refresh_env_path():
+    """PATH текущего процесса = Machine+User из реестра (после установки Python)."""
+    if winreg is None:
+        return
+    parts = []
+    for hive, key in (
+        (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
+        (winreg.HKEY_CURRENT_USER, "Environment"),
+    ):
+        try:
+            with winreg.OpenKey(hive, key) as k:
+                v, _ = winreg.QueryValueEx(k, "Path")
+                if v:
+                    parts.append(str(v))
+        except OSError:
+            continue
+    if parts:
+        os.environ["PATH"] = os.pathsep.join(parts)
+
+
+def trigger_windows_python(quiet=False):
+    """Как на свежих Windows: в PowerShell команда `python` ставит интерпретатор сама."""
+    # Без аргументов App Installer / Store ставит Python. С -c заглушка только пишет
+    # «run without arguments to install» — поэтому сначала пробуем -c, иначе просто python.
+    script = (
+        "$ErrorActionPreference = 'Continue'; "
+        "$v = & python -c 'import sys; print(sys.version.split()[0])' 2>&1 | Out-String; "
+        "if ($LASTEXITCODE -eq 0 -and $v -match '\\d+\\.\\d+') { "
+        "  Write-Output $v.Trim(); exit 0 "
+        "}; "
+        "Write-Output $v; "
+        "Write-Output 'windows-auto-install'; "
+        "& python; "
+        "exit $LASTEXITCODE"
+    )
+    kwargs = {"timeout": 600, "errors": "replace", "text": True}
+    if quiet:
+        kwargs["capture_output"] = True
+        kwargs["creationflags"] = _NO_WINDOW
+    else:
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+    return subprocess.run(
+        [_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        **kwargs,
+    )
 
 
 def memory_mb():
@@ -463,10 +534,13 @@ def passport(paths):
         ("clients.db", "%s (клиентов: %s)" % (file_info(os.path.join(paths.demo_dir, "clients.db")),
                                               db_rows(os.path.join(paths.demo_dir, "clients.db"), "clients"))),
         ("Google Chrome", "%s %s" % (chrome_path or "не найден", chrome_ver)),
-        ("Python для SDK", "%s %s" % (py_cmd or "не найден", py_ver)),
+        ("Python (команда python)", "%s %s" % (py_cmd or "не найден", py_ver)),
         ("Прокси", "%s" % (os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or "-")),
     ]
-    return lines, {"chrome": chrome_path, "chrome_ver": chrome_ver, "python": py_cmd, "python_ver": py_ver}
+    return lines, {
+        "chrome": chrome_path, "chrome_ver": chrome_ver,
+        "python": py_cmd, "python_ver": py_ver,
+    }
 
 
 # ────────────────────────────── сеть / GitHub ──────────────────────────────
@@ -489,6 +563,15 @@ def download_to(url, dst, timeout=60):
 def load_release():
     data = http_get(RELEASE_URL)
     return json.loads(data.decode("utf-8-sig"))
+
+
+def sha256_of(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def merge_companies(seed_db, target_db):
@@ -547,6 +630,7 @@ class Wizard:
         self.log_cb = log_cb
         self.ask_cb = ask_cb          # (text) -> bool; в --check всегда False
         self.offline = offline
+        self.quiet = bool(options.get("quiet"))
         self.report_file = ""
         self.new_msi_url = ""
         self._log_fh = open(self.paths.log_file, "a", encoding="utf-8")
@@ -610,10 +694,40 @@ class Wizard:
             self.step("st_chrome", "warn", self.t["chrome_missing"])
 
     def do_python(self):
-        if self.info.get("python"):
-            self.step("st_python", "ok", "%s %s" % (self.info["python"], self.info.get("python_ver", "")))
-        else:
+        cmd, ver = find_python()
+        if cmd:
+            self.info["python"] = cmd
+            self.info["python_ver"] = ver
+            self.step("st_python", "ok", "%s %s" % (cmd, ver))
+            return
+        if not self.opt.get("python", True):
             self.step("st_python", "warn", self.t["python_missing"])
+            return
+        if self.offline:
+            self.step("st_python", "warn", self.t["python_offline"])
+            return
+        try:
+            self.log("команда python не работает — запускаем её в PowerShell (Windows ставит сам)")
+            proc = trigger_windows_python(quiet=self.quiet)
+            tail = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+            self.log("python: код %d %s" % (proc.returncode, tail[:400].replace("\n", " | ")))
+            refresh_env_path()
+            cmd, ver = find_python()
+            if not cmd:
+                for _ in range(40):
+                    time.sleep(3)
+                    refresh_env_path()
+                    cmd, ver = find_python()
+                    if cmd:
+                        break
+            if cmd:
+                self.info["python"] = cmd
+                self.info["python_ver"] = ver
+                self.step("st_python", "ok", "после команды python: %s %s" % (cmd, ver))
+            else:
+                self.step("st_python", "warn", self.t["python_missing"])
+        except Exception as exc:  # noqa: BLE001
+            self.step("st_python", "warn", "%s %s" % (self.t["python_missing"], exc))
 
     def do_network(self):
         if self.offline:
@@ -642,6 +756,9 @@ class Wizard:
                 dst = os.path.join(self.paths.logs, os.path.basename(urllib.parse.urlparse(msi).path) or "Contragenti.msi")
                 try:
                     size = download_to(msi, dst, timeout=600)
+                    want = (self.release.get("msi_sha256") or "").lower()
+                    if want and sha256_of(dst) != want:
+                        raise ValueError("sha256 MSI не совпал с release.json — файл не запущен")
                     self.log("MSI: %s (%d байт)" % (dst, size))
                     os.startfile(dst)  # noqa: S606 — установщик запускает сам пользователь
                 except Exception as exc:  # noqa: BLE001
@@ -651,6 +768,90 @@ class Wizard:
         else:
             self.step("st_release", "ok", "%s (installed %s)" % (remote, local))
 
+    def target_path(self, dst_rel):
+        """Путь в установке; из исходников Demo CRM лежит в crm_delphi/, а не в DemoCRM/."""
+        dst = os.path.join(self.paths.root, dst_rel.replace("/", os.sep))
+        if dst_rel.startswith("DemoCRM/") and not os.path.isdir(os.path.join(self.paths.root, "DemoCRM")):
+            dst = os.path.join(self.paths.demo_dir, dst_rel[len("DemoCRM/"):])
+        return dst
+
+    def apply_file(self, dst_rel, new_b, is_exe):
+        """Кладёт файл поверх установки. Возвращает 'same' | 'updated'."""
+        dst = self.target_path(dst_rel)
+        if is_exe and (new_b[:2] != b"MZ" or len(new_b) < 100000):
+            raise ValueError("не exe (LFS-указатель или обрыв): %d байт" % len(new_b))
+        if os.path.exists(dst):
+            with open(dst, "rb") as f1:
+                old_b = f1.read()
+            # текстовые файлы: в установке CRLF (git на Windows), из GitHub — LF
+            same = old_b == new_b if is_exe else \
+                old_b.replace(b"\r\n", b"\n") == new_b.replace(b"\r\n", b"\n")
+            if same:
+                self.log("  = %s (без изменений, %d байт)" % (dst_rel, len(new_b)))
+                return "same"
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        tmp = dst + ".new"
+        with open(tmp, "wb") as fh:
+            fh.write(new_b)
+        if os.path.exists(dst):
+            bak = dst + ".bak"
+            if os.path.exists(bak):
+                os.remove(bak)
+            os.replace(dst, bak)
+        os.replace(tmp, dst)
+        self.log("  + %s (%d байт)" % (dst_rel, len(new_b)))
+        return "updated"
+
+    def update_from_zip(self):
+        """Один zip-пакет release/Contragenti-update-<версия>.zip вместо
+        десятка запросов; sha256 сверяется с release.json."""
+        url = self.release.get("update_zip") or ""
+        if not url:
+            return None
+        tmpdir = tempfile.mkdtemp(prefix="contragenti_upd_")
+        try:
+            zpath = os.path.join(tmpdir, "update.zip")
+            size = download_to(url, zpath, timeout=300)
+            want = (self.release.get("update_zip_sha256") or "").lower()
+            got = sha256_of(zpath)
+            if want and got != want:
+                raise ValueError("sha256 zip не совпал: %s ≠ %s" % (got[:12], want[:12]))
+            self.log("  zip %s: %d байт, sha256 %s" % (os.path.basename(url), size, got[:12]))
+            updated, errors, total = [], [], 0
+            with zipfile.ZipFile(zpath) as zf:
+                for info in zf.infolist():
+                    if info.is_dir() or info.filename in ("VERSION", "release.json"):
+                        continue
+                    total += 1
+                    try:
+                        res = self.apply_file(info.filename, zf.read(info),
+                                              info.filename.lower().endswith(".exe"))
+                        if res == "updated":
+                            updated.append(info.filename)
+                    except Exception as exc:  # noqa: BLE001
+                        errors.append("%s: %s" % (info.filename, exc))
+                        self.log("  ! %s: %s" % (info.filename, exc))
+            return updated, errors, total
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def update_from_components(self):
+        comps = self.release.get("components", [])
+        updated, errors = [], []
+        for comp in comps:
+            src, dst_rel = comp.get("src"), comp.get("dst")
+            if not src or not dst_rel:
+                continue
+            try:
+                res = self.apply_file(dst_rel, http_get(RAW_BASE + src, timeout=120),
+                                      comp.get("kind") == "exe")
+                if res == "updated":
+                    updated.append(dst_rel)
+            except Exception as exc:  # noqa: BLE001
+                errors.append("%s: %s" % (dst_rel, exc))
+                self.log("  ! %s: %s" % (dst_rel, exc))
+        return updated, errors, len(comps)
+
     def do_update(self):
         if not self.opt.get("update", True):
             self.step("st_update", "skip")
@@ -658,58 +859,20 @@ class Wizard:
         if not self.release:
             self.step("st_update", "skip", "GitHub")
             return
-        comps = self.release.get("components", [])
-        updated, errors = [], []
-        for comp in comps:
-            src, dst_rel = comp.get("src"), comp.get("dst")
-            if not src or not dst_rel:
-                continue
-            dst = os.path.join(self.paths.root, dst_rel.replace("/", os.sep))
-            # в установке Demo CRM лежит в DemoCRM/, из исходников — в crm_delphi/
-            if dst_rel.startswith("DemoCRM/") and not os.path.isdir(os.path.join(self.paths.root, "DemoCRM")):
-                dst = os.path.join(self.paths.demo_dir, dst_rel[len("DemoCRM/"):])
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            tmp = dst + ".new"
-            try:
-                size = download_to(RAW_BASE + src, tmp)
-                if comp.get("kind") == "exe":
-                    with open(tmp, "rb") as fh:
-                        if fh.read(2) != b"MZ" or size < 100000:
-                            raise ValueError("не exe (LFS-указатель или обрыв): %d байт" % size)
-                same = False
-                if os.path.exists(dst):
-                    with open(dst, "rb") as f1, open(tmp, "rb") as f2:
-                        old_b, new_b = f1.read(), f2.read()
-                    if comp.get("kind") == "exe":
-                        same = old_b == new_b
-                    else:
-                        # текстовые файлы: в установке CRLF (git на Windows), с GitHub — LF
-                        same = old_b.replace(b"\r\n", b"\n") == new_b.replace(b"\r\n", b"\n")
-                if same:
-                    os.remove(tmp)
-                    self.log("  = %s (без изменений, %d байт)" % (dst_rel, size))
-                    continue
-                if os.path.exists(dst):
-                    bak = dst + ".bak"
-                    if os.path.exists(bak):
-                        os.remove(bak)
-                    os.replace(dst, bak)
-                os.replace(tmp, dst)
-                updated.append("%s (%d)" % (dst_rel, size))
-                self.log("  + %s (%d байт)" % (dst_rel, size))
-            except Exception as exc:  # noqa: BLE001
-                errors.append("%s: %s" % (dst_rel, exc))
-                self.log("  ! %s: %s" % (dst_rel, exc))
-                try:
-                    os.remove(tmp)
-                except OSError:
-                    pass
+        result = None
+        try:
+            result = self.update_from_zip()
+        except Exception as exc:  # noqa: BLE001
+            self.log("  zip-пакет недоступен (%s) — по отдельным файлам" % exc)
+        if result is None:
+            result = self.update_from_components()
+        updated, errors, total = result
         if errors and not updated:
             self.step("st_update", "fail", "; ".join(errors))
         elif errors:
             self.step("st_update", "warn", "обновлено %d, ошибок %d: %s" % (len(updated), len(errors), "; ".join(errors)))
         else:
-            self.step("st_update", "ok", "обновлено %d из %d" % (len(updated), len(comps)))
+            self.step("st_update", "ok", "обновлено %d из %d" % (len(updated), total))
 
     def do_database(self):
         if not self.opt.get("db", True):
@@ -1004,9 +1167,9 @@ def run_gui(lang, offline, auto=False, shot=""):
 
     opts = ttk.Frame(root, padding=(12, 0))
     opts.pack(fill="x")
-    vars_ = {k: tk.BooleanVar(value=True) for k in ("update", "db", "seed", "selftest", "shortcuts")}
+    vars_ = {k: tk.BooleanVar(value=True) for k in ("python", "update", "db", "seed", "selftest", "shortcuts")}
     checks = {}
-    for key in ("update", "db", "seed", "selftest", "shortcuts"):
+    for key in ("python", "update", "db", "seed", "selftest", "shortcuts"):
         cb = ttk.Checkbutton(opts, text=t("opt_" + key), variable=vars_[key])
         cb.pack(anchor="w")
         checks[key] = cb
@@ -1019,7 +1182,13 @@ def run_gui(lang, offline, auto=False, shot=""):
     close_btn.pack(side="right")
     start_btn = ttk.Button(btns, text=t("start_apps"))
     chrome_btn = ttk.Button(btns, text=t("chrome_get"), command=lambda: webbrowser.open("https://www.google.com/chrome/"))
-    python_btn = ttk.Button(btns, text=t("python_get"), command=lambda: webbrowser.open("https://www.python.org/downloads/windows/"))
+    def _run_python_cmd():
+        try:
+            trigger_windows_python(quiet=False)
+        except Exception:  # noqa: BLE001
+            pass
+
+    python_btn = ttk.Button(btns, text=t("python_get"), command=_run_python_cmd)
     msi_btn = ttk.Button(btns, text=t("download_msi"))
 
     prog = ttk.Progressbar(root, mode="determinate", maximum=11)
@@ -1233,6 +1402,7 @@ def run_gui(lang, offline, auto=False, shot=""):
 
     if auto:
         vars_["seed"].set("--no-seed" not in sys.argv)
+        vars_["python"].set("--no-python" not in sys.argv)
         root.after(400, on_run)
 
     root.mainloop()
@@ -1259,7 +1429,8 @@ def main(argv=None):
             except (AttributeError, ValueError):
                 pass
         wiz = Wizard(lang, {"update": "--no-update" not in argv, "db": True,
-                            "seed": "--no-seed" not in argv, "selftest": True, "shortcuts": True},
+                            "seed": "--no-seed" not in argv, "selftest": True, "shortcuts": True,
+                            "python": "--no-python" not in argv, "quiet": True},
                      log_cb=lambda line: print(line), offline=offline)
         try:
             ok = wiz.run_all()

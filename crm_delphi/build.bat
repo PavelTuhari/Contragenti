@@ -22,4 +22,12 @@ if errorlevel 1 (
   exit /b 1
 )
 echo Done: ContragentiCRM.exe
+
+rem refresh release\Contragenti-update-<version>.zip and release.json so the
+rem update package in the repository always matches the compiled exe
+if exist "..\.venv\Scripts\python.exe" (
+  "..\.venv\Scripts\python.exe" "..\tools\make_release.py" --zip-only
+) else (
+  python "..\tools\make_release.py" --zip-only
+)
 endlocal

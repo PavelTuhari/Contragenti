@@ -101,12 +101,23 @@ python3.12 -m venv .venv
 
 ### Windows: MSI-установщик и мастер настройки
 
-Для чистого Windows без Python и Git есть MSI (`python setup.py bdist_msi`
-→ `dist/Contragenti-<версия>-win64.msi`). Он ставит Contragenti.exe, Demo
-CRM и SDK, а в конце запускает **мастер настройки** («Contragenti
-Setup.exe», он же в меню «Пуск» — «Contragenti — настройка и обновление»):
+**Скачать установщик:**
+[Contragenti-1.1.0-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.1.0-win64.msi)
+(≈40 МБ, папка [release/](release/)). Рядом — [Contragenti-update-1.1.0.zip](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.1.0.zip):
+пакет обновления поверх установки (Demo CRM, переводы, процессы, SDK,
+инструкции, стартовая база); он пересобирается автоматически при каждой
+компиляции Demo CRM и перед каждым коммитом (`tools/make_release.py`),
+ссылки и sha256 — в [release.json](release.json).
+
+Для чистого Windows без Git MSI (`python setup.py bdist_msi`
+→ `dist/Contragenti-<версия>-win64.msi`, затем `python tools/make_release.py`
+кладёт его в `release/`) ставит Contragenti.exe, Demo CRM и SDK, а в конце
+запускает **мастер настройки** («Contragenti Setup.exe», он же в меню
+«Пуск» — «Contragenti — настройка и обновление»):
 
 - технический паспорт компьютера (ОС, память, Chrome, Python, версии файлов);
+- если команда `python` не работает — в PowerShell запускает `python`,
+  и на свежих Windows интерпретатор ставится сам (версия не фиксируется);
 - докачивает из этого репозитория свежие компоненты по `release.json`
   (Demo CRM, переводы `lang.json`, процессы `processes.json`, SDK) и
   стартовую базу компаний `data/companies_seed.zip`; если вышла новая
@@ -115,7 +126,8 @@ Setup.exe», он же в меню «Пуск» — «Contragenti — настр
 - при ошибках сохраняет отчёт (паспорт + лог + события Windows Installer)
   и предлагает отправить его разработчику — issue на GitHub или письмо.
 
-Подробно — раздел «Быстрый путь» в [INSTALL_WINDOWS_ru.md](INSTALL_WINDOWS_ru.md).
+Подробно — [INSTALL_MSI_ru.md](INSTALL_MSI_ru.md) и раздел «Быстрый путь»
+в [INSTALL_WINDOWS_ru.md](INSTALL_WINDOWS_ru.md).
 
 ---
 

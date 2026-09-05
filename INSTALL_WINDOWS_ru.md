@@ -19,10 +19,14 @@ https://raw.githack.com/PavelTuhari/Contragenti/main/docs/ustanovka-demo-crm-win
 
 Всё, что описано ниже руками (Python, зависимости, `crm.ini`, ярлыки,
 самопроверка), на чистом Windows делает установщик и мастер настройки —
-Python и Git на компьютере **не нужны**, нужен только Google Chrome.
+Git **не нужен**, нужен Google Chrome. Если команда `python` ещё не работает,
+мастер в PowerShell запускает `python` — на свежих Windows интерпретатор
+ставится сам. Подробно — [INSTALL_MSI_ru.md](INSTALL_MSI_ru.md).
 
-1. Скачайте `Contragenti-<версия>-win64.msi` (сборка: `python setup.py bdist_msi`,
-   см. [README](README.md#установка)) и запустите. Установка идёт в
+1. Скачайте установщик из репозитория:
+   **[release/Contragenti-1.1.0-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.1.0-win64.msi)**
+   (рядом лежит `Contragenti-update-1.1.0.zip` — пакет обновления, его
+   мастер скачивает сам; ссылки и sha256 в `release.json`) и запустите. Установка идёт в
    `%LOCALAPPDATA%\Contragenti`, без прав администратора. На рабочем столе
    появляются ярлыки **Contragenti** и **Demo CRM (SDK Contragenti)**, в меню
    «Пуск» — **Contragenti — настройка и обновление**.
@@ -36,7 +40,7 @@ Python и Git на компьютере **не нужны**, нужен толь
    |---|---|---|
    | Технический паспорт | ОС, сборка, память, диск, Chrome, Python, версии файлов, размер баз | попадает в отчёт |
    | Google Chrome | ищет `chrome.exe` в реестре и типичных папках | кнопка «Скачать Chrome» (нужен для портала) |
-   | Python для SDK | `py -3` / `python` — только для `sdk/python` | кнопка «Скачать Python»; exe и Demo CRM работают без него |
+   | Python | команда `python` в PowerShell; если не работает — Windows ставит интерпретатор сам | кнопка «Установить Python»; exe и Demo CRM работают и без него |
    | Доступ к GitHub | читает `release.json` из репозитория | шаги обновления пропускаются, программы работают |
    | Новая версия | сравнивает `version` с файлом `VERSION` установки | если новее и есть `msi_url` — предлагает скачать MSI |
    | Обновление компонентов | докачивает из GitHub `DemoCRM\ContragentiCRM.exe`, `lang.json`, `processes.json`, инструкции, SDK (список — `components` в `release.json`); старые файлы остаются как `.bak` | ошибка по файлу — в отчёт, остальные обновляются |

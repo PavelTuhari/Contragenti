@@ -133,6 +133,10 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
 - `setup.py` собирает MSI; первым `Executable` идёт `setup_wizard.py`
   («Contragenti Setup.exe») — его cx_Freeze запускает по «Launch on finish».
   Не менять порядок.
+- Мастер после MSI проверяет команду `python` (как в PowerShell). Если она
+  не работает — запускает `python` без аргументов: на свежих Windows
+  интерпретатор ставится сам (App Installer / Store), версия не фиксируется.
+  `--offline` и `--no-python` этот шаг пропускают. Описание — `INSTALL_MSI_ru.md`.
 - Мастер докачивает компоненты по `release.json` из ветки `main`
   (`raw.githubusercontent.com`). При любом изменении файлов, которые попадают
   в установку без переустановки (`ContragentiCRM.exe`, `lang.json`,
@@ -141,6 +145,17 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   в `setup.py` и `company_search.py` (все четыре — одно значение).
 - Стартовая база компаний — `data/companies_seed.zip`
   (`python tools/make_seed.py`); в `.gitignore` для неё исключение из `*.zip`.
+- Готовые сборки лежат в репозитории, в `release/`: MSI и zip-пакет
+  обновления. Zip пересобирает `tools/make_release.py --zip-only` — он
+  вызывается из `crm_delphi\build.bat` после компиляции и из pre-commit
+  хука (`.githooks/pre-commit`; включить один раз:
+  `git config core.hooksPath .githooks`). Zip детерминированный, без
+  изменений содержимого не меняется. Список файлов пакета — `FILES` в
+  `make_release.py`: новый файл, который должен обновляться поверх
+  установки, добавляй туда (и в `components` release.json как запасной
+  путь). После `python setup.py bdist_msi` выполни
+  `python tools/make_release.py` — MSI попадёт в `release/`, а в
+  `release.json` обновятся `msi_url`, размер и sha256.
 - Перед коммитом: `python setup_wizard.py --check --offline --no-seed`
   должен закончиться с кодом 0 (паспорт, настройка, самопроверка Demo CRM).
   После пуша — `--check` без `--offline` (проверяет `release.json` и

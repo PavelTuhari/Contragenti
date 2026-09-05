@@ -1,0 +1,15 @@
+#!/bin/sh
+# Перед каждым коммитом пересобирает release/Contragenti-update-<версия>.zip
+# и release.json (url, размер, sha256), чтобы пакет обновления в репозитории
+# всегда соответствовал коммиту. Zip детерминированный: без изменений
+# содержимого файл не меняется и в коммит не попадает.
+# Включение (один раз, локально): git config core.hooksPath .githooks
+cd "$(git rev-parse --show-toplevel)" || exit 0
+PY=""
+for c in ".venv/Scripts/python.exe" "python" "py"; do
+  if command -v "$c" >/dev/null 2>&1 || [ -x "$c" ]; then PY="$c"; break; fi
+done
+[ -z "$PY" ] && { echo "pre-commit: python не найден, release/ не пересобран"; exit 0; }
+"$PY" tools/make_release.py --zip-only >/dev/null || { echo "pre-commit: make_release.py завершился с ошибкой"; exit 1; }
+git add release/ release.json
+exit 0

@@ -61,6 +61,9 @@ export/
 *.log
 # стартовая база компаний для мастера настройки — исключение из *.zip
 !data/companies_seed.zip
+# готовые сборки: MSI и zip-пакет обновления (tools/make_release.py)
+!release/*.zip
+!release/*.msi
 
 # Собранные дистрибутивы (cx_Freeze / MSI) — не хранятся в репозитории
 build/

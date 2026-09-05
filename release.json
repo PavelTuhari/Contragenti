@@ -2,20 +2,58 @@
   "_comment": "Манифест обновления: его читает мастер настройки (setup_wizard.py / «Contragenti Setup.exe») по адресу raw.githubusercontent.com/PavelTuhari/Contragenti/main/release.json. version сравнивается с файлом VERSION в установке; если тут новее и указан msi_url — мастер предлагает скачать новый установщик. components — файлы, которые обновляются поверх установки без переустановки (src — путь в репозитории, dst — путь относительно каталога установки). database.zip — стартовая база компаний date.gov.md, сливается с локальной companies.db по ключу IDNO. developer — куда мастер предлагает отправить отчёт об ошибках (issue на GitHub или письмо; отправляет пользователь).",
   "version": "1.1.0",
   "released": "2026-09-05",
-  "msi_url": "",
+  "msi_url": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.1.0-win64.msi",
   "notes": "Канбан с информативными карточками и анимацией, схема бизнес-процесса (processes.json), мастер настройки после установки, три языка (ro/en/ru), окно входа.",
   "components": [
-    { "src": "crm_delphi/ContragentiCRM.exe", "dst": "DemoCRM/ContragentiCRM.exe", "kind": "exe" },
-    { "src": "crm_delphi/lang.json", "dst": "DemoCRM/lang.json" },
-    { "src": "crm_delphi/processes.json", "dst": "DemoCRM/processes.json" },
-    { "src": "crm_delphi/sample_card.xml", "dst": "DemoCRM/sample_card.xml" },
-    { "src": "crm_delphi/README_ru.md", "dst": "DemoCRM/README_ru.md" },
-    { "src": "INTEGRATION.md", "dst": "INTEGRATION.md" },
-    { "src": "INSTALL_WINDOWS_ru.md", "dst": "INSTALL_WINDOWS_ru.md" },
-    { "src": "sdk/python/contragenti_sdk.py", "dst": "sdk/python/contragenti_sdk.py" },
-    { "src": "sdk/cpp/contragenti_sdk.h", "dst": "sdk/cpp/contragenti_sdk.h" },
-    { "src": "sdk/cpp/example.cpp", "dst": "sdk/cpp/example.cpp" },
-    { "src": "sdk/README.md", "dst": "sdk/README.md" }
+    {
+      "src": "crm_delphi/ContragentiCRM.exe",
+      "dst": "DemoCRM/ContragentiCRM.exe",
+      "kind": "exe"
+    },
+    {
+      "src": "crm_delphi/lang.json",
+      "dst": "DemoCRM/lang.json"
+    },
+    {
+      "src": "crm_delphi/processes.json",
+      "dst": "DemoCRM/processes.json"
+    },
+    {
+      "src": "crm_delphi/sample_card.xml",
+      "dst": "DemoCRM/sample_card.xml"
+    },
+    {
+      "src": "crm_delphi/README_ru.md",
+      "dst": "DemoCRM/README_ru.md"
+    },
+    {
+      "src": "INTEGRATION.md",
+      "dst": "INTEGRATION.md"
+    },
+    {
+      "src": "INSTALL_WINDOWS_ru.md",
+      "dst": "INSTALL_WINDOWS_ru.md"
+    },
+    {
+      "src": "INSTALL_MSI_ru.md",
+      "dst": "INSTALL_MSI_ru.md"
+    },
+    {
+      "src": "sdk/python/contragenti_sdk.py",
+      "dst": "sdk/python/contragenti_sdk.py"
+    },
+    {
+      "src": "sdk/cpp/contragenti_sdk.h",
+      "dst": "sdk/cpp/contragenti_sdk.h"
+    },
+    {
+      "src": "sdk/cpp/example.cpp",
+      "dst": "sdk/cpp/example.cpp"
+    },
+    {
+      "src": "sdk/README.md",
+      "dst": "sdk/README.md"
+    }
   ],
   "database": {
     "zip": "data/companies_seed.zip",
@@ -26,5 +64,10 @@
     "name": "Pavel Tuhari",
     "github_issues": "https://github.com/PavelTuhari/Contragenti/issues/new",
     "email": "ptuhari@gmail.com"
-  }
+  },
+  "update_zip": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.1.0.zip",
+  "update_zip_size": 2675443,
+  "update_zip_sha256": "e1e9165fc91095056aeb8ccd4aa376142d5e8872230a1b395db7600ec478f863",
+  "msi_size": 40783872,
+  "msi_sha256": "9e4939ec44a85896289465c6cf9bac254b39e1d8fe52a95ad422b648925a5715"
 }

@@ -61,6 +61,7 @@ build_exe_options = {
         ("API_ru.md", "API_ru.md"),
         ("INTEGRATION.md", "INTEGRATION.md"),
         ("INSTALL_WINDOWS_ru.md", "INSTALL_WINDOWS_ru.md"),
+        ("INSTALL_MSI_ru.md", "INSTALL_MSI_ru.md"),
         ("LICENSE", "LICENSE"),
         ("app_icon.ico", "app_icon.ico"),
         # версия установки и манифест обновления — их сравнивает мастер настройки
