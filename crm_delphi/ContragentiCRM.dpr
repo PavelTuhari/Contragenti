@@ -12,6 +12,8 @@
     ContragentiCRM.exe --import file.xml     импорт карточки из XML (без GUI)
     ContragentiCRM.exe --selftest            проверка базы и разбора XML
     ContragentiCRM.exe --gui-test [каталог]  встроенный GUI-самотест со снимками
+    ContragentiCRM.exe --seed-demo [база]    полный набор тестовых данных (AGENTS.md)
+    ContragentiCRM.exe --dml-test            DML-тест всех сущностей во временной базе
 }
 
 {$APPTYPE GUI}
@@ -19,6 +21,7 @@
 uses
   Winapi.Windows,
   System.SysUtils,
+  System.Classes,
   System.IOUtils,
   Vcl.Forms,
   uContragenti in 'uContragenti.pas',
@@ -27,7 +30,8 @@ uses
   uCrmData in 'uCrmData.pas',
   uEntityPage in 'uEntityPage.pas',
   uMainForm in 'uMainForm.pas',
-  uGuiSelfTest in 'uGuiSelfTest.pas';
+  uGuiSelfTest in 'uGuiSelfTest.pas',
+  uTestData in 'uTestData.pas';
 
 {$R *.res}
 
@@ -165,6 +169,70 @@ begin
   if Ok then Result := 0 else Result := 1;
 end;
 
+{ Генератор тестовых данных: полный набор записей всех сущностей (AGENTS.md §1). }
+function RunSeed(const DbArg: string): Integer;
+var
+  DB: TClientsDB;
+  Data: TCrmData;
+  Stats: TSeedStats;
+  Path: string;
+begin
+  Path := DbArg;
+  if Path = '' then
+    Path := TPath.Combine(AppDir, 'clients.db');
+  DB := TClientsDB.Create(Path);
+  try
+    DB.Open;
+    Data := TCrmData.Create(DB);
+    try
+      Stats := SeedDemo(DB, Data);
+      WriteConsole('Тестовые данные добавлены в ' + Path);
+      WriteConsole('Добавлено: ' + Stats.Text);
+      WriteConsole(Format('Всего в базе: клиентов %d, контактов %d, лидов %d, сделок %d, ' +
+        'номенклатуры %d, заказов %d, строк %d, задач %d',
+        [DB.Count, Data.Count('contacts'), Data.Count('leads'), Data.Count('deals'),
+         Data.Count('items'), Data.Count('orders'), Data.Count('order_lines'), Data.Count('tasks')]));
+      Result := 0;
+    finally
+      Data.Free;
+    end;
+  finally
+    DB.Free;
+  end;
+end;
+
+{ DML-тест всех сущностей во временной базе (AGENTS.md §1). }
+function RunDml: Integer;
+var
+  DB: TClientsDB;
+  Data: TCrmData;
+  Log: TStringList;
+  TmpDb, S: string;
+  Ok: Boolean;
+begin
+  TmpDb := TPath.Combine(TPath.GetTempPath, 'crm_dml_' + IntToStr(GetTickCount) + '.db');
+  if TFile.Exists(TmpDb) then TFile.Delete(TmpDb);
+  DB := TClientsDB.Create(TmpDb);
+  Log := TStringList.Create;
+  try
+    DB.Open;
+    Data := TCrmData.Create(DB);
+    try
+      // сначала полный набор данных — DML проверяется на заполненной базе
+      SeedDemo(DB, Data);
+      Ok := RunDmlTest(DB, Data, Log);
+    finally
+      Data.Free;
+    end;
+    for S in Log do WriteConsole(S);
+    if Ok then Result := 0 else Result := 1;
+  finally
+    Log.Free;
+    DB.Free;
+    if TFile.Exists(TmpDb) then TFile.Delete(TmpDb);
+  end;
+end;
+
 { Встроенный GUI-самотест: форма ведёт себя сама, снимает себя и пишет отчёт. }
 function RunGuiTest(const OutDir, LauncherArg: string): Integer;
 var
@@ -242,6 +310,16 @@ begin
     if Arg = '--gui-test' then
     begin
       ExitCode := RunGuiTest(ParamStr(2), ParamStr(3));
+      Exit;
+    end;
+    if Arg = '--seed-demo' then
+    begin
+      ExitCode := RunSeed(ParamStr(2));
+      Exit;
+    end;
+    if Arg = '--dml-test' then
+    begin
+      ExitCode := RunDml;
       Exit;
     end;
   end;

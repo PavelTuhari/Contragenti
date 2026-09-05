@@ -63,7 +63,7 @@ uses
   Vcl.Forms, Vcl.Graphics, Vcl.Imaging.pngimage,
   System.IOUtils, System.StrUtils, System.Generics.Collections, System.Generics.Defaults,
   System.Variants, System.Math, System.DateUtils,
-  uContragenti, uClientsDB, uCrmData, uEntityPage;
+  uContragenti, uClientsDB, uCrmData, uEntityPage, uTestData;
 
 const
   PW_RENDERFULLCONTENT = $00000002;
@@ -412,6 +412,7 @@ var
   P: TEntityPage;
   AlfaId, AgroId: Integer;
   V: Variant;
+  Stats: TSeedStats;
 begin
   FSteps := nil;
   FNum := 0;
@@ -781,12 +782,55 @@ begin
       [FForm.TestKpi(0), FForm.TestKpi(1), FForm.TestKpi(2), FForm.TestKpi(3), FForm.TestKpi(4)]),
     'dashboard');
 
+  // ── часть 4: генератор тестовых данных в полном объёме (AGENTS.md §1) ──
+
+  Inc(FNum);
+  Stats := SeedDemo(FForm.Crm.DB, FForm.Crm);
+  FForm.TestClickNav(nsHome);
+  Pump;
+  Step('Генератор тестовых данных: ' + Stats.Text + ' — показатели на «Главной»',
+    (Stats.Clients >= 12) and (Stats.Orders >= 15) and (Stats.Tasks >= 20)
+      and (FForm.TestKpi(4) = IntToStr(FForm.Crm.Count('items'))),
+    Format('KPI: клиенты=%s, сделки=%s, заказы=%s, просрочено=%s, номенклатура=%s',
+      [FForm.TestKpi(0), FForm.TestKpi(1), FForm.TestKpi(2), FForm.TestKpi(3), FForm.TestKpi(4)]),
+    'seed_dashboard');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsOrders);
+  Pump;
+  P := FForm.Page(nsOrders);
+  Step('Заказы на полном наборе: продажа / услуга / производство, все статусы',
+    P.ListCount = FForm.Crm.Count('orders'),
+    Format('в списке %d, в базе %d', [P.ListCount, FForm.Crm.Count('orders')]), 'seed_orders');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsItems);
+  Pump;
+  P := FForm.Page(nsItems);
+  P.SelectPreset(4);   // «Нет на складе»
+  Pump;
+  Step('Номенклатура на полном наборе: пресет «Нет на складе»',
+    (P.ListCount > 0) and (P.ListCount < FForm.Crm.Count('items')),
+    Format('без остатка %d из %d', [P.ListCount, FForm.Crm.Count('items')]), 'seed_items');
+  P.SelectPreset(0);
+
+  Inc(FNum);
+  FForm.TestClickNav(nsCalendar);
+  Pump;
+  P := FForm.Page(nsCalendar);
+  P.SelectPreset(2);   // «Просроченные»
+  Pump;
+  Step('Календарь на полном наборе: просроченные задачи выделены пресетом',
+    P.ListCount > 0, Format('просроченных %d', [P.ListCount]), 'seed_tasks_overdue');
+  P.SelectPreset(0);
+
   Inc(FNum);
   FForm.TestClickNav(nsAccounts);
   FForm.TestSetFilter('');
   FForm.TestHideBanner;
   Pump;
-  Step('Итоговое состояние окна', FForm.TestDbCount = 3,
+  Step('Итоговое состояние окна: клиенты из SDK, лида и генератора',
+    FForm.TestDbCount = 3 + Stats.Clients,
     Format('в базе %d клиентов', [FForm.TestDbCount]), 'final');
 
   WriteReport;

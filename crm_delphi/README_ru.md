@@ -95,7 +95,13 @@ ContragentiCRM.exe                     графический интерфейс
 ContragentiCRM.exe --import card.xml   импорт карточки из XML (без окна)
 ContragentiCRM.exe --selftest          проверка базы и разбора XML
 ContragentiCRM.exe --gui-test [dir]    GUI-самотест со снимками и report.html
+ContragentiCRM.exe --seed-demo [база]  полный набор тестовых данных (идемпотентно)
+ContragentiCRM.exe --dml-test          DML-тест всех сущностей во временной базе
 ```
+
+Правило проекта ([AGENTS.md](../AGENTS.md)): при любой доработке генератор
+(`uTestData.pas`) обновляется вместе с сущностью, затем обязательно
+прогоняются `--seed-demo`, `--dml-test` (0 FAIL) и `--gui-test`.
 
 Интерфейс без модальных окон: все сообщения выводятся в строку внизу окна
 и различаются цветом (серый — информация, зелёный — успех, янтарный —
