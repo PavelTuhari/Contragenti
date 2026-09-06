@@ -37,6 +37,7 @@ FILES = [
     ("INTEGRATION.md", "INTEGRATION.md"),
     ("INSTALL_WINDOWS_ru.md", "INSTALL_WINDOWS_ru.md"),
     ("INSTALL_MSI_ru.md", "INSTALL_MSI_ru.md"),
+    ("INSTALL_RO.md", "INSTALL_RO.md"),
     ("API_ru.md", "API_ru.md"),
     ("GUIDE_ru.md", "GUIDE_ru.md"),
     ("README.md", "README.md"),

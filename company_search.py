@@ -50,7 +50,7 @@ from selenium.common.exceptions import TimeoutException
 
 import openpyxl
 
-APP_VERSION = "1.3.2"
+APP_VERSION = "1.3.3"
 SEARCH_URL = "https://date.gov.md/open/company-search"
 DETAILS_URL = "https://date.gov.md/open/company-details"
 def _app_dir():
@@ -79,7 +79,12 @@ def _data_dir():
     первом запуске туда копируется companies.db из установки — стартовая
     база компаний, чтобы утилита сразу была с данными."""
     app = _app_dir()
-    if _dir_writable(app):
+    # под администратором Program Files доступен на запись, но данные всё равно
+    # держим в профиле — иначе у разных пользователей были бы разные базы
+    in_pf = any(os.environ.get(e) and os.path.normcase(os.path.abspath(app)).startswith(
+        os.path.normcase(os.path.abspath(os.environ[e])) + os.sep)
+        for e in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"))
+    if _dir_writable(app) and not in_pf:
         return app
     data = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Contragenti")
     os.makedirs(data, exist_ok=True)

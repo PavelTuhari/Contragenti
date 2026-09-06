@@ -28,7 +28,7 @@ import sys
 import zipfile
 from cx_Freeze import setup, Executable
 
-APP_VERSION = "1.3.2"   # то же значение — в VERSION, release.json и company_search.py
+APP_VERSION = "1.3.3"   # то же значение — в VERSION, release.json и company_search.py
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DEMO_CRM_EXE = os.path.join(_HERE, "crm_delphi", "ContragentiCRM.exe")
@@ -90,7 +90,9 @@ build_exe_options = {
         "datetime",
         "oracledb",
     ],
-    "includes": ["tms_export"],
+    # certifi — запасной набор корневых сертификатов для мастера настройки:
+    # хранилище Windows на свежем сервере не знало цепочку GitHub
+    "includes": ["tms_export", "certifi"],
     "excludes": ["test", "unittest"],
     "include_files": [
         ("README.md", "README.md"),
@@ -99,6 +101,7 @@ build_exe_options = {
         ("INTEGRATION.md", "INTEGRATION.md"),
         ("INSTALL_WINDOWS_ru.md", "INSTALL_WINDOWS_ru.md"),
         ("INSTALL_MSI_ru.md", "INSTALL_MSI_ru.md"),
+        ("INSTALL_RO.md", "INSTALL_RO.md"),
         ("LICENSE", "LICENSE"),
         ("app_icon.ico", "app_icon.ico"),
         # версия установки и манифест обновления — их сравнивает мастер настройки

@@ -37,7 +37,10 @@ def _writable(path):
 def _crm_data_dir(demo_dir):
     """Тот же выбор, что делает сама CRM (CrmDataDir в uClientsDB.pas): рядом с
     exe, если туда можно писать, иначе %LOCALAPPDATA%\\Contragenti\\DemoCRM."""
-    if _writable(demo_dir):
+    in_pf = any(os.environ.get(e) and os.path.normcase(os.path.abspath(demo_dir)).startswith(
+        os.path.normcase(os.path.abspath(os.environ[e])) + os.sep)
+        for e in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"))
+    if _writable(demo_dir) and not in_pf:
         return demo_dir
     d = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Contragenti", "DemoCRM")
     os.makedirs(d, exist_ok=True)

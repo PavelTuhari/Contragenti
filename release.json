@@ -1,9 +1,9 @@
 {
   "_comment": "Манифест обновления: его читает мастер настройки (setup_wizard.py / «ContragentiSetup.exe») по адресу raw.githubusercontent.com/PavelTuhari/Contragenti/main/release.json. version сравнивается с файлом VERSION в установке; если тут новее и указан msi_url — мастер предлагает скачать новый установщик. components — файлы, которые обновляются поверх установки без переустановки (src — путь в репозитории, dst — путь относительно каталога установки). database.zip — стартовая база компаний date.gov.md, сливается с локальной companies.db по ключу IDNO. developer — куда мастер предлагает отправить отчёт об ошибках (issue на GitHub или письмо; отправляет пользователь).",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "released": "2026-09-06",
-  "msi_url": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.2-win64.msi",
-  "notes": "1.3.2: проекты (тендер → аванс → производство → сдача → оплата) и переработанные задачи (этапы, приоритеты, исполнители, план, зависимости) с демо-проектами по образцу gravura.md и BM Public; доски проектов и задач проекта, схема процесса, Гант по проектам, отчёт по проектам. Установка в Program Files, базы с данными в установке, setup.exe без Windows Installer.",
+  "msi_url": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.3-win64.msi",
+  "notes": "1.3.3: проверено на Windows Server 2022; данные всегда в профиле при установке в Program Files (и под администратором); мастер при сбое проверки сертификата повторяет запрос с корнями certifi; проверка ярлыков на общем рабочем столе; короткая инструкция INSTALL_RO.md. 1.3.2: проекты и задачи (тендеры, авансы, производство), доски и схема процесса проекта, Гант по проектам, отчёт по проектам.",
   "components": [
     {
       "src": "crm_delphi/ContragentiCRM.exe",
@@ -53,6 +53,10 @@
     {
       "src": "sdk/README.md",
       "dst": "sdk/README.md"
+    },
+    {
+      "src": "INSTALL_RO.md",
+      "dst": "INSTALL_RO.md"
     }
   ],
   "database": {
@@ -65,12 +69,12 @@
     "github_issues": "https://github.com/PavelTuhari/Contragenti/issues/new",
     "email": "ptuhari@gmail.com"
   },
-  "update_zip": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.3.2.zip",
-  "update_zip_size": 2709542,
-  "update_zip_sha256": "f26a160e8282bd7c57a8212d651972bff6eb43bdb3b755f86d90af95369b7e96",
-  "msi_size": 40853504,
-  "msi_sha256": "43584e98395313f6b17597962a4d723722e70ffd91fb013cbf620af1dd7464ba",
-  "exe_url": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.2-setup.exe",
-  "exe_size": 52588615,
-  "exe_sha256": "25c30c561a5dfa2dbd19430a96d092b9fdbf5eca0a331de90c2815ce55de9e72"
+  "update_zip": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.3.3.zip",
+  "update_zip_size": 2713352,
+  "update_zip_sha256": "abc8973578e895a2ca6c12c3cb29180022af461865151da1690a4e7519118949",
+  "msi_size": 51744768,
+  "msi_sha256": "67bc94a949afa431588eef895d4c94ebb07296206b5ca779a5dbc522592c7a11",
+  "exe_url": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.3-setup.exe",
+  "exe_size": 63557855,
+  "exe_sha256": "ba5b398ac028a0402f92d406fa55ff2743165832ecf7fd9d3af442ebf92bd612"
 }

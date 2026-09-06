@@ -64,10 +64,25 @@ function CrmDataDir: string;
 implementation
 
 uses
-  System.IOUtils, Winapi.Windows;
+  System.IOUtils, System.StrUtils, Winapi.Windows;
 
 var
   GDataDir: string;   // вычисляется один раз за запуск
+
+function InProgramFiles(const Dir: string): Boolean;
+const
+  Vars: array[0..2] of string = ('ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432');
+var
+  V, Base: string;
+begin
+  Result := False;
+  for V in Vars do
+  begin
+    Base := GetEnvironmentVariable(V);
+    if (Base <> '') and StartsText(IncludeTrailingPathDelimiter(Base), Dir) then
+      Exit(True);
+  end;
+end;
 
 function CrmDataDir: string;
 var
@@ -75,14 +90,19 @@ var
 begin
   if GDataDir <> '' then Exit(GDataDir);
   App := ExtractFilePath(ParamStr(0));
-  Probe := App + '~w' + IntToStr(GetCurrentProcessId) + '.tmp';
-  try
-    TFile.WriteAllText(Probe, '');
-    TFile.Delete(Probe);
-    GDataDir := App;
-    Exit(GDataDir);
-  except
-    // рядом с программой писать нельзя (Program Files) — данные в профиле
+  // Под администратором Program Files доступен на запись, но данные всё равно
+  // держим в профиле — иначе у разных пользователей были бы разные базы.
+  if not InProgramFiles(App) then
+  begin
+    Probe := App + '~w' + IntToStr(GetCurrentProcessId) + '.tmp';
+    try
+      TFile.WriteAllText(Probe, '');
+      TFile.Delete(Probe);
+      GDataDir := App;
+      Exit(GDataDir);
+    except
+      // рядом с программой писать нельзя — данные в профиле
+    end;
   end;
   Loc := IncludeTrailingPathDelimiter(GetEnvironmentVariable('LOCALAPPDATA'));
   if Loc = '\' then Loc := IncludeTrailingPathDelimiter(TPath.GetHomePath);

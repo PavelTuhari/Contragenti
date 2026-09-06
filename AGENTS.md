@@ -149,9 +149,15 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   что пишется в работе, — через «каталог данных»: `_data_dir()` в
   `company_search.py`, `CrmDataDir` в `uClientsDB.pas`, `Paths.data` /
   `demo_data` в мастере, `_crm_data_dir` в `run_demo_crm.py`. Правило одно:
-  рядом с exe, если туда можно писать, иначе `%LOCALAPPDATA%\Contragenti`
-  (для CRM — `\DemoCRM`), при первом запуске туда копируются базы из
-  установки. Новый файл, который программа пишет, — только через эти
+  рядом с exe, если туда можно писать **и это не Program Files** (под
+  администратором он доступен на запись, но данные всё равно идут в
+  профиль), иначе `%LOCALAPPDATA%\Contragenti` (для CRM — `\DemoCRM`),
+  при первом запуске туда копируются базы из установки.
+- Сеть в мастере — только через `_urlopen` (setup_wizard.py): при
+  `CERTIFICATE_VERIFY_FAILED` повторяет запрос с корнями certifi (в сборке
+  cx_Freeze certifi включён явно), проверку сертификата не отключать.
+- Короткая инструкция для пользователей — `INSTALL_RO.md` (румынский);
+  при смене версии обновляй ссылки и в ней (скрипт bump правит `1.x.y`). Новый файл, который программа пишет, — только через эти
   функции, не рядом с exe напрямую.
 - В установку входят базы с данными: `build/seed/companies.db` (из
   `data/companies_seed.zip`) и `build/seed/clients.db` (`--seed-demo`) —

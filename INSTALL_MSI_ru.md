@@ -11,8 +11,8 @@
 
 | Файл | Когда |
 |---|---|
-| **[Contragenti-1.3.2-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.2-setup.exe)** | Рекомендуется. Обычный exe **без Windows Installer**; работает там, где MSI запрещён политикой |
-| [Contragenti-1.3.2-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.2-win64.msi) | Если в организации ставят только MSI (SCCM/Intune, групповые политики) |
+| **[Contragenti-1.3.3-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.3-setup.exe)** | Рекомендуется. Обычный exe **без Windows Installer**; работает там, где MSI запрещён политикой |
+| [Contragenti-1.3.3-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.3-win64.msi) | Если в организации ставят только MSI (SCCM/Intune, групповые политики) |
 
 ---
 
@@ -21,11 +21,12 @@
 Это код 1625 Windows Installer: политика (обычно `DisableUserInstalls`,
 запрет MSI из интернета или установок не от администратора) не пускает
 именно **msiexec**. Программа тут ни при чём. Берите
-**`Contragenti-1.3.2-setup.exe`** — он Windows Installer не вызывает:
-распаковывает программу в `%LOCALAPPDATA%\Contragenti`, создаёт ярлыки
-(рабочий стол, «Пуск»), запись в «Программы и компоненты» (HKCU, без
-прав администратора) и запускает мастер настройки. Удаление — через
-«Программы и компоненты» или «Пуск → Contragenti → Удалить Contragenti».
+**`Contragenti-1.3.3-setup.exe`** — он Windows Installer не вызывает:
+распаковывает программу в `C:\Program Files\Contragenti` (запрос UAC; при
+отказе — в `%LOCALAPPDATA%\Contragenti`), создаёт ярлыки (рабочий стол,
+«Пуск»), запись в «Программы и компоненты» и запускает мастер настройки.
+Удаление — через «Программы и компоненты» или «Пуск → Contragenti → Удалить
+Contragenti». Короткая инструкция на румынском — [INSTALL_RO.md](INSTALL_RO.md).
 
 Ключи: `/S` — тихо; `/S /D=C:\Contragenti` — тихо в каталог;
 `--extract-only D:\Contragenti` — только распаковать (портативно, без
@@ -37,14 +38,14 @@
 «⋯» → «Keep», затем сверьте sha256 с `release.json`:
 
 ```powershell
-Get-FileHash .\Contragenti-1.3.2-setup.exe
+Get-FileHash .\Contragenti-1.3.3-setup.exe
 ```
 
 ---
 
 ## Куда ставится и где лежат данные
 
-С версии 1.3.2 обе сборки ставят программу в **`C:\Program Files\Contragenti`**
+С версии 1.3.3 обе сборки ставят программу в **`C:\Program Files\Contragenti`**
 для всех пользователей: setup.exe сам запрашивает права администратора (UAC),
 `msiexec /i` нужно запускать из окна «от имени администратора» (иначе код
 1925/1730). Если прав нет — setup.exe с ключом `/D=%LOCALAPPDATA%\Contragenti`
@@ -68,8 +69,20 @@ date.gov.md (стартовая база, ~200 записей) и `DemoCRM\clien
 профиль, запуск из исходников), данные лежат там же; если нельзя —
 в `%LOCALAPPDATA%\Contragenti`.
 
+Правило действует и под администратором: Program Files для него доступен
+на запись, но данные всё равно идут в профиль — иначе у администратора и у
+обычного пользователя были бы разные базы.
+
+Проверено на Windows Server 2022 (без Chrome, без winget и Store): мастер
+поставил Python 3.12.10 с python.org с проверкой подписи, скачал стартовую
+базу и компоненты, самопроверка обеих программ прошла. Если хранилище
+сертификатов Windows не знает цепочку GitHub (`CERTIFICATE_VERIFY_FAILED`
+в логе), мастер повторяет запрос с набором корневых сертификатов certifi из
+установки, а при неудаче докачивает файлы по отдельности; проверка
+сертификата не отключается.
+
 Мастер настройки запускается сам и после тихой установки
-`msiexec /i Contragenti-1.3.2-win64.msi /qn` (пользовательское действие
+`msiexec /i Contragenti-1.3.3-win64.msi /qn` (пользовательское действие
 после InstallFinalize), не только по галочке на последнем экране. Для
 обновления компонентов в Program Files мастер один раз запрашивает права
 администратора (UAC); при отказе всё остальное (базы, настройки, демо-данные,

@@ -306,10 +306,14 @@ class Paths:
         # Каталог данных — тот же выбор, что делают сами программы: рядом с
         # exe, если туда можно писать (профиль, портативная копия, исходники),
         # иначе (Program Files) — %LOCALAPPDATA%\Contragenti. Туда же логи.
-        self.root_writable = dir_writable(self.root)
+        # Под администратором Program Files доступен на запись, но данные всё
+        # равно держим в профиле: иначе у администратора и у обычного
+        # пользователя были бы разные базы.
+        self.root_writable = dir_writable(self.root) and not in_program_files(self.root)
         local = os.path.join(os.environ.get("LOCALAPPDATA", tempfile.gettempdir()), "Contragenti")
         self.data = self.root if self.root_writable else local
-        self.demo_data = self.demo_dir if dir_writable(self.demo_dir) else os.path.join(local, "DemoCRM")
+        self.demo_data = self.demo_dir if (dir_writable(self.demo_dir) and not in_program_files(self.demo_dir)) \
+            else os.path.join(local, "DemoCRM")
         os.makedirs(self.data, exist_ok=True)
         os.makedirs(self.demo_data, exist_ok=True)
         self.companies_db = os.path.join(self.data, "companies.db")
@@ -343,6 +347,15 @@ def dir_writable(path):
         return True
     except OSError:
         return False
+
+
+def in_program_files(path):
+    p = os.path.normcase(os.path.abspath(path))
+    for env in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"):
+        base = os.environ.get(env)
+        if base and p.startswith(os.path.normcase(os.path.abspath(base)) + os.sep):
+            return True
+    return False
 
 
 def relaunch_elevated(args):
@@ -717,16 +730,43 @@ def passport(paths):
 
 # ────────────────────────────── сеть / GitHub ──────────────────────────────
 
+def _ssl_contexts():
+    """Хранилище сертификатов Windows на свежем сервере может не знать
+    промежуточный сертификат objects.githubusercontent.com (CERTIFICATE_VERIFY_FAILED).
+    Тогда пробуем набор корней certifi, который лежит в установке. Проверка
+    сертификата не отключается никогда."""
+    import ssl
+    yield None
+    try:
+        import certifi
+        yield ssl.create_default_context(cafile=certifi.where())
+    except Exception:  # noqa: BLE001
+        return
+
+
+def _urlopen(url, timeout):
+    req = urllib.request.Request(url, headers={"User-Agent": "Contragenti-Setup/1.3"})
+    last = None
+    for ctx in _ssl_contexts():
+        try:
+            if ctx is None:
+                return urllib.request.urlopen(req, timeout=timeout)
+            return urllib.request.urlopen(req, timeout=timeout, context=ctx)
+        except urllib.error.URLError as exc:
+            last = exc
+            if "CERTIFICATE_VERIFY_FAILED" not in str(exc):
+                raise
+    raise last
+
+
 def http_get(url, timeout=NET_TIMEOUT):
-    req = urllib.request.Request(url, headers={"User-Agent": "Contragenti-Setup/1.1"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _urlopen(url, timeout) as resp:
         return resp.read()
 
 
 def download_to(url, dst, timeout=60):
-    req = urllib.request.Request(url, headers={"User-Agent": "Contragenti-Setup/1.1"})
     tmp = dst + ".part"
-    with urllib.request.urlopen(req, timeout=timeout) as resp, open(tmp, "wb") as f:
+    with _urlopen(url, timeout) as resp, open(tmp, "wb") as f:
         shutil.copyfileobj(resp, f)
     os.replace(tmp, dst)
     return os.path.getsize(dst)
@@ -1210,9 +1250,13 @@ class Wizard:
             self.step("st_shortcuts", "skip")
             return
         try:
-            desk = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
-            found = [f for f in os.listdir(desk) if f.lower().endswith(".lnk") and
-                     ("contragenti" in f.lower() or "demo crm" in f.lower())] if os.path.isdir(desk) else []
+            # установка для всех пользователей кладёт ярлыки на общий рабочий стол
+            found = []
+            for desk in (os.path.join(os.environ.get("USERPROFILE", ""), "Desktop"),
+                         os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "Desktop")):
+                if os.path.isdir(desk):
+                    found += [f for f in os.listdir(desk) if f.lower().endswith(".lnk") and
+                              ("contragenti" in f.lower() or "demo crm" in f.lower())]
             if found:
                 self.step("st_shortcuts", "ok", ", ".join(found))
             else:
