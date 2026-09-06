@@ -11,8 +11,8 @@
 
 | Файл | Когда |
 |---|---|
-| **[Contragenti-1.3.0-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.0-setup.exe)** | Рекомендуется. Обычный exe **без Windows Installer**; работает там, где MSI запрещён политикой |
-| [Contragenti-1.3.0-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.0-win64.msi) | Если в организации ставят только MSI (SCCM/Intune, групповые политики) |
+| **[Contragenti-1.3.1-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.1-setup.exe)** | Рекомендуется. Обычный exe **без Windows Installer**; работает там, где MSI запрещён политикой |
+| [Contragenti-1.3.1-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.1-win64.msi) | Если в организации ставят только MSI (SCCM/Intune, групповые политики) |
 
 ---
 
@@ -21,7 +21,7 @@
 Это код 1625 Windows Installer: политика (обычно `DisableUserInstalls`,
 запрет MSI из интернета или установок не от администратора) не пускает
 именно **msiexec**. Программа тут ни при чём. Берите
-**`Contragenti-1.3.0-setup.exe`** — он Windows Installer не вызывает:
+**`Contragenti-1.3.1-setup.exe`** — он Windows Installer не вызывает:
 распаковывает программу в `%LOCALAPPDATA%\Contragenti`, создаёт ярлыки
 (рабочий стол, «Пуск»), запись в «Программы и компоненты» (HKCU, без
 прав администратора) и запускает мастер настройки. Удаление — через
@@ -37,21 +37,57 @@
 «⋯» → «Keep», затем сверьте sha256 с `release.json`:
 
 ```powershell
-Get-FileHash .\Contragenti-1.3.0-setup.exe
+Get-FileHash .\Contragenti-1.3.1-setup.exe
 ```
+
+---
+
+## Куда ставится и где лежат данные
+
+С версии 1.3.1 обе сборки ставят программу в **`C:\Program Files\Contragenti`**
+для всех пользователей: setup.exe сам запрашивает права администратора (UAC),
+`msiexec /i` нужно запускать из окна «от имени администратора» (иначе код
+1925/1730). Если прав нет — setup.exe с ключом `/D=%LOCALAPPDATA%\Contragenti`
+ставит в профиль без UAC.
+
+Каталог в Program Files доступен только на чтение, поэтому всё, что
+программы пишут, лежит в профиле пользователя:
+
+| Данные | Где |
+|---|---|
+| `companies.db` (база компаний утилиты), `tms_config.json` | `%LOCALAPPDATA%\Contragenti\` |
+| `clients.db`, `crm.ini`, `reports\` Demo CRM | `%LOCALAPPDATA%\Contragenti\DemoCRM\` |
+| логи и отчёты мастера | `%LOCALAPPDATA%\Contragenti\logs\` |
+
+**В установку включены базы с данными:** `companies.db` — компании
+date.gov.md (стартовая база, ~200 записей) и `DemoCRM\clients.db` — полная
+демо-фирма (клиенты, контакты, лиды, сделки, номенклатура, заказы со
+строками, задачи). При первом запуске программы копируют их в профиль и
+работают с копиями; переустановка ваши данные не трогает. Правило одно для
+всех: если рядом с exe писать можно (портативная распаковка, установка в
+профиль, запуск из исходников), данные лежат там же; если нельзя —
+в `%LOCALAPPDATA%\Contragenti`.
+
+Мастер настройки запускается сам и после тихой установки
+`msiexec /i Contragenti-1.3.1-win64.msi /qn` (пользовательское действие
+после InstallFinalize), не только по галочке на последнем экране. Для
+обновления компонентов в Program Files мастер один раз запрашивает права
+администратора (UAC); при отказе всё остальное (базы, настройки, демо-данные,
+самопроверка) выполняется без них.
 
 ---
 
 ## Что делает MSI
 
 `Contragenti-<версия>-win64.msi` копирует программы в
-`%LOCALAPPDATA%\Contragenti` **без прав администратора**:
+`C:\Program Files\Contragenti` (с правами администратора):
 
 | Что | Куда |
 |---|---|
 | Contragenti.exe | замороженная утилита (портал date.gov.md) |
-| DemoCRM\ContragentiCRM.exe | Demo CRM |
-| Contragenti Setup.exe | мастер настройки и обновления |
+| companies.db | стартовая база компаний с данными |
+| DemoCRM\ContragentiCRM.exe, DemoCRM\clients.db | Demo CRM и демо-база фирмы |
+| ContragentiSetup.exe | мастер настройки и обновления |
 | sdk\, инструкции, VERSION, release.json | рядом |
 | data\companies_seed.zip | запасная стартовая база без интернета |
 
@@ -144,13 +180,13 @@ python -c "import sys; print(sys.version)"
 Без окна:
 
 ```powershell
-& "$env:LOCALAPPDATA\Contragenti\Contragenti Setup.exe" --check
+& "$env:LOCALAPPDATA\Contragenti\ContragentiSetup.exe" --check
 ```
 
 Только настройка, без GitHub и без команды python:
 
 ```powershell
-& "$env:LOCALAPPDATA\Contragenti\Contragenti Setup.exe" --check --offline --no-seed --no-python
+& "$env:LOCALAPPDATA\Contragenti\ContragentiSetup.exe" --check --offline --no-seed --no-python
 ```
 
 Лог: `%LOCALAPPDATA%\Contragenti\logs\install.log`.
@@ -178,7 +214,7 @@ python -m venv .venv
 - `dist\Contragenti-1.1.0-win64.msi`
 - копия в `release\`, плюс обновлённые `msi_url` / sha256 в `release.json`
 
-Первый `Executable` в `setup.py` — `setup_wizard.py` («Contragenti Setup.exe»):
+Первый `Executable` в `setup.py` — `setup_wizard.py` («ContragentiSetup.exe»):
 cx_Freeze запускает именно его по «Launch on finish». Порядок не менять.
 
 Перед коммитом:

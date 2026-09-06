@@ -89,7 +89,7 @@
           "title": { "ro": "Așteaptă avans", "en": "Awaiting advance", "ru": "Ожидает аванс" },
           "owner": { "ro": "contabil", "en": "accountant", "ru": "бухгалтер" },
           "sla_days": "5",
-          "desc": { "ro": "Comanda este confirmată, factura de avans (30%) este emisă. Lucrările încep numai după încasarea avansului.", "en": "The order is confirmed, the advance invoice (30%) is issued. Work starts only after the advance is received.", "ru": "Заказ подтверждён, выставлен счёт на аванс (30%). Работы начинаются только после поступления аванса. [самотест 20:35:51]" }
+          "desc": { "ro": "Comanda este confirmată, factura de avans (30%) este emisă. Lucrările încep numai după încasarea avansului.", "en": "The order is confirmed, the advance invoice (30%) is issued. Work starts only after the advance is received.", "ru": "Заказ подтверждён, выставлен счёт на аванс (30%). Работы начинаются только после поступления аванса. [самотест 12:41:30]" }
         },
         {
           "id": "adv_gate",

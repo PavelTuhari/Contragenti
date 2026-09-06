@@ -206,13 +206,15 @@ var
   DbPath: string;
 begin
   inherited CreateNew(AOwner, Dummy);
-  FIniPath := TPath.Combine(AppDir, 'crm.ini');
+  // данные — в каталоге, куда можно писать (см. CrmDataDir): при установке
+  // в Program Files это %LOCALAPPDATA%\Contragenti\DemoCRM
+  FIniPath := TPath.Combine(CrmDataDir, 'crm.ini');
   FPendingDeleteId := 0;
 
   if GDBPathOverride <> '' then
     DbPath := GDBPathOverride
   else
-    DbPath := TPath.Combine(AppDir, 'clients.db');
+    DbPath := TPath.Combine(CrmDataDir, 'clients.db');
   FDB := TClientsDB.Create(DbPath);
   FDB.Open;
   FCrm := TCrmData.Create(FDB);
@@ -708,7 +710,7 @@ begin
   FWorkspace := TWorkspacePage.Create(Self, FContent, FCrm, FErp, Say);
   FWorkspace.OnStageClick := OnStageClick;
   FReportsPage := TReportsPage.Create(Self, FContent, FCrm, Say,
-    TPath.Combine(AppDir, 'reports'));
+    TPath.Combine(CrmDataDir, 'reports'));
   FKanbanPage := TKanbanPage.Create(Self, FContent, FCrm, Say);
   FKanbanPage.OnOpenRecord := OnKanbanOpen;
   FProcessPage := TProcessPage.Create(Self, FContent, FCrm, Say);

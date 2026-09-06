@@ -131,7 +131,7 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
 ## 4.1. Установка (MSI) и мастер настройки
 
 - `setup.py` собирает MSI; первым `Executable` идёт `setup_wizard.py`
-  («Contragenti Setup.exe») — его cx_Freeze запускает по «Launch on finish».
+  («ContragentiSetup.exe») — его cx_Freeze запускает по «Launch on finish».
   Не менять порядок.
 - Мастер после MSI проверяет команду `python` (как в PowerShell). Если она
   не работает — запускает `python` без аргументов: на свежих Windows
@@ -145,6 +145,19 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   в `setup.py` и `company_search.py` (все четыре — одно значение).
 - Стартовая база компаний — `data/companies_seed.zip`
   (`python tools/make_seed.py`); в `.gitignore` для неё исключение из `*.zip`.
+- Установка идёт в Program Files (только чтение для пользователя). Всё,
+  что пишется в работе, — через «каталог данных»: `_data_dir()` в
+  `company_search.py`, `CrmDataDir` в `uClientsDB.pas`, `Paths.data` /
+  `demo_data` в мастере, `_crm_data_dir` в `run_demo_crm.py`. Правило одно:
+  рядом с exe, если туда можно писать, иначе `%LOCALAPPDATA%\Contragenti`
+  (для CRM — `\DemoCRM`), при первом запуске туда копируются базы из
+  установки. Новый файл, который программа пишет, — только через эти
+  функции, не рядом с exe напрямую.
+- В установку входят базы с данными: `build/seed/companies.db` (из
+  `data/companies_seed.zip`) и `build/seed/clients.db` (`--seed-demo`) —
+  `setup.py` собирает их сам перед `build_exe`/`bdist_msi`; при новой
+  сущности в CRM генератор уже покрывает её (§1), отдельно ничего делать
+  не надо, но `python setup.py bdist_msi` должен пройти без ошибок.
 - Основной установщик — `Contragenti-<версия>-setup.exe` без Windows
   Installer (`installer_exe.py` + `tools/build_exe_installer.py`,
   PyInstaller-onefile с payload.zip из `build/exe.win-*`): MSI на части
@@ -152,7 +165,7 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   policies»). MSI остаётся вторым вариантом. Порядок выпуска:
   `python setup.py bdist_msi` → `python tools/build_exe_installer.py` →
   `python tools/make_release.py`. Удаление exe-установки делает мастер
-  (`Contragenti Setup.exe --uninstall`), запись в HKCU\...\Uninstall.
+  (`ContragentiSetup.exe --uninstall`), запись в HKCU\...\Uninstall.
 - Готовые сборки лежат в репозитории, в `release/`: setup.exe, MSI и
   zip-пакет обновления. Zip пересобирает `tools/make_release.py --zip-only` — он
   вызывается из `crm_delphi\build.bat` после компиляции и из pre-commit

@@ -1,9 +1,9 @@
 {
-  "_comment": "Манифест обновления: его читает мастер настройки (setup_wizard.py / «Contragenti Setup.exe») по адресу raw.githubusercontent.com/PavelTuhari/Contragenti/main/release.json. version сравнивается с файлом VERSION в установке; если тут новее и указан msi_url — мастер предлагает скачать новый установщик. components — файлы, которые обновляются поверх установки без переустановки (src — путь в репозитории, dst — путь относительно каталога установки). database.zip — стартовая база компаний date.gov.md, сливается с локальной companies.db по ключу IDNO. developer — куда мастер предлагает отправить отчёт об ошибках (issue на GitHub или письмо; отправляет пользователь).",
-  "version": "1.3.0",
+  "_comment": "Манифест обновления: его читает мастер настройки (setup_wizard.py / «ContragentiSetup.exe») по адресу raw.githubusercontent.com/PavelTuhari/Contragenti/main/release.json. version сравнивается с файлом VERSION в установке; если тут новее и указан msi_url — мастер предлагает скачать новый установщик. components — файлы, которые обновляются поверх установки без переустановки (src — путь в репозитории, dst — путь относительно каталога установки). database.zip — стартовая база компаний date.gov.md, сливается с локальной companies.db по ключу IDNO. developer — куда мастер предлагает отправить отчёт об ошибках (issue на GitHub или письмо; отправляет пользователь).",
+  "version": "1.3.1",
   "released": "2026-09-06",
-  "msi_url": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.0-win64.msi",
-  "notes": "1.3: установщик Contragenti-1.3.0-setup.exe без Windows Installer (обходит политику «administrator has set policies», код 1625), MSI как второй вариант; мастер ставит Python под новые (winget / Store) и старые (python.org) Windows; канбан, схема бизнес-процесса, три языка, окно входа.",
+  "msi_url": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.1-win64.msi",
+  "notes": "1.3.1: установка в Program Files (setup.exe с UAC, MSI для всех пользователей), мастер запускается и после msiexec /i … /qn; в установке базы с данными — companies.db (компании date.gov.md) и DemoCRM\\clients.db (демо-фирма); данные хранятся в %LOCALAPPDATA%\\Contragenti. Установщик setup.exe без Windows Installer (обходит политику 1625), Python под новые и старые Windows, канбан, схема бизнес-процесса, три языка, окно входа.",
   "components": [
     {
       "src": "crm_delphi/ContragentiCRM.exe",
@@ -65,12 +65,12 @@
     "github_issues": "https://github.com/PavelTuhari/Contragenti/issues/new",
     "email": "ptuhari@gmail.com"
   },
-  "update_zip": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.3.0.zip",
-  "update_zip_size": 2682416,
-  "update_zip_sha256": "44e4d01ed1f774cc743eb6b56ee04ffd0944ba22582b044a30b930023d626c63",
-  "msi_size": 40796160,
-  "msi_sha256": "4ccfae167fc8cd20221f38c1133ce463031958eb89af587a74218fd08447bf8e",
-  "exe_url": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.0-setup.exe",
-  "exe_size": 52524477,
-  "exe_sha256": "f3bc22e9e1f8eda1951f8e021bc71ec7defb7aa4e3fc90e783dfce3615f9aded"
+  "update_zip": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.3.1.zip",
+  "update_zip_size": 2684765,
+  "update_zip_sha256": "776fb6126347985e0187bf517f9cea720356a261224fc6bebcf178d2bf5ba715",
+  "msi_size": 40824832,
+  "msi_sha256": "8c76333548f680e53379928729eb1ab9b22755f37211c87e161caecaa363a097",
+  "exe_url": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.1-setup.exe",
+  "exe_size": 52558573,
+  "exe_sha256": "9aa814a56f0430a34bfe9e1a10a17e57c995a8e5fb54f85ae01bd9769f45e3bc"
 }

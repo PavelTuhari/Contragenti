@@ -24,16 +24,20 @@ Git **не нужен**, нужен Google Chrome. Если команда `pyth
 ставится сам. Подробно — [INSTALL_MSI_ru.md](INSTALL_MSI_ru.md).
 
 1. Скачайте установщик из репозитория:
-   **[release/Contragenti-1.3.0-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.0-setup.exe)**
+   **[release/Contragenti-1.3.1-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.1-setup.exe)**
    (обычный exe без Windows Installer; если у вас в организации ставят
-   только MSI — [Contragenti-1.3.0-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.0-win64.msi);
-   рядом лежит `Contragenti-update-1.3.0.zip` — пакет обновления, его
+   только MSI — [Contragenti-1.3.1-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.1-win64.msi);
+   рядом лежит `Contragenti-update-1.3.1.zip` — пакет обновления, его
    мастер скачивает сам; ссылки и sha256 в `release.json`) и запустите. Установка идёт в
-   `%LOCALAPPDATA%\Contragenti`, без прав администратора. На рабочем столе
-   появляются ярлыки **Contragenti** и **Demo CRM (SDK Contragenti)**, в меню
-   «Пуск» — **Contragenti — настройка и обновление**.
-2. На последнем экране установщика оставьте галочку **Launch on finish** —
-   откроется мастер настройки (`Contragenti Setup.exe`). Язык мастера
+   `C:\Program Files\Contragenti` (запрос прав администратора; без них —
+   `Contragenti-1.3.1-setup.exe /D=%LOCALAPPDATA%\Contragenti`). В установке уже
+   есть базы с данными: `companies.db` (компании date.gov.md) и
+   `DemoCRM\clients.db` (демо-фирма); рабочие копии программы держат в
+   `%LOCALAPPDATA%\Contragenti`. На рабочем столе появляются ярлыки
+   **Contragenti** и **Demo CRM (SDK Contragenti)**, в меню «Пуск» —
+   **Contragenti — настройка и обновление**.
+2. Мастер настройки (`ContragentiSetup.exe`) запускается сам — и после
+   setup.exe, и после MSI, в том числе тихого `msiexec /i … /qn`. Язык мастера
    (română / english / русский) выбирается вверху и сразу запоминается в
    реестре — Demo CRM откроется на том же языке.
 3. Отметьте шаги (по умолчанию включены все) и нажмите **Выполнить**:
@@ -64,7 +68,7 @@ Git **не нужен**, нужен Google Chrome. Если команда `pyth
 чтобы подтянуть свежую Demo CRM из GitHub без переустановки. Без окна:
 
 ```powershell
-& "$env:LOCALAPPDATA\Contragenti\Contragenti Setup.exe" --check
+& "$env:LOCALAPPDATA\Contragenti\ContragentiSetup.exe" --check
 ```
 
 Лог всех запусков — `%LOCALAPPDATA%\Contragenti\logs\install.log`.

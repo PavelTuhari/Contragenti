@@ -50,7 +50,7 @@ from selenium.common.exceptions import TimeoutException
 
 import openpyxl
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 SEARCH_URL = "https://date.gov.md/open/company-search"
 DETAILS_URL = "https://date.gov.md/open/company-details"
 def _app_dir():
@@ -61,7 +61,40 @@ def _app_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
-DB_PATH = os.path.join(_app_dir(), "companies.db")
+def _dir_writable(path):
+    probe = os.path.join(path, "~w%d.tmp" % os.getpid())
+    try:
+        with open(probe, "w") as f:
+            f.write("")
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
+def _data_dir():
+    """Каталог данных (companies.db, tms_config.json): рядом с программой, если
+    туда можно писать — исходники, портативная копия, установка в профиль;
+    иначе (установка в Program Files) — %LOCALAPPDATA%\\Contragenti. При
+    первом запуске туда копируется companies.db из установки — стартовая
+    база компаний, чтобы утилита сразу была с данными."""
+    app = _app_dir()
+    if _dir_writable(app):
+        return app
+    data = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Contragenti")
+    os.makedirs(data, exist_ok=True)
+    seed = os.path.join(app, "companies.db")
+    if os.path.exists(seed) and not os.path.exists(os.path.join(data, "companies.db")):
+        import shutil
+        try:
+            shutil.copy2(seed, os.path.join(data, "companies.db"))
+        except OSError:
+            pass
+    return data
+
+
+DATA_DIR = _data_dir()
+DB_PATH = os.path.join(DATA_DIR, "companies.db")
 DEFAULT_PORT = 9393
 
 COLUMNS = ("idno", "denumire", "administratori", "inregistrare")
@@ -1152,7 +1185,7 @@ class BrowserWorker(threading.Thread):
 
 # ─────────────────────── интеграция с ERP una.md ───────────────────────
 
-TMS_CONFIG_PATH = os.path.join(_app_dir(), "tms_config.json")
+TMS_CONFIG_PATH = os.path.join(DATA_DIR, "tms_config.json")
 
 
 def tms_load_config():

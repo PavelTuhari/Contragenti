@@ -6,7 +6,7 @@
                                             и любого коммита пакет актуален)
 
 Zip-пакет `release/Contragenti-update-<версия>.zip` — то, что мастер настройки
-(«Contragenti Setup.exe») скачивает и раскладывает поверх установки без
+(«ContragentiSetup.exe») скачивает и раскладывает поверх установки без
 переустановки MSI: Demo CRM (exe, lang.json, processes.json, sample_card.xml,
 README_ru.md), инструкции, SDK, стартовая база компаний, setup_wizard.py.
 Пути внутри zip = пути в каталоге установки.

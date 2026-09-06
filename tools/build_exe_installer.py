@@ -50,6 +50,8 @@ def main():
     n = make_payload(src, payload)
     print("payload: %d файлов, %d байт" % (n, os.path.getsize(payload)))
     name = "Contragenti-%s-setup" % ver
+    # без --uac-admin: права администратора установщик запрашивает сам только
+    # когда они нужны (Program Files), а при отказе ставит в профиль
     cmd = [PY, "-m", "PyInstaller", "--onefile", "--noconsole", "--clean", "-y",
            "--name", name, "--icon", os.path.join(ROOT, "app_icon.ico"),
            "--add-data", payload + os.pathsep + ".",

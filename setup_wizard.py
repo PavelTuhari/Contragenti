@@ -34,12 +34,12 @@
 (mailto) — отправляет сам пользователь, автоматически ничего не уходит.
 
 Режимы:
-    "Contragenti Setup.exe"            окно мастера (по умолчанию)
-    "Contragenti Setup.exe" --check    без окна: все шаги, лог, код возврата
-    "Contragenti Setup.exe" --lang ro  язык мастера (ro | en | ru)
-    "Contragenti Setup.exe" --offline  не ходить в GitHub и не вызывать python
-    "Contragenti Setup.exe" --no-python  не запускать команду python, даже если его нет
-    "Contragenti Setup.exe" --auto --shot файл.png
+    "ContragentiSetup.exe"            окно мастера (по умолчанию)
+    "ContragentiSetup.exe" --check    без окна: все шаги, лог, код возврата
+    "ContragentiSetup.exe" --lang ro  язык мастера (ro | en | ru)
+    "ContragentiSetup.exe" --offline  не ходить в GitHub и не вызывать python
+    "ContragentiSetup.exe" --no-python  не запускать команду python, даже если его нет
+    "ContragentiSetup.exe" --auto --shot файл.png
                                        окно, шаги запускаются сами, в конце
                                        снимок своего окна (PrintWindow) и выход —
                                        для акта тестирования
@@ -302,18 +302,28 @@ class Paths:
         self.demo_exe = os.path.join(self.demo_dir, "ContragentiCRM.exe")
         self.contragenti_exe = os.path.join(self.root, "Contragenti.exe")
         self.contragenti_py = os.path.join(self.root, "company_search.py")
-        self.companies_db = os.path.join(self.root, "companies.db")
         self.version_file = os.path.join(self.root, "VERSION")
-        self.logs = os.path.join(self.root, "logs")
-        try:
-            os.makedirs(self.logs, exist_ok=True)
-            with open(os.path.join(self.logs, ".w"), "w") as f:
-                f.write("")
-            os.remove(os.path.join(self.logs, ".w"))
-        except OSError:
-            self.logs = os.path.join(os.environ.get("LOCALAPPDATA", tempfile.gettempdir()),
-                                     "Contragenti", "logs")
-            os.makedirs(self.logs, exist_ok=True)
+        # Каталог данных — тот же выбор, что делают сами программы: рядом с
+        # exe, если туда можно писать (профиль, портативная копия, исходники),
+        # иначе (Program Files) — %LOCALAPPDATA%\Contragenti. Туда же логи.
+        self.root_writable = dir_writable(self.root)
+        local = os.path.join(os.environ.get("LOCALAPPDATA", tempfile.gettempdir()), "Contragenti")
+        self.data = self.root if self.root_writable else local
+        self.demo_data = self.demo_dir if dir_writable(self.demo_dir) else os.path.join(local, "DemoCRM")
+        os.makedirs(self.data, exist_ok=True)
+        os.makedirs(self.demo_data, exist_ok=True)
+        self.companies_db = os.path.join(self.data, "companies.db")
+        # первый запуск после установки в Program Files: стартовые базы из
+        # установки становятся рабочими копиями в профиле
+        for src, dst in ((os.path.join(self.root, "companies.db"), self.companies_db),
+                         (os.path.join(self.demo_dir, "clients.db"), os.path.join(self.demo_data, "clients.db"))):
+            if os.path.exists(src) and not os.path.exists(dst) and os.path.dirname(src) != os.path.dirname(dst):
+                try:
+                    shutil.copy2(src, dst)
+                except OSError:
+                    pass
+        self.logs = os.path.join(self.data, "logs")
+        os.makedirs(self.logs, exist_ok=True)
         self.log_file = os.path.join(self.logs, "install.log")
 
     def installed_version(self):
@@ -322,6 +332,31 @@ class Paths:
                 return f.read().strip() or "0"
         except OSError:
             return "0"
+
+
+def dir_writable(path):
+    probe = os.path.join(path, "~w%d.tmp" % os.getpid())
+    try:
+        with open(probe, "w") as f:
+            f.write("")
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
+def relaunch_elevated(args):
+    """Перезапуск с правами администратора (UAC). True — запущено, этот
+    процесс должен выйти; False — отказ пользователя или ошибка."""
+    try:
+        exe = sys.executable
+        params = " ".join('"%s"' % a for a in args)
+        if not is_frozen():
+            params = '"%s" %s' % (os.path.abspath(__file__), params)
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, params, None, 1)
+        return rc > 32
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def ver_tuple(v):
@@ -666,8 +701,10 @@ def passport(paths):
         ("lang.json", file_info(os.path.join(paths.demo_dir, "lang.json"))),
         ("processes.json", file_info(os.path.join(paths.demo_dir, "processes.json"))),
         ("companies.db", "%s (компаний: %s)" % (file_info(paths.companies_db), db_rows(paths.companies_db, "companies"))),
-        ("clients.db", "%s (клиентов: %s)" % (file_info(os.path.join(paths.demo_dir, "clients.db")),
-                                              db_rows(os.path.join(paths.demo_dir, "clients.db"), "clients"))),
+        ("clients.db", "%s (клиентов: %s)" % (file_info(os.path.join(paths.demo_data, "clients.db")),
+                                              db_rows(os.path.join(paths.demo_data, "clients.db"), "clients"))),
+        ("Каталог данных", "%s%s" % (paths.data, "" if paths.root_writable else
+                                     " (каталог программы недоступен на запись — Program Files)")),
         ("Google Chrome", "%s %s" % (chrome_path or "не найден", chrome_ver)),
         ("Python (команда python)", "%s %s" % (py_cmd or "не найден", py_ver)),
         ("Прокси", "%s" % (os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or "-")),
@@ -1065,6 +1102,10 @@ class Wizard:
         if not self.release:
             self.step("st_update", "skip", "GitHub")
             return
+        if is_frozen() and not self.paths.root_writable and not is_admin():
+            self.step("st_update", "warn", "каталог %s доступен только администратору — запустите мастер "
+                      "от имени администратора, чтобы обновить компоненты" % self.paths.root)
+            return
         # компоненты старой версии поверх более новой установки не кладём
         if ver_tuple(str(self.release.get("version", "0"))) < ver_tuple(self.paths.installed_version()):
             self.step("st_update", "skip", "в репозитории %s, установлена %s — новее" % (
@@ -1126,8 +1167,8 @@ class Wizard:
         try:
             launcher = self.paths.contragenti_exe if os.path.exists(self.paths.contragenti_exe) \
                 else self.paths.contragenti_py
-            ini = os.path.join(self.paths.demo_dir, "crm.ini")
-            os.makedirs(self.paths.demo_dir, exist_ok=True)
+            ini = os.path.join(self.paths.demo_data, "crm.ini")
+            os.makedirs(self.paths.demo_data, exist_ok=True)
             if os.path.exists(ini):
                 # уже настроено пользователем — правим только язык, лаунчер не трогаем
                 with open(ini, encoding="utf-8-sig") as fh:
@@ -1666,8 +1707,13 @@ UNINST_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Contragenti"
 
 def uninstall_app(silent):
     """Удаление установки от setup.exe: ярлыки, папка в «Пуск», запись в
-    «Программы и компоненты», затем сам каталог (после выхода процесса)."""
+    «Программы и компоненты», затем сам каталог (после выхода процесса).
+    Установка в Program Files — с правами администратора (UAC)."""
     root = app_dir()
+    if not dir_writable(root) and not is_admin():
+        if relaunch_elevated(["--uninstall"] + (["--silent"] if silent else [])):
+            return 0
+        return 1
     if not silent:
         import tkinter as tk
         from tkinter import messagebox
@@ -1678,19 +1724,23 @@ def uninstall_app(silent):
         r.destroy()
         if not ok:
             return 1
-    desk = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
-    for name in ("Contragenti.lnk", "Demo CRM (SDK Contragenti).lnk"):
-        try:
-            os.remove(os.path.join(desk, name))
-        except OSError:
-            pass
-    sm = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", "Contragenti")
-    shutil.rmtree(sm, ignore_errors=True)
+    # ярлыки и записи — и пользовательские, и общие (установка для всех)
+    for desk in (os.path.join(os.environ.get("USERPROFILE", ""), "Desktop"),
+                 os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "Desktop")):
+        for name in ("Contragenti.lnk", "Demo CRM (SDK Contragenti).lnk"):
+            try:
+                os.remove(os.path.join(desk, name))
+            except OSError:
+                pass
+    for base in (os.environ.get("APPDATA", ""), os.environ.get("ProgramData", r"C:\ProgramData")):
+        shutil.rmtree(os.path.join(base, "Microsoft", "Windows", "Start Menu", "Programs", "Contragenti"),
+                      ignore_errors=True)
     if winreg is not None:
-        try:
-            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, UNINST_KEY)
-        except OSError:
-            pass
+        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                winreg.DeleteKey(hive, UNINST_KEY)
+            except OSError:
+                pass
     # каталог удаляется после завершения этого процесса (он сам лежит внутри);
     # до 20 попыток с паузой — файлы могут ещё держать антивирус или трей
     script = ('for /l %%i in (1,1,20) do (ping -n 3 127.0.0.1 >nul & rd /s /q "%s" 2>nul & '
@@ -1736,6 +1786,12 @@ def main(argv=None):
         i = argv.index("--shot")
         if i + 1 < len(argv):
             shot = os.path.abspath(argv[i + 1])
+    # установка в Program Files: чтобы обновлять компоненты, мастеру нужны
+    # права администратора — предлагаем UAC один раз при запуске окна
+    if is_frozen() and "--auto" not in argv and "--no-elevate" not in argv \
+            and not dir_writable(app_dir()) and not is_admin():
+        if relaunch_elevated(argv + ["--no-elevate"]):
+            return 0
     return run_gui(lang, offline, auto="--auto" in argv, shot=shot)
 
 

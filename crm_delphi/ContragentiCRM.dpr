@@ -80,7 +80,7 @@ begin
     Exit(2);
   end;
   Cli := TContragentiClient.Create;
-  DB := TClientsDB.Create(TPath.Combine(AppDir, 'clients.db'));
+  DB := TClientsDB.Create(TPath.Combine(CrmDataDir, 'clients.db'));
   try
     DB.Open;
     if not Cli.ParseCardFile(XmlFile, Card) then
@@ -191,7 +191,7 @@ var
 begin
   Path := DbArg;
   if Path = '' then
-    Path := TPath.Combine(AppDir, 'clients.db');
+    Path := TPath.Combine(CrmDataDir, 'clients.db');
   DB := TClientsDB.Create(Path);
   try
     DB.Open;

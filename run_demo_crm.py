@@ -23,8 +23,29 @@ def _app_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
+def _writable(path):
+    probe = os.path.join(path, "~w%d.tmp" % os.getpid())
+    try:
+        with open(probe, "w") as f:
+            f.write("")
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
+def _crm_data_dir(demo_dir):
+    """Тот же выбор, что делает сама CRM (CrmDataDir в uClientsDB.pas): рядом с
+    exe, если туда можно писать, иначе %LOCALAPPDATA%\\Contragenti\\DemoCRM."""
+    if _writable(demo_dir):
+        return demo_dir
+    d = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Contragenti", "DemoCRM")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def _ensure_crm_ini(demo_dir, contragenti_exe):
-    ini_path = os.path.join(demo_dir, "crm.ini")
+    ini_path = os.path.join(_crm_data_dir(demo_dir), "crm.ini")
     if os.path.exists(ini_path):
         return  # не перезаписываем настройки, которые уже мог поменять пользователь
     with open(ini_path, "w", encoding="utf-8") as f:

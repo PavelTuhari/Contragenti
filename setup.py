@@ -13,7 +13,7 @@ Demo CRM (crm_delphi/) — готовый Delphi-бинарник ContragentiCRM
 нет, сборка просто пропускает Demo CRM с предупреждением (Contragenti
 собирается и без неё).
 
-Мастер настройки (setup_wizard.py → «Contragenti Setup.exe») идёт первым в
+Мастер настройки (setup_wizard.py → «ContragentiSetup.exe») идёт первым в
 списке Executable: именно первый exe cx_Freeze запускает по галочке «Launch
 on finish» в конце установки (launch_on_finish=True). Мастер докачивает из
 GitHub свежие компоненты и стартовую базу (release.json, data/), настраивает
@@ -23,10 +23,12 @@ crm.ini и реестр, заполняет демо-данные, прогон�
 """
 
 import os
+import subprocess
 import sys
+import zipfile
 from cx_Freeze import setup, Executable
 
-APP_VERSION = "1.3.0"   # то же значение — в VERSION, release.json и company_search.py
+APP_VERSION = "1.3.1"   # то же значение — в VERSION, release.json и company_search.py
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DEMO_CRM_EXE = os.path.join(_HERE, "crm_delphi", "ContragentiCRM.exe")
@@ -34,6 +36,41 @@ _HAS_DEMO_CRM = os.path.exists(_DEMO_CRM_EXE)
 if not _HAS_DEMO_CRM:
     print(f"[setup.py] предупреждение: {_DEMO_CRM_EXE} не найден — "
           "Demo CRM не будет включена в установку (см. crm_delphi/build.bat)")
+
+
+def _prepare_seed_dbs():
+    """Базы с данными для установки: companies.db (стартовая база компаний
+    date.gov.md из data/companies_seed.zip) и DemoCRM/clients.db (полный
+    демонстрационный набор фирмы — ContragentiCRM.exe --seed-demo). После
+    установки в Program Files программы при первом запуске копируют их в
+    %LOCALAPPDATA%\\Contragenti и работают с копиями."""
+    seed_dir = os.path.join(_HERE, "build", "seed")
+    os.makedirs(seed_dir, exist_ok=True)
+    companies = os.path.join(seed_dir, "companies.db")
+    with zipfile.ZipFile(os.path.join(_HERE, "data", "companies_seed.zip")) as z:
+        with open(companies, "wb") as f:
+            f.write(z.read("companies.db"))
+    clients = ""
+    if _HAS_DEMO_CRM:
+        clients = os.path.join(seed_dir, "clients.db")
+        if os.path.exists(clients):
+            os.remove(clients)
+        # GUI-exe не пишет в pipe — вывод в файл
+        with open(os.path.join(seed_dir, "seed.log"), "w", encoding="utf-8", errors="replace") as log:
+            subprocess.run([_DEMO_CRM_EXE, "--seed-demo", clients], stdout=log, stderr=subprocess.STDOUT,
+                           timeout=300, check=True)
+        for extra in ("clients.db-journal",):
+            try:
+                os.remove(os.path.join(seed_dir, extra))
+            except OSError:
+                pass
+    print(f"[setup.py] стартовые базы: {companies} ({os.path.getsize(companies)} байт)"
+          + (f", {clients} ({os.path.getsize(clients)} байт)" if clients else ""))
+    return companies, clients
+
+
+_BUILDING = any(a.startswith(("build", "bdist")) for a in sys.argv[1:])
+_SEED_COMPANIES, _SEED_CLIENTS = _prepare_seed_dbs() if _BUILDING else ("", "")
 
 build_exe_options = {
     "packages": [
@@ -74,6 +111,10 @@ build_exe_options = {
     ],
 }
 
+if _SEED_COMPANIES:
+    # база компаний с данными — утилита сразу не пустая
+    build_exe_options["include_files"].append((_SEED_COMPANIES, "companies.db"))
+
 if _HAS_DEMO_CRM:
     build_exe_options["include_files"] += [
         (_DEMO_CRM_EXE, "DemoCRM/ContragentiCRM.exe"),
@@ -84,6 +125,9 @@ if _HAS_DEMO_CRM:
         ("crm_delphi/README_ru.md", "DemoCRM/README_ru.md"),
         ("crm_delphi/sample_card.xml", "DemoCRM/sample_card.xml"),
     ]
+    if _SEED_CLIENTS:
+        # демо-база CRM с клиентами, сделками, заказами и задачами
+        build_exe_options["include_files"].append((_SEED_CLIENTS, "DemoCRM/clients.db"))
 
 # Тихий запуск GUI-приложения (без консольного окна)
 base = "Win32GUI" if sys.platform == "win32" else None
@@ -94,7 +138,7 @@ executables = [
     Executable(
         "setup_wizard.py",
         base=base,
-        target_name="Contragenti Setup.exe",
+        target_name="ContragentiSetup.exe",
         icon="app_icon.ico",
         shortcut_name="Contragenti — настройка и обновление",
         shortcut_dir="ProgramMenuFolder",
@@ -127,11 +171,23 @@ if _HAS_DEMO_CRM:
 bdist_msi_options = {
     "upgrade_code": "{8E2C6C7A-6B0B-4C2C-9C7A-3B2D4E5F6A7B}",
     "add_to_path": False,
-    "all_users": False,
-    "initial_target_dir": r"[LocalAppDataFolder]\Contragenti",
+    # установка для всех пользователей в Program Files (msiexec попросит права
+    # администратора); данные программы пишут в %LOCALAPPDATA%\Contragenti
+    "all_users": True,
+    "initial_target_dir": r"[ProgramFilesFolder]\Contragenti",
     "install_icon": "app_icon.ico",
     # в конце установки — галочка «Launch on finish»: запускает мастер настройки
     "launch_on_finish": True,
+    # …а при тихой установке (msiexec /i … /qn) диалога нет, поэтому мастер
+    # запускается пользовательским действием после InstallFinalize
+    "data": {
+        "CustomAction": [
+            ("LaunchWizardAfterInstall", 226, "TARGETDIR", '"[TARGETDIR]ContragentiSetup.exe"'),
+        ],
+        "InstallExecuteSequence": [
+            ("LaunchWizardAfterInstall", "NOT Installed AND NOT REMOVE", 6601),
+        ],
+    },
     "summary_data": {
         "author": "Pavel Tuhari",
         "comments": "Contragenti — поиск юридических лиц Молдовы (date.gov.md)",

@@ -12,15 +12,15 @@ Installer не связан: он просто распаковывает про
 payload.zip с готовой сборкой cx_Freeze (build/exe.win-amd64-3.12).
 
 Режимы:
-    Contragenti-1.3.0-setup.exe                 окно (каталог, ярлыки, язык)
-    Contragenti-1.3.0-setup.exe /S              тихо в %LOCALAPPDATA%\\Contragenti
-    Contragenti-1.3.0-setup.exe /S /D=C:\\Dir     тихо в указанный каталог
-    Contragenti-1.3.0-setup.exe --extract-only C:\\Dir
+    Contragenti-1.3.1-setup.exe                 окно (каталог, ярлыки, язык)
+    Contragenti-1.3.1-setup.exe /S              тихо в %LOCALAPPDATA%\\Contragenti
+    Contragenti-1.3.1-setup.exe /S /D=C:\\Dir     тихо в указанный каталог
+    Contragenti-1.3.1-setup.exe --extract-only C:\\Dir
                                                  портативно: только распаковать,
                                                  без ярлыков и реестра
     --no-shortcuts  --no-wizard  --lang ro|en|ru
 Удаление: «Программы и компоненты» → Contragenti (запускает
-"Contragenti Setup.exe" --uninstall) или тот же мастер с ключом --uninstall.
+"ContragentiSetup.exe" --uninstall) или тот же мастер с ключом --uninstall.
 """
 
 import ctypes
@@ -51,6 +51,8 @@ TR = {
         "opt_wizard": "После установки запустить мастер настройки",
         "install": "Установить", "close": "Закрыть", "done": "Установлено в %s",
         "err": "Ошибка: %s", "busy": "Закройте Contragenti и Demo CRM и повторите: %s",
+        "elevating": "Для установки в %s нужны права администратора — подтвердите запрос Windows…",
+        "fallback": "Без прав администратора — установка в профиль пользователя: %s",
         "extracting": "Распаковка… %d%%", "shortcuts": "Ярлыки и реестр…", "wizard": "Запуск мастера настройки…",
     },
     "en": {
@@ -63,6 +65,8 @@ TR = {
         "opt_wizard": "Run the setup wizard after installation",
         "install": "Install", "close": "Close", "done": "Installed to %s",
         "err": "Error: %s", "busy": "Close Contragenti and Demo CRM and retry: %s",
+        "elevating": "Installing to %s needs administrator rights — confirm the Windows prompt…",
+        "fallback": "No administrator rights — installing into the user profile: %s",
         "extracting": "Extracting… %d%%", "shortcuts": "Shortcuts and registry…", "wizard": "Starting the setup wizard…",
     },
     "ro": {
@@ -75,6 +79,8 @@ TR = {
         "opt_wizard": "După instalare pornește asistentul de configurare",
         "install": "Instalează", "close": "Închide", "done": "Instalat în %s",
         "err": "Eroare: %s", "busy": "Închideți Contragenti și Demo CRM și reîncercați: %s",
+        "elevating": "Instalarea în %s necesită drepturi de administrator — confirmați cererea Windows…",
+        "fallback": "Fără drepturi de administrator — instalare în profilul utilizatorului: %s",
         "extracting": "Dezarhivare… %d%%", "shortcuts": "Scurtături și registru…", "wizard": "Pornirea asistentului…",
     },
 }
@@ -93,8 +99,50 @@ def payload_version():
         return "0"
 
 
-def default_dir():
+def is_admin():
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def program_files_dir():
+    return os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), APP)
+
+
+def user_dir():
     return os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), APP)
+
+
+def default_dir():
+    """По умолчанию — Program Files для всех пользователей; права
+    администратора запрашиваются (UAC) в момент установки, при отказе —
+    профиль текущего пользователя."""
+    return program_files_dir()
+
+
+def dir_writable(path):
+    """Можно ли писать в каталог (создаётся при необходимости)."""
+    try:
+        os.makedirs(path, exist_ok=True)
+        probe = os.path.join(path, "~w%d.tmp" % os.getpid())
+        with open(probe, "w") as f:
+            f.write("")
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
+def relaunch_elevated(args):
+    """Перезапуск установщика с правами администратора (UAC). True — запущен."""
+    try:
+        params = " ".join('"%s"' % a for a in args)
+        if not getattr(sys, "frozen", False):
+            params = '"%s" %s' % (os.path.abspath(__file__), params)
+        return ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, None, 1) > 32
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def default_lang():
@@ -135,12 +183,22 @@ def make_shortcut(lnk, target, args="", workdir="", icon=""):
     return _ps(script).returncode == 0
 
 
-def desktop_dir():
+def all_users_install(target_dir):
+    """Установка в Program Files (или любой каталог вне профиля) с правами
+    администратора — ярлыки и запись в реестре общие для всех."""
+    return is_admin() and not target_dir.lower().startswith(
+        os.environ.get("LOCALAPPDATA", "~~").lower())
+
+
+def desktop_dir(common=False):
+    if common:
+        return os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "Desktop")
     return os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
 
 
-def start_menu_dir():
-    return os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", APP)
+def start_menu_dir(common=False):
+    base = os.environ.get("ProgramData", r"C:\ProgramData") if common else os.environ.get("APPDATA", "")
+    return os.path.join(base, "Microsoft", "Windows", "Start Menu", "Programs", APP)
 
 
 def dir_size_kb(path):
@@ -156,7 +214,7 @@ def dir_size_kb(path):
 
 def stop_running(target_dir):
     """Программы из каталога установки надо закрыть, иначе exe не заменить."""
-    for name in ("Contragenti.exe", "ContragentiCRM.exe", "Demo CRM.exe", "Contragenti Setup.exe"):
+    for name in ("Contragenti.exe", "ContragentiCRM.exe", "Demo CRM.exe", "ContragentiSetup.exe"):
         _ps("Get-Process | Where-Object { $_.Path -like '%s\\*' -and $_.Name -eq '%s' } | "
             "Stop-Process -Force -ErrorAction SilentlyContinue"
             % (target_dir.replace("'", "''"), os.path.splitext(name)[0].replace("'", "''")))
@@ -173,15 +231,16 @@ def extract(target_dir, progress=None):
 
 
 def register(target_dir, ver, lang, desktop=True, menu=True):
-    wiz = os.path.join(target_dir, "Contragenti Setup.exe")
+    wiz = os.path.join(target_dir, "ContragentiSetup.exe")
     ico = os.path.join(target_dir, "app_icon.ico")
+    common = all_users_install(target_dir)
     if desktop:
-        make_shortcut(os.path.join(desktop_dir(), "Contragenti.lnk"),
+        make_shortcut(os.path.join(desktop_dir(common), "Contragenti.lnk"),
                       os.path.join(target_dir, "Contragenti.exe"), "--lang " + lang, target_dir, ico)
-        make_shortcut(os.path.join(desktop_dir(), "Demo CRM (SDK Contragenti).lnk"),
+        make_shortcut(os.path.join(desktop_dir(common), "Demo CRM (SDK Contragenti).lnk"),
                       os.path.join(target_dir, "Demo CRM.exe"), "", target_dir, ico)
     if menu:
-        sm = start_menu_dir()
+        sm = start_menu_dir(common)
         make_shortcut(os.path.join(sm, "Contragenti.lnk"),
                       os.path.join(target_dir, "Contragenti.exe"), "--lang " + lang, target_dir, ico)
         make_shortcut(os.path.join(sm, "Demo CRM (SDK Contragenti).lnk"),
@@ -189,7 +248,8 @@ def register(target_dir, ver, lang, desktop=True, menu=True):
         make_shortcut(os.path.join(sm, "Contragenti — настройка и обновление.lnk"), wiz, "", target_dir, ico)
         make_shortcut(os.path.join(sm, "Удалить Contragenti.lnk"), wiz, "--uninstall", target_dir, ico)
         if winreg is not None:
-            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, UNINST_KEY) as k:
+            hive = winreg.HKEY_LOCAL_MACHINE if common else winreg.HKEY_CURRENT_USER
+            with winreg.CreateKey(hive, UNINST_KEY) as k:
                 for name, val in (
                     ("DisplayName", APP), ("DisplayVersion", ver), ("Publisher", PUBLISHER),
                     ("InstallLocation", target_dir), ("DisplayIcon", ico),
@@ -214,7 +274,7 @@ def install(target_dir, lang, desktop=True, menu=True, run_wizard=True, log=None
         register(target_dir, ver, lang, desktop, menu)
         log("shortcuts/registry done")
     if run_wizard:
-        wiz = os.path.join(target_dir, "Contragenti Setup.exe")
+        wiz = os.path.join(target_dir, "ContragentiSetup.exe")
         if os.path.exists(wiz):
             subprocess.Popen([wiz, "--lang", lang], cwd=target_dir)
             log("wizard started")
@@ -303,8 +363,22 @@ def run_gui(lang, target):
 
     def work():
         tt = TR[state["lang"]]
+        target_dir = dir_var.get().strip()
         try:
-            install(dir_var.get().strip(), state["lang"], v_desktop.get(), v_menu.get(), v_wiz.get(),
+            if not dir_writable(target_dir) and not is_admin():
+                # нужны права администратора: UAC; при отказе — в профиль
+                ui(lambda: status.configure(text=tt["elevating"] % target_dir))
+                args = ["--dir", target_dir, "--lang", state["lang"]]
+                if not v_desktop.get() and not v_menu.get():
+                    args.append("--no-shortcuts")
+                if not v_wiz.get():
+                    args.append("--no-wizard")
+                if relaunch_elevated(args + ["--elevated"]):
+                    ui(root.destroy)
+                    return
+                target_dir = user_dir()
+                ui(lambda: (dir_var.set(target_dir), status.configure(text=tt["fallback"] % target_dir)))
+            install(target_dir, state["lang"], v_desktop.get(), v_menu.get(), v_wiz.get(),
                     progress=lambda p: ui(lambda p=p: (prog.configure(value=p),
                                                        status.configure(text=tt["extracting"] % p))))
             ui(lambda: (prog.configure(value=100), status.configure(text=tt["done"] % dir_var.get().strip()),
@@ -350,7 +424,12 @@ def main(argv=None):
         dst = argv[i + 1] if i + 1 < len(argv) else target
         install(dst, lang, desktop=False, menu=False, run_wizard=False)
         return 0
-    if silent:
+    if silent or "--elevated" in argv:
+        if not dir_writable(target) and not is_admin():
+            # тихая установка в Program Files без прав: пробуем UAC, иначе — профиль
+            if "--no-elevate" not in argv and relaunch_elevated(argv + ["--elevated"]):
+                return 0
+            target = user_dir()
         install(target, lang, desktop="--no-shortcuts" not in argv, menu="--no-shortcuts" not in argv,
                 run_wizard="--no-wizard" not in argv)
         return 0

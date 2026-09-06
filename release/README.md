@@ -10,7 +10,7 @@
 | `Contragenti-update-<версия>.zip` | Пакет обновления поверх установки: Demo CRM (exe, `lang.json`, `processes.json`), инструкции, SDK, стартовая база компаний, `setup_wizard.py`. Пути внутри = пути в каталоге установки | автоматически: `crm_delphi\build.bat` после каждой компиляции и pre-commit хук перед каждым коммитом (`tools/make_release.py --zip-only`) |
 
 `release.json` в корне репозитория содержит версию, ссылки, размеры и
-sha256 обоих файлов — по нему мастер настройки («Contragenti Setup.exe»,
+sha256 обоих файлов — по нему мастер настройки («ContragentiSetup.exe»,
 меню «Пуск» → «Contragenti — настройка и обновление») находит новую версию
 и докачивает zip, сверяя sha256.
 

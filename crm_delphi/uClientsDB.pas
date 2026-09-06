@@ -54,10 +54,48 @@ type
     property Connection: TFDConnection read FConn;
   end;
 
+{ Каталог данных CRM (clients.db, crm.ini, reports): рядом с программой, если
+  туда можно писать — исходники, портативная копия, установка в профиль;
+  иначе (установка в Program Files) — %LOCALAPPDATA%\Contragenti\DemoCRM\.
+  При первом запуске туда копируются clients.db (демо-база из установки) и
+  crm.ini. Путь с разделителем на конце. }
+function CrmDataDir: string;
+
 implementation
 
 uses
-  System.IOUtils;
+  System.IOUtils, Winapi.Windows;
+
+var
+  GDataDir: string;   // вычисляется один раз за запуск
+
+function CrmDataDir: string;
+var
+  App, Probe, Loc: string;
+begin
+  if GDataDir <> '' then Exit(GDataDir);
+  App := ExtractFilePath(ParamStr(0));
+  Probe := App + '~w' + IntToStr(GetCurrentProcessId) + '.tmp';
+  try
+    TFile.WriteAllText(Probe, '');
+    TFile.Delete(Probe);
+    GDataDir := App;
+    Exit(GDataDir);
+  except
+    // рядом с программой писать нельзя (Program Files) — данные в профиле
+  end;
+  Loc := IncludeTrailingPathDelimiter(GetEnvironmentVariable('LOCALAPPDATA'));
+  if Loc = '\' then Loc := IncludeTrailingPathDelimiter(TPath.GetHomePath);
+  Loc := Loc + 'Contragenti\DemoCRM\';
+  ForceDirectories(Loc);
+  // первый запуск: демо-база и настройки из установки становятся рабочими
+  if TFile.Exists(App + 'clients.db') and not TFile.Exists(Loc + 'clients.db') then
+    TFile.Copy(App + 'clients.db', Loc + 'clients.db');
+  if TFile.Exists(App + 'crm.ini') and not TFile.Exists(Loc + 'crm.ini') then
+    TFile.Copy(App + 'crm.ini', Loc + 'crm.ini');
+  GDataDir := Loc;
+  Result := GDataDir;
+end;
 
 constructor TClientsDB.Create(const ADBPath: string);
 begin
