@@ -10,9 +10,19 @@
 | `Contragenti-update-<версия>.zip` | Пакет обновления поверх установки: Demo CRM (exe, `lang.json`, `processes.json`), инструкции, SDK, стартовая база компаний, `setup_wizard.py`. Пути внутри = пути в каталоге установки | автоматически: `crm_delphi\build.bat` после каждой компиляции и pre-commit хук перед каждым коммитом (`tools/make_release.py --zip-only`) |
 
 `release.json` в корне репозитория содержит версию, ссылки, размеры и
-sha256 обоих файлов — по нему мастер настройки («ContragentiSetup.exe»,
+sha256 всех трёх файлов — по нему мастер настройки («ContragentiSetup.exe»,
 меню «Пуск» → «Contragenti — настройка и обновление») находит новую версию
 и докачивает zip, сверяя sha256.
+
+**Важно:** `Contragenti-update-<версия>.zip` **не содержит `Contragenti.exe`**
+(замороженную сборку самой утилиты) — только Demo CRM, документацию, SDK и
+мастер. Изменения в `company_search.py` (новый источник данных, логика
+поиска и т.п.) в установленную копию через инкрементальный zip не попадают:
+их получают только `setup.exe`/`MSI` при переустановке или обновлении. Если
+менялся `company_search.py`, версию и `release/` нужно пересобирать
+целиком (`python setup.py build_exe` → `bdist_msi` →
+`tools/build_exe_installer.py` → `tools/make_release.py`), а не только
+гонять `make_release.py --zip-only`.
 
 Включить хук после клонирования (один раз):
 

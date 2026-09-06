@@ -183,6 +183,13 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   путь). После `python setup.py bdist_msi` выполни
   `python tools/make_release.py` — MSI попадёт в `release/`, а в
   `release.json` обновятся `msi_url`, размер и sha256.
+- **`Contragenti.exe` (заморозка `company_search.py`) в zip-пакет
+  обновления не входит** — только `ContragentiCRM.exe`, документация, SDK
+  и мастер (список `FILES` в `make_release.py`). Если менялся
+  `company_search.py`, `--zip-only` ничего не доставит: нужна полная
+  пересборка — `python setup.py build_exe` (или `bdist_msi`) →
+  `python tools/build_exe_installer.py` → `python tools/make_release.py`
+  (без `--zip-only`) — и обычно новая версия (см. AGENTS.md §5/выпуск).
 - Мастер, запущенный **из исходников** (не frozen), файлы репозитория не
   заменяет — только сверяет с GitHub и пишет в лог (`apply_file` → `dry`).
   Иначе онлайн-прогон из git-клона затирал правки рабочего дерева

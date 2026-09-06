@@ -50,7 +50,7 @@ from selenium.common.exceptions import TimeoutException
 
 import openpyxl
 
-APP_VERSION = "1.3.3"
+APP_VERSION = "1.3.4"
 SEARCH_URL = "https://date.gov.md/open/company-search"
 DETAILS_URL = "https://date.gov.md/open/company-details"
 # Второй источник: data2b.md — публичный поиск сайта (тот же запрос, который

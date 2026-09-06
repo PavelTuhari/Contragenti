@@ -12,10 +12,10 @@ Installer не связан: он просто распаковывает про
 payload.zip с готовой сборкой cx_Freeze (build/exe.win-amd64-3.12).
 
 Режимы:
-    Contragenti-1.3.3-setup.exe                 окно (каталог, ярлыки, язык)
-    Contragenti-1.3.3-setup.exe /S              тихо в %LOCALAPPDATA%\\Contragenti
-    Contragenti-1.3.3-setup.exe /S /D=C:\\Dir     тихо в указанный каталог
-    Contragenti-1.3.3-setup.exe --extract-only C:\\Dir
+    Contragenti-1.3.4-setup.exe                 окно (каталог, ярлыки, язык)
+    Contragenti-1.3.4-setup.exe /S              тихо в %LOCALAPPDATA%\\Contragenti
+    Contragenti-1.3.4-setup.exe /S /D=C:\\Dir     тихо в указанный каталог
+    Contragenti-1.3.4-setup.exe --extract-only C:\\Dir
                                                  портативно: только распаковать,
                                                  без ярлыков и реестра
     --no-shortcuts  --no-wizard  --lang ro|en|ru
