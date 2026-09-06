@@ -165,15 +165,28 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   сущности в CRM генератор уже покрывает её (§1), отдельно ничего делать
   не надо, но `python setup.py bdist_msi` должен пройти без ошибок.
 - Основной установщик — `Contragenti-<версия>-setup.exe` без Windows
-  Installer (`installer_exe.py` + `tools/build_exe_installer.py`,
-  PyInstaller-onefile с payload.zip из `build/exe.win-*`): MSI на части
-  компьютеров блокирует политика (код 1625 «administrator has set
-  policies»). MSI остаётся вторым вариантом. Порядок выпуска:
-  `python setup.py bdist_msi` → `python tools/build_exe_installer.py` →
-  `python tools/make_release.py`. Удаление exe-установки делает мастер
-  (`ContragentiSetup.exe --uninstall`), запись в HKCU\...\Uninstall.
-- Готовые сборки лежат в репозитории, в `release/`: setup.exe, MSI и
-  zip-пакет обновления. Zip пересобирает `tools/make_release.py --zip-only` — он
+  Installer (`installer_exe.py` + `tools/build_exe_installer.py`): MSI на
+  части компьютеров блокирует политика (код 1625 «administrator has set
+  policies»). С 1.3.5 это **тонкий** установщик — сам exe программу и
+  Python не содержит (только tkinter-окно, загрузчик и корни certifi),
+  весь `build/exe.win-*` пакуется отдельно в публикуемый
+  `Contragenti-<версия>-app.zip`, который `installer_exe.py` скачивает из
+  `release.json` (`app_zip_url`/`app_zip_size`/`app_zip_sha256`) и
+  распаковывает во время установки — поэтому нужен интернет. Раньше
+  payload.zip был встроен в exe через PyInstaller `--add-data`
+  (~50 МБ), из-за чего временная папка `_MEI...` не успевала раскрыться и
+  удалиться на выходе («Failed to remove temporary directory»); теперь
+  скачанный zip распаковывается из обычного временного каталога, а не
+  внутри `_MEIPASS`. MSI остаётся полностью автономным вторым вариантом —
+  для сред без интернета при установке. Порядок выпуска:
+  `python setup.py build_exe` (или `bdist_msi`) →
+  `python tools/build_exe_installer.py` (даёт и `setup.exe`, и
+  `app.zip`) → `python tools/make_release.py`. Удаление exe-установки
+  делает мастер (`ContragentiSetup.exe --uninstall`), запись в
+  HKCU\...\Uninstall. Локальная проверка без сети — ключ
+  `--offline-payload FILE.zip` у `installer_exe.py`.
+- Готовые сборки лежат в репозитории, в `release/`: setup.exe, app.zip,
+  MSI и zip-пакет обновления. Zip пересобирает `tools/make_release.py --zip-only` — он
   вызывается из `crm_delphi\build.bat` после компиляции и из pre-commit
   хука (`.githooks/pre-commit`; включить один раз:
   `git config core.hooksPath .githooks`). Zip детерминированный, без

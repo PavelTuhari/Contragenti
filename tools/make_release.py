@@ -1,6 +1,7 @@
-"""Собирает release/: zip-пакет обновления и копию MSI, обновляет release.json.
+"""Собирает release/: zip-пакет обновления, копии MSI/setup.exe/app.zip,
+обновляет release.json.
 
-    python tools/make_release.py            zip + MSI (если dist/*.msi новее) + release.json
+    python tools/make_release.py            zip + MSI/exe/app.zip (если новее в dist/) + release.json
     python tools/make_release.py --zip-only только zip и release.json (вызов из build.bat
                                             и pre-commit: после каждой перекомпиляции
                                             и любого коммита пакет актуален)
@@ -11,10 +12,14 @@ Zip-пакет `release/Contragenti-update-<версия>.zip` — то, что 
 README_ru.md), инструкции, SDK, стартовая база компаний, setup_wizard.py.
 Пути внутри zip = пути в каталоге установки.
 
+`release/Contragenti-<версия>-app.zip` — вся сборка cx_Freeze
+(build/exe.win-amd64-3.12): его качает тонкий `Contragenti-<версия>-setup.exe`
+во время установки (сам этот exe программу и Python не содержит).
+
 Zip собирается детерминированно (фиксированные даты записей, сортировка),
 поэтому при неизменном содержимом файл байт-в-байт тот же и коммит не
-раздувается. release.json получает url, размер и sha256 zip и MSI —
-мастер сверяет sha256 после загрузки.
+раздувается. release.json получает url, размер и sha256 каждого файла —
+загрузчик сверяет sha256 после скачивания.
 """
 import hashlib
 import json
@@ -117,7 +122,11 @@ def copy_exe(ver):
     return copy_artifact(ver, "Contragenti-%s-setup.exe", "-setup.exe")
 
 
-def update_manifest(ver, zip_path, msi_path, exe_path=""):
+def copy_app_zip(ver):
+    return copy_artifact(ver, "Contragenti-%s-app.zip", "-app.zip")
+
+
+def update_manifest(ver, zip_path, msi_path, exe_path="", app_zip_path=""):
     path = os.path.join(ROOT, "release.json")
     with open(path, encoding="utf-8") as f:
         text = f.read()
@@ -135,6 +144,11 @@ def update_manifest(ver, zip_path, msi_path, exe_path=""):
         rel["exe_url"] = RAW + "release/" + os.path.basename(exe_path)
         rel["exe_size"] = os.path.getsize(exe_path)
         rel["exe_sha256"] = sha256(exe_path)
+    if app_zip_path:
+        # полная сборка (build/exe.win-*), которую setup.exe докачивает при установке
+        rel["app_zip_url"] = RAW + "release/" + os.path.basename(app_zip_path)
+        rel["app_zip_size"] = os.path.getsize(app_zip_path)
+        rel["app_zip_sha256"] = sha256(app_zip_path)
     new_text = json.dumps(rel, ensure_ascii=False, indent=2) + "\n"
     if new_text != text:
         with open(path, "w", encoding="utf-8") as f:
@@ -146,17 +160,20 @@ def main(argv):
     ver = version()
     zip_path = build_zip(ver)
     print("  zip:", zip_path, os.path.getsize(zip_path), "байт")
-    msi_path, exe_path = "", ""
+    msi_path, exe_path, app_zip_path = "", "", ""
     if "--zip-only" in argv:
         names = os.listdir(REL_DIR) if os.path.isdir(REL_DIR) else []
         msi = [n for n in names if n.endswith(".msi")]
         exe = [n for n in names if n.endswith("-setup.exe")]
+        app_zip = [n for n in names if n.endswith("-app.zip")]
         msi_path = os.path.join(REL_DIR, msi[0]) if msi else ""
         exe_path = os.path.join(REL_DIR, exe[0]) if exe else ""
+        app_zip_path = os.path.join(REL_DIR, app_zip[0]) if app_zip else ""
     else:
         msi_path = copy_msi(ver)
         exe_path = copy_exe(ver)
-    update_manifest(ver, zip_path, msi_path, exe_path)
+        app_zip_path = copy_app_zip(ver)
+    update_manifest(ver, zip_path, msi_path, exe_path, app_zip_path)
     return 0
 
 

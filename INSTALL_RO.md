@@ -5,18 +5,21 @@ Ghid scurt: cinci pași, fără Python și fără Git. Verificat pe Windows 10/1
 
 ## 1. Descărcați instalatorul
 
-**[Contragenti-1.3.4-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.4-setup.exe)**
-(≈50 MB, fără Windows Installer — funcționează și acolo unde MSI este
-interzis prin politică).
+**[Contragenti-1.3.5-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.5-setup.exe)**
+(câțiva MB, fără Windows Installer — funcționează și acolo unde MSI este
+interzis prin politică). **Necesită internet în timpul instalării** — descarcă
+automat sursa completă din github.com/PavelTuhari/Contragenti și îi verifică
+suma de control (sha256) înainte de dezarhivare.
 
 Dacă browserul afișează „isn't commonly downloaded”: fișierul nu este semnat
 cu certificat de dezvoltator. Apăsați „⋯” → **Keep / Păstrează**. Suma de
 control se poate verifica cu `Get-FileHash` față de `release.json` din
 repozitoriu.
 
-Alternativă pentru medii cu MSI obligatoriu:
-[Contragenti-1.3.4-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.4-win64.msi)
-(rulați `msiexec` ca administrator).
+Alternativă pentru medii fără internet la instalare sau cu MSI obligatoriu:
+[Contragenti-1.3.5-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.5-win64.msi)
+(≈40 MB, conține tot ce e necesar — nu descarcă nimic în timpul instalării;
+rulați `msiexec` ca administrator).
 
 ## 2. Rulați instalatorul
 
@@ -31,8 +34,8 @@ desktop și dosarul **Contragenti** în meniul Start.
 Instalare silențioasă:
 
 ```powershell
-.\Contragenti-1.3.4-setup.exe /S
-.\Contragenti-1.3.4-setup.exe /S /D=D:\Contragenti --no-wizard
+.\Contragenti-1.3.5-setup.exe /S
+.\Contragenti-1.3.5-setup.exe /S /D=D:\Contragenti --no-wizard
 ```
 
 ## 3. Asistentul de configurare
@@ -95,7 +98,7 @@ odată cu programul — salvați bazele înainte, dacă sunt necesare.
 
 | Simptom | Ce faceți |
 |---|---|
-| „The system administrator has set policies to prevent this installation” | Este politica MSI (cod 1625). Folosiți `Contragenti-1.3.4-setup.exe` |
+| „The system administrator has set policies to prevent this installation” | Este politica MSI (cod 1625). Folosiți `Contragenti-1.3.5-setup.exe` |
 | Chrome nu este găsit | Instalați Google Chrome; fără el portalul nu este accesibil |
 | `CERTIFICATE_VERIFY_FAILED` în log | Depozitul de certificate Windows este vechi; asistentul trece automat pe setul de certificate din instalare, iar la nevoie descarcă fișierele individual |
 | Căutarea se blochează | Nu folosiți „browser ascuns”; rezolvați captcha în Chrome; nu lansați multe căutări la rând |
