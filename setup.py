@@ -93,7 +93,11 @@ build_exe_options = {
     # certifi — запасной набор корневых сертификатов для мастера настройки:
     # хранилище Windows на свежем сервере не знало цепочку GitHub
     "includes": ["tms_export", "certifi"],
-    "excludes": ["test", "unittest"],
+    # numpy/onnxruntime/sympy попадают в окружение сборки транзитивно
+    # (markitdown для проверки презентаций) и утяжеляют установщик на 11 МБ;
+    # программе они не нужны (openpyxl работает без numpy)
+    "excludes": ["test", "unittest", "numpy", "onnxruntime", "sympy", "mpmath", "magika",
+                 "markitdown", "pptx", "PyInstaller"],
     "include_files": [
         ("README.md", "README.md"),
         ("GUIDE_ru.md", "GUIDE_ru.md"),
