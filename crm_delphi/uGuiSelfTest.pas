@@ -1122,7 +1122,7 @@ begin
   FForm.Process.SelectProcess(0);
   Pump;
   Step('Бизнес-процесс: схема «Сделка → заказ → оплата» из processes.json — дорожки, узлы, развилки, стрелки',
-    (FForm.Process.LoadError = '') and (FForm.Process.ProcessCount = 2) and
+    (FForm.Process.LoadError = '') and (FForm.Process.ProcessCount = 3) and
     (FForm.Process.NodeCount = 13) and (FForm.Process.EdgeCount = 14),
     Format('процессов %d, узлов %d, связей %d', [FForm.Process.ProcessCount,
       FForm.Process.NodeCount, FForm.Process.EdgeCount]),
@@ -1265,6 +1265,131 @@ begin
     FForm.Gantt.RowCount > 0,
     Format('строк %d, работ %d', [FForm.Gantt.RowCount, FForm.Gantt.WorkCount]),
     'gantt_all');
+
+  // ── часть 5б: проекты — единичные изделия под заказ, тендеры, авансы,
+  //    задачи по этапам (gravura.md / BM Public) ──
+
+  Inc(FNum);
+  FForm.TestClickNav(nsProjects);
+  Pump;
+  P := FForm.Page(nsProjects);
+  Step('Проекты: панно с логотипом, выжиг поздравлений, стенды, медали — тендеры с авансом и без',
+    P.ListCount >= 10,
+    Format('проектов %d; в производстве %d, тендеров %d, проиграно %d, запаздывает %d',
+      [P.ListCount, FForm.Crm.Count('projects', 't.status = ''Производство'''),
+       FForm.Crm.Count('projects', 't.status = ''Тендер'''), FForm.Crm.Count('projects', 't.status = ''Проигран'''),
+       FForm.Crm.Count('projects', 't.status NOT IN (''Закрыт'',''Проигран'') AND t.due_date < date(''now'',''localtime'')')]),
+    'projects_list');
+
+  Inc(FNum);
+  Id := FForm.Crm.Scalar('SELECT id FROM projects WHERE status = ''Производство'' ORDER BY id LIMIT 1');
+  P.SelectPreset(0);
+  P.SelectById(Id);
+  Pump;
+  FForm.TestProjectTasks;
+  Pump;
+  Step('Проект → «Задачи проекта»: доска задач по этапам — новая / в работе / ожидание / проверка / готово',
+    (FForm.TestSection = nsKanban) and (FForm.Kanban.Board = bkProjectTasks) and
+    (FForm.Kanban.ColumnCount = 5) and (FForm.Kanban.ProjectId = Id) and (FForm.Kanban.CardsInColumn(4) > 0),
+    Format('проект %d, колонок %d; новых %d, в работе %d, ожидание %d, проверка %d, готово %d',
+      [Id, FForm.Kanban.ColumnCount, FForm.Kanban.CardsInColumn(0), FForm.Kanban.CardsInColumn(1),
+       FForm.Kanban.CardsInColumn(2), FForm.Kanban.CardsInColumn(3), FForm.Kanban.CardsInColumn(4)]),
+    'project_tasks_board');
+
+  Inc(FNum);
+  Id := FForm.Crm.Scalar('SELECT id FROM tasks WHERE project_id = ' + IntToStr(FForm.Kanban.ProjectId) +
+    ' AND stage = ''Новая'' ORDER BY seq LIMIT 1');
+  FForm.Kanban.DragCardById(Id, 1);
+  Pump;
+  V := FForm.Crm.Scalar('SELECT stage FROM tasks WHERE id = ' + IntToStr(Id));
+  Step('Задача перетащена «Новая» → «В работе»: этап в базе изменён, флаг «выполнено» не тронут',
+    (VarToStr(V) = 'В работе') and (Integer(FForm.Crm.Scalar('SELECT done FROM tasks WHERE id = ' + IntToStr(Id))) = 0),
+    Format('задача %d: этап «%s»', [Id, VarToStr(V)]), 'task_drag_inwork');
+
+  Inc(FNum);
+  FForm.Kanban.DragCardById(Id, 4);
+  Pump;
+  V := FForm.Crm.Scalar('SELECT stage FROM tasks WHERE id = ' + IntToStr(Id));
+  Step('Задача перетащена в «Готово»: флаг «выполнено» выставлен сам — этап и флаг суть одно состояние',
+    (VarToStr(V) = 'Готово') and (Integer(FForm.Crm.Scalar('SELECT done FROM tasks WHERE id = ' + IntToStr(Id))) = 1),
+    Format('задача %d: этап «%s», done = %s', [Id, VarToStr(V),
+      VarToStr(FForm.Crm.Scalar('SELECT done FROM tasks WHERE id = ' + IntToStr(Id)))]), 'task_drag_done');
+  FForm.Kanban.DragCardById(Id, 0);   // вернуть в «Новая»
+  Pump;
+
+  Inc(FNum);
+  FForm.Kanban.SelectBoard(bkProjects);
+  Pump;
+  Step('Канбан «Проекты»: девять этапов от тендера до закрытия, проигранные тендеры отдельно',
+    (FForm.Kanban.ColumnCount = 9) and (FForm.Kanban.CardsInColumn(4) > 0) and (FForm.Kanban.CardsInColumn(8) > 0),
+    Format('колонок %d; тендер %d, договор %d, аванс %d, дизайн %d, производство %d, сдача %d, оплата %d, закрыт %d, проигран %d',
+      [FForm.Kanban.ColumnCount, FForm.Kanban.CardsInColumn(0), FForm.Kanban.CardsInColumn(1),
+       FForm.Kanban.CardsInColumn(2), FForm.Kanban.CardsInColumn(3), FForm.Kanban.CardsInColumn(4),
+       FForm.Kanban.CardsInColumn(5), FForm.Kanban.CardsInColumn(6), FForm.Kanban.CardsInColumn(7),
+       FForm.Kanban.CardsInColumn(8)]),
+    'kanban_projects');
+
+  Inc(FNum);
+  Id := FForm.Crm.Scalar('SELECT id FROM projects WHERE status = ''Тендер'' ORDER BY id LIMIT 1');
+  FForm.Kanban.DragCardById(Id, 1);
+  Pump;
+  V := FForm.Crm.Scalar('SELECT status FROM projects WHERE id = ' + IntToStr(Id));
+  Step('Проект перетащен «Тендер» → «Договор» (тендер выигран): этап в базе изменён',
+    VarToStr(V) = 'Договор', Format('проект %d: этап «%s»', [Id, VarToStr(V)]), 'kanban_project_drag');
+  FForm.Kanban.DragCardById(Id, 0);
+  Pump;
+
+  Inc(FNum);
+  FForm.TestClickNav(nsProcess);
+  Pump;
+  FForm.Process.SelectProcess(2);
+  Pump;
+  FForm.Process.ClickNode('production');
+  Pump;
+  Step('Бизнес-процесс «Проект: тендер → аванс → производство → сдача → оплата»: узел «Производство» показывает его проекты',
+    (FForm.Process.LoadError = '') and (FForm.Process.NodeCount >= 10) and (FForm.Process.CardsShown > 0) and
+    (FForm.Process.CardsShown = FForm.Crm.Count('projects', 't.status = ''Производство''')),
+    Format('узлов %d, связей %d; в производстве %d, запаздывает %d',
+      [FForm.Process.NodeCount, FForm.Process.EdgeCount, FForm.Process.CardsShown, FForm.Process.NodeOverdue('production')]),
+    'process_project');
+
+  Inc(FNum);
+  FForm.TestClickNav(nsGantt);
+  Pump;
+  FForm.Gantt.SelectFilter(3);
+  Pump;
+  Step('План работ «Проекты и задачи»: проект и его шаги по датам, готовые зелёным, просроченные красным, стрелки «после задачи»',
+    (FForm.Gantt.RowCount > 10) and (FForm.Gantt.WorkCount > 10) and (FForm.Gantt.OverdueCount > 0),
+    Format('строк %d, из них задач %d, просроченных проектов %d; период %s',
+      [FForm.Gantt.RowCount, FForm.Gantt.WorkCount, FForm.Gantt.OverdueCount, FForm.Gantt.RangeText]),
+    'gantt_projects');
+
+  Inc(FNum);
+  Before := FForm.Gantt.FirstTaskRow;
+  Id := FForm.Gantt.RowTaskId(Before);
+  D1 := FForm.Gantt.RowPlanEnd(Before);
+  FForm.Gantt.DragBar(Before, dmMove, 3);   // тот же путь, что и мышь
+  Pump;
+  V := FForm.Crm.Scalar('SELECT due_at FROM tasks WHERE id = ' + IntToStr(Id));
+  Step('План работ: задача проекта перетащена мышью на 3 дня — план и срок в базе сдвинулись',
+    VarToStr(V) = FormatDateTime('yyyy-mm-dd', D1 + 3),
+    Format('задача %d: срок %s → %s', [Id, FormatDateTime('yyyy-mm-dd', D1), VarToStr(V)]),
+    'gantt_task_drag');
+  FForm.Gantt.DragBar(Before, dmMove, -3);
+  Pump;
+
+  Inc(FNum);
+  FForm.TestClickNav(nsReports);
+  Pump;
+  FForm.Reports.SelectReport(rkProjects);
+  Pump;
+  Xlsx := FForm.Reports.Export(efXlsx);
+  Pdf := FForm.Reports.Export(efPdf);
+  Step('Отчёт «Проекты: тендеры, авансы, задачи» — предпросмотр и выгрузка в Excel и PDF',
+    (FForm.Reports.PreviewRows >= 10) and IsZip(Xlsx) and IsPdf(Pdf),
+    Format('строк %d; %s, %s', [FForm.Reports.PreviewRows, ExtractFileName(Xlsx), ExtractFileName(Pdf)]),
+    'report_projects');
+  FExports := FExports + [Xlsx, Pdf];
 
   // ── часть 6: отчёты и выгрузка в Excel и PDF ──
 

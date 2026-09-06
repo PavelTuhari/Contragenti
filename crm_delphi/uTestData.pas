@@ -22,7 +22,7 @@ uses
 
 type
   TSeedStats = record
-    Clients, Contacts, Leads, Deals, Items, Orders, Lines, Tasks: Integer;
+    Clients, Contacts, Leads, Deals, Items, Orders, Lines, Tasks, Projects, ProjectTasks: Integer;
     function Text: string;
   end;
 
@@ -33,7 +33,7 @@ implementation
 
 uses
   System.StrUtils, System.Variants, System.Math, System.DateUtils, System.IOUtils,
-  FireDAC.Comp.Client, uReports, uReportTable;
+  FireDAC.Comp.Client, uReports, uReportTable, uBoardCards;
 
 { Проверка выгрузки по сигнатуре файла, а не по расширению. }
 function HeadOf(const FileName: string; Count: Integer): TBytes;
@@ -73,8 +73,8 @@ end;
 function TSeedStats.Text: string;
 begin
   Result := Format('клиентов %d, контактов %d, лидов %d, сделок %d, номенклатуры %d, ' +
-    'заказов %d (строк %d), задач %d',
-    [Clients, Contacts, Leads, Deals, Items, Orders, Lines, Tasks]);
+    'заказов %d (строк %d), задач %d, проектов %d (задач по проектам %d)',
+    [Clients, Contacts, Leads, Deals, Items, Orders, Lines, Tasks, Projects, ProjectTasks]);
 end;
 
 { ── справочные наборы ── }
@@ -150,6 +150,104 @@ const
     'Напомнить об акте выполненных работ', 'Презентация продукции', 'Уточнить реквизиты',
     'Контроль отгрузки');
 
+{ ── проекты: единичные изделия под заказ по образцу gravura.md (лазерная
+     гравировка, выжиг на дереве) и BM Public (рекламные конструкции: панно
+     с логотипом, световые короба, стенды). Партнёры-производители заведены
+     как клиенты типа «Партнёр»; заказчики проектов — фирмы из COMPANIES.
+     Реквизиты партнёров демонстрационные. ── }
+type
+  TProjectSeed = record
+    Name: string;
+    ClientIdx: Integer;       // индекс в COMPANIES
+    Kind, Status, Tender: string;
+    Budget, PrepayPct: Integer;
+    StartOff, DueOff: Integer; // дни от сегодня
+    Manager, Notes: string;
+  end;
+
+const
+  PARTNERS: array[0..1] of TCompany = (
+    (Idno: '1010600044123'; Name: 'GRAVURA.MD S.R.L.'; Form: 'Societate cu răspundere limitată';
+     Addr: 'mun. Chişinău, str. Uzinelor 19'; Admin: 'ROŞCA DENIS [Administrator]'; CType: 'Партнёр';
+     Phone: '+373 22 000-111'; Email: 'office@gravura.md'),
+    (Idno: '1009600037654'; Name: 'BM PUBLIC S.R.L.'; Form: 'Societate cu răspundere limitată';
+     Addr: 'mun. Chişinău, str. Calea Ieşilor 10'; Admin: 'BOTNARI MARIN [Administrator]'; CType: 'Партнёр';
+     Phone: '+373 22 000-222'; Email: 'office@bmpublic.md'));
+
+  PROJECTS_SEED: array[0..9] of TProjectSeed = (
+    (Name: 'Панно с логотипом на стену 3×1,5 м (акрил, подсветка)'; ClientIdx: 11; Kind: 'Реклама';
+     Status: 'Производство'; Tender: 'T-2026-014'; Budget: 48000; PrepayPct: 50; StartOff: -20; DueOff: 10;
+     Manager: 'Ion Popescu'; Notes: 'Тендер IT-Solutions: панно в холле офиса. Производство — партнёр BM PUBLIC (фрезеровка, объёмные буквы, LED).'),
+    (Name: 'Таблички с выжигом поздравлений, дуб, 200 шт. (юбилей)'; ClientIdx: 3; Kind: 'Гравировка';
+     Status: 'Дизайн'; Tender: 'T-2026-021'; Budget: 36000; PrepayPct: 0; StartOff: -7; DueOff: 21;
+     Manager: 'Maria Ceban'; Notes: 'Без аванса: по условиям тендера оплата после сдачи. Выжиг и лазер — партнёр GRAVURA.MD.'),
+    (Name: 'Гравировка подарочных ручек и ежедневников, 500 шт.'; ClientIdx: 5; Kind: 'Сувениры';
+     Status: 'Закрыт'; Tender: ''; Budget: 22500; PrepayPct: 30; StartOff: -60; DueOff: -25;
+     Manager: 'Ion Popescu'; Notes: 'Без тендера, прямой заказ. Сдан и оплачен полностью.'),
+    (Name: 'Световой короб на фасад магазина 4×1 м'; ClientIdx: 12; Kind: 'Реклама';
+     Status: 'Проигран'; Tender: 'T-2026-009'; Budget: 61000; PrepayPct: 40; StartOff: -30; DueOff: 5;
+     Manager: 'Ion Popescu'; Notes: 'Тендер проигран по цене — заявка сохранена для следующего раза.'),
+    (Name: 'Брендирование автомобиля доставки (плёнка, логотип)'; ClientIdx: 4; Kind: 'Реклама';
+     Status: 'Аванс'; Tender: 'T-2026-027'; Budget: 18900; PrepayPct: 50; StartOff: -3; DueOff: 14;
+     Manager: 'Ion Popescu'; Notes: 'Договор подписан, ждём аванс 50 % — работы начнутся после поступления.'),
+    (Name: 'Деревянные медали с гравировкой для марафона, 1 200 шт.'; ClientIdx: 9; Kind: 'Сувениры';
+     Status: 'Оплата'; Tender: 'T-2026-016'; Budget: 54000; PrepayPct: 30; StartOff: -35; DueOff: -2;
+     Manager: 'Maria Ceban'; Notes: 'Сдано по акту, ждём остаток оплаты 70 %. Гравировка — GRAVURA.MD.'),
+    (Name: 'Выставочный стенд Moldexpo 6×3 м с панно и подсветкой'; ClientIdx: 10; Kind: 'Монтаж';
+     Status: 'Производство'; Tender: 'T-2026-019'; Budget: 96000; PrepayPct: 50; StartOff: -25; DueOff: -3;
+     Manager: 'Victor Botnari'; Notes: 'Запаздывает: срок сдачи прошёл, конструкция ещё в производстве. Монтаж — BM PUBLIC.'),
+    (Name: 'Панно-табличка ресторана из дуба с логотипом (лазер)'; ClientIdx: 7; Kind: 'Гравировка';
+     Status: 'Договор'; Tender: ''; Budget: 9800; PrepayPct: 50; StartOff: 0; DueOff: 18;
+     Manager: 'Andrei Rusu'; Notes: 'Прямой заказ, договор на подписи; аванс 50 %.'),
+    (Name: 'Наградные доски и кубки с гравировкой (конкурс)'; ClientIdx: 0; Kind: 'Сувениры';
+     Status: 'Тендер'; Tender: 'T-2026-031'; Budget: 27000; PrepayPct: 30; StartOff: 2; DueOff: 40;
+     Manager: 'Maria Ceban'; Notes: 'Заявка подана, вскрытие предложений через 5 дней.'),
+    (Name: 'Вывеска и панно на входе (композит + объёмные буквы)'; ClientIdx: 2; Kind: 'Реклама';
+     Status: 'Сдача'; Tender: 'T-2026-012'; Budget: 74500; PrepayPct: 50; StartOff: -40; DueOff: 1;
+     Manager: 'Victor Botnari'; Notes: 'Смонтировано, назначена приёмка и подписание акта.'));
+
+  // шаги проекта: тема, исполнитель, часы; шаг 7 зависит от вида проекта
+  PROJECT_STEPS: array[0..10, 0..2] of string = (
+    ('Подготовка тендерной заявки', 'Ion Popescu', '4'),
+    ('Договор и спецификация', 'Ion Popescu', '3'),
+    ('Счёт на аванс и контроль оплаты', 'Elena Ciobanu', '1'),
+    ('Дизайн-макет', 'Maria Ceban', '8'),
+    ('Согласование макета с клиентом', 'Ion Popescu', '2'),
+    ('Закупка материалов', 'Victor Botnari', '3'),
+    ('Производство', 'Andrei Rusu', '16'),
+    ('Контроль качества', 'Andrei Rusu', '2'),
+    ('Монтаж / доставка', 'Victor Botnari', '6'),
+    ('Сдача работ и акт', 'Ion Popescu', '1'),
+    ('Итоговый счёт и закрытие оплаты', 'Elena Ciobanu', '1'));
+  PROJECT_ITEMS: array[0..2, 0..5] of string = (
+    ('P-101', 'Панно с логотипом (изделие под заказ)', 'Изделие', 'шт', '1', '0'),
+    ('P-102', 'Табличка с гравировкой / выжигом, дерево', 'Изделие', 'шт', '1', '0'),
+    ('P-103', 'Стенд выставочный (изделие под заказ)', 'Изделие', 'компл', '1', '0'));
+
+{ Сколько шагов проекта уже готово на данном этапе. }
+function DoneStepsFor(const Status: string): Integer;
+begin
+  if Status = 'Тендер' then Result := 0
+  else if Status = 'Договор' then Result := 1
+  else if Status = 'Аванс' then Result := 2
+  else if Status = 'Дизайн' then Result := 3
+  else if Status = 'Производство' then Result := 6
+  else if Status = 'Сдача' then Result := 9
+  else if Status = 'Оплата' then Result := 10
+  else if Status = 'Закрыт' then Result := 11
+  else Result := 1;   // проигран: заявка подана, дальше не пошли
+end;
+
+function ProductionStep(const Kind: string; out Who, Hours: string): string;
+begin
+  Who := 'Andrei Rusu'; Hours := '16';
+  if Kind = 'Реклама' then begin Result := 'Резка ЧПУ, сборка панно, покраска'; Who := 'Victor Botnari'; Hours := '24'; end
+  else if Kind = 'Гравировка' then Result := 'Лазерная гравировка и выжиг'
+  else if Kind = 'Сувениры' then begin Result := 'Гравировка партии и упаковка'; Hours := '20'; end
+  else if Kind = 'Монтаж' then begin Result := 'Изготовление конструкции стенда'; Who := 'Victor Botnari'; Hours := '40'; end
+  else Result := 'Производство';
+end;
+
 function D(Days: Integer): string;
 begin
   Result := FormatDateTime('yyyy-mm-dd', Now + Days);
@@ -204,6 +302,10 @@ var
   Ids: TArray<Integer>;
   Statuses: TArray<string>;
   Totals: TArray<Double>;
+  PS: TProjectSeed;
+  ProjectId, TaskId, PrevTaskId, DoneN, Cursor, Days, StepN, ItemN: Integer;
+  Prepaid, Paid: Double;
+  Subj, Who, Hours, Stage, Prio, OStatus: string;
 begin
   FillChar(Result, SizeOf(Result), 0);
   Data.EnsureSchema;
@@ -396,6 +498,117 @@ begin
       'notes', '']));
     Inc(Result.Tasks);
   end;
+
+  // ── проекты: партнёры-производители, изделия, проекты с тендерами и
+  //    авансами, задачи по шагам, производственные заказы ──
+  for I := 0 to High(PARTNERS) do
+  begin
+    C := PARTNERS[I];
+    Card.Clear;
+    Card.Idno := C.Idno; Card.Denumire := C.Name; Card.FormaJuridica := C.Form;
+    Card.Adresa := C.Addr; Card.Administratori := C.Admin; Card.Lichidata := 'Nu';
+    Card.Inregistrare := Format('1%d.0%d.20%.2d', [I + 1, I + 3, 12 + I]);
+    Card.DetailsText := '=== Date de bază ===' + sLineBreak + 'IDNO/Cod Fiscal: ' + C.Idno +
+      sLineBreak + 'Denumire: ' + C.Name + sLineBreak + 'Adresa juridică: ' + C.Addr;
+    if DB.AddFromCard(Card, Id) = arAdded then Inc(Result.Clients);
+    ClientId := Data.Scalar('SELECT id FROM clients WHERE idno = ' + Q(C.Idno));
+    DB.Connection.ExecSQL('UPDATE clients SET client_type = :t, phone = :p, email = :e, ' +
+      'contact_person = :c WHERE id = :id AND (client_type IS NULL OR client_type = '''')',
+      [C.CType, C.Phone, C.Email, C.Admin, ClientId]);
+  end;
+  for I := 0 to High(PROJECT_ITEMS) do
+    if not Exists(Data, 'items', 'code = ' + Q(PROJECT_ITEMS[I][0])) then
+    begin
+      Data.Insert(DefItems, Vals(DefItems, ['code', PROJECT_ITEMS[I][0], 'name', PROJECT_ITEMS[I][1],
+        'kind', PROJECT_ITEMS[I][2], 'unit_', PROJECT_ITEMS[I][3], 'price', PROJECT_ITEMS[I][4],
+        'vat', '20', 'stock', PROJECT_ITEMS[I][5], 'notes', 'Изделие по проекту: цена в строке заказа']));
+      Inc(Result.Items);
+    end;
+
+  for I := 0 to High(PROJECTS_SEED) do
+  begin
+    PS := PROJECTS_SEED[I];
+    if Exists(Data, 'projects', 'name = ' + Q(PS.Name)) then Continue;
+    ClientId := ClientIds[PS.ClientIdx];
+    // деньги по этапу: аванс с этапа «Аванс», остаток — только у закрытых
+    Prepaid := 0; Paid := 0;
+    if (DoneStepsFor(PS.Status) >= 2) and (PS.Status <> 'Проигран') then
+      Prepaid := Round(PS.Budget * PS.PrepayPct / 100);
+    if PS.Status = 'Закрыт' then Paid := PS.Budget - Prepaid;
+    ProjectId := Data.Insert(DefProjects, Vals(DefProjects, ['name', PS.Name,
+      'client_id', IntToStr(ClientId), 'kind', PS.Kind, 'status', PS.Status,
+      'tender_no', PS.Tender, 'tender_deadline', IfThen(PS.Tender <> '', D(PS.StartOff + 5), ''),
+      'budget', IntToStr(PS.Budget), 'prepay_pct', IntToStr(PS.PrepayPct),
+      'prepaid', FormatFloat('0', Prepaid), 'paid', FormatFloat('0', Paid),
+      'start_date', D(PS.StartOff), 'due_date', D(PS.DueOff),
+      'manager', PS.Manager, 'notes', PS.Notes]));
+    Inc(Result.Projects);
+
+    // тендер как сделка в воронке
+    if not Exists(Data, 'deals', 'title = ' + Q('Тендер: ' + PS.Name)) then
+    begin
+      Data.Insert(DefDeals, Vals(DefDeals, ['title', 'Тендер: ' + PS.Name,
+        'client_id', IntToStr(ClientId),
+        'stage', IfThen(PS.Status = 'Тендер', 'Предложение', IfThen(PS.Status = 'Проигран', 'Проиграна', 'Выиграна')),
+        'amount', IntToStr(PS.Budget), 'close_date', D(PS.StartOff + 5),
+        'notes', IfThen(PS.Tender <> '', 'Тендер ' + PS.Tender, 'Прямой заказ')]));
+      Inc(Result.Deals);
+    end;
+
+    // задачи по шагам: план последовательный от начала проекта, каждая
+    // зависит от предыдущей; готовые — по этапу; текущая — «В работе»
+    DoneN := DoneStepsFor(PS.Status);
+    Cursor := PS.StartOff;
+    PrevTaskId := 0;
+    StepN := 0;
+    for J := 0 to High(PROJECT_STEPS) do
+    begin
+      if (J = 2) and (PS.PrepayPct = 0) then Continue;          // без аванса — нет шага аванса
+      if (PS.Status = 'Проигран') and (J > 1) then Break;
+      Subj := PROJECT_STEPS[J][0]; Who := PROJECT_STEPS[J][1]; Hours := PROJECT_STEPS[J][2];
+      if J = 6 then Subj := ProductionStep(PS.Kind, Who, Hours);
+      Days := Max(1, Ceil(StrToInt(Hours) / 8));
+      Inc(StepN);
+      if StepN <= DoneN then Stage := 'Готово'
+      else if StepN = DoneN + 1 then Stage := IfThen(PS.Status = 'Проигран', 'Ожидание', 'В работе')
+      else Stage := 'Новая';
+      if J = 6 then Prio := 'Высокий' else if J = 7 then Prio := 'Низкий' else Prio := 'Обычный';
+      if (Stage = 'В работе') and (Cursor + Days - 1 < 0) then Prio := 'Срочно';   // просрочено
+      TaskId := Data.Insert(DefTasks, Vals(DefTasks, [
+        'subject', Subj, 'project_id', IntToStr(ProjectId), 'stage', Stage, 'priority', Prio,
+        'assignee', Who, 'kind', IfThen(J = 4, 'Встреча', 'Задача'),
+        'plan_start', D(Cursor), 'due_at', D(Cursor + Days - 1),
+        'hours_plan', Hours, 'hours_fact', IfThen(Stage = 'Готово', IntToStr(Round(StrToInt(Hours) * 1.1)), ''),
+        'seq', IntToStr(StepN), 'depends_on', IfThen(PrevTaskId > 0, IntToStr(PrevTaskId), ''),
+        'client_id', IntToStr(ClientId), 'done', IfThen(Stage = 'Готово', '1', '0'),
+        'notes', IfThen(J = 2, Format('Аванс %d %% от %d MDL', [PS.PrepayPct, PS.Budget]), '')]));
+      Inc(Result.ProjectTasks);
+      PrevTaskId := TaskId;
+      Inc(Cursor, Days);
+    end;
+
+    // производственный заказ — с этапа «Производство»
+    if (PS.Status = 'Производство') or (PS.Status = 'Сдача') or (PS.Status = 'Оплата') or (PS.Status = 'Закрыт') then
+    begin
+      Num := 'PR-' + IntToStr(1001 + I);
+      if not Exists(Data, 'orders', 'number = ' + Q(Num)) then
+      begin
+        if PS.Status = 'Производство' then OStatus := 'В работе'
+        else if PS.Status = 'Закрыт' then OStatus := 'Оплачен'
+        else OStatus := 'Выполнен';
+        OrderId := Data.Insert(DefOrders, Vals(DefOrders, ['number', Num, 'order_date', D(PS.StartOff),
+          'client_id', IntToStr(ClientId), 'project_id', IntToStr(ProjectId), 'kind', 'Производство',
+          'status', OStatus, 'due_date', D(PS.DueOff), 'notes', 'По проекту: ' + PS.Name]));
+        if PS.Kind = 'Реклама' then ItemN := 0 else if PS.Kind = 'Монтаж' then ItemN := 2 else ItemN := 1;
+        Data.AddOrderLine(OrderId, Data.Scalar('SELECT id FROM items WHERE code = ' + Q(PROJECT_ITEMS[ItemN][0])),
+          1, PS.Budget);
+        Inc(Result.Orders); Inc(Result.Lines);
+        if OStatus <> 'В работе' then Data.PostOrder(OrderId);
+        Data.DB.Connection.ExecSQL('UPDATE orders SET advance = :a, paid = :p, ship_date = :s WHERE id = :i',
+          [Prepaid, Paid, IfThen((PS.Status = 'Оплата') or (PS.Status = 'Закрыт'), D(PS.DueOff), ''), OrderId]);
+      end;
+    end;
+  end;
 end;
 
 { ── DML-тест ── }
@@ -447,6 +660,8 @@ var
   Rows: TArray<TRow>;
   Rk: TReportKind;
   Rep: TReportTable;
+  Tn, Dn, Ov: Integer;
+  HP, HF: Double;
 begin
   Fails := 0;
   Data.EnsureSchema;
@@ -601,6 +816,49 @@ begin
   Rows := Data.List(DefTasks, '', 't.id = ' + IntToStr(Id) + ' AND t.done = 0');
   Check(Length(Rows) = 0, 'tasks: после «Выполнено» не попадает в открытые');
   Data.Delete(DefTasks, Id);
+
+  // ── проекты и задачи проекта: этап ⇔ «выполнено», доски, сводка ──
+  CrudCycle(DefProjects, 'name',
+    ['name', 'Тест Проект', 'client_id', IntToStr(ClientId), 'kind', 'Реклама', 'status', 'Тендер',
+     'budget', '1000', 'prepay_pct', '50'],
+    ['name', 'Тест Проект (изм.)', 'client_id', IntToStr(ClientId), 'kind', 'Гравировка', 'status', 'Договор',
+     'budget', '2000', 'prepay_pct', '30']);
+  Id := Data.Insert(DefProjects, Vals(DefProjects, ['name', 'DML проект', 'client_id', IntToStr(ClientId),
+    'kind', 'Гравировка', 'status', 'Договор', 'budget', '10000', 'prepay_pct', '30']));
+  Id2 := Data.Insert(DefTasks, Vals(DefTasks, ['subject', 'DML задача 1', 'project_id', IntToStr(Id),
+    'stage', 'Новая', 'priority', 'Высокий', 'assignee', 'Ion Popescu', 'plan_start', D(-2), 'due_at', D(-1),
+    'hours_plan', '4', 'seq', '1', 'done', '0']));
+  V := Data.Scalar('SELECT done FROM tasks WHERE id = ' + IntToStr(Id2));
+  Check(Integer(V) = 0, 'tasks: новая задача проекта — done = 0');
+  Data.SetTaskStage(Id2, 'Готово');
+  V := Data.Scalar('SELECT done FROM tasks WHERE id = ' + IntToStr(Id2));
+  Check(Integer(V) = 1, 'tasks: этап «Готово» выставляет done = 1');
+  Data.SetTaskDone(Id2, False);
+  V := Data.Scalar('SELECT stage FROM tasks WHERE id = ' + IntToStr(Id2));
+  Check(VarToStr(V) = 'В работе', 'tasks: снятие «выполнено» возвращает этап «В работе»');
+  Data.Update(DefTasks, Id2, Vals(DefTasks, ['subject', 'DML задача 1', 'project_id', IntToStr(Id),
+    'stage', 'Проверка', 'priority', 'Высокий', 'assignee', 'Ion Popescu', 'plan_start', D(-2), 'due_at', D(-1),
+    'hours_plan', '4', 'seq', '1', 'done', '1']));
+  V := Data.Scalar('SELECT done FROM tasks WHERE id = ' + IntToStr(Id2));
+  Check(Integer(V) = 0, 'tasks: редактор: этап «Проверка» при done=1 — этап главнее, done сброшен');
+  Data.ProjectSummary(Id, Tn, Dn, Ov, HP, HF);
+  Check((Tn = 1) and (Dn = 0) and (Ov = 1) and (Abs(HP - 4) < 0.01),
+    Format('projects: сводка задач всего %d / готово %d / просрочено %d, часы план %.0f', [Tn, Dn, Ov, HP]));
+  BoardProjectFilter := Id;
+  Check(MoveBoardCard(Data, bkProjectTasks, Id2, 4), 'board: задача проекта перенесена в колонку «Готово»');
+  V := Data.Scalar('SELECT done FROM tasks WHERE id = ' + IntToStr(Id2));
+  Check((Integer(V) = 1) and (Data.ProjectProgress(Id) = 100), 'board: done = 1, готовность проекта 100 %');
+  BoardProjectFilter := 0;
+  Check(MoveBoardCard(Data, bkProjects, Id, 2), 'board: проект перенесён в «Аванс»');
+  V := Data.Scalar('SELECT prepaid FROM projects WHERE id = ' + IntToStr(Id));
+  Check(Abs(Double(V) - 3000) < 0.01, 'projects: аванс 30 % от 10 000 = 3 000 записан при переходе в «Аванс»');
+  Check(MoveBoardCard(Data, bkProjects, Id, 7), 'board: проект перенесён в «Закрыт»');
+  V := Data.Scalar('SELECT paid FROM projects WHERE id = ' + IntToStr(Id));
+  Check(Abs(Double(V) - 7000) < 0.01, 'projects: при закрытии оплачен остаток 7 000');
+  Rows := Data.List(DefProjects, '', 't.status = ''Закрыт'' AND t.id = ' + IntToStr(Id));
+  Check(Length(Rows) = 1, 'projects: пресет «Закрыт» находит проект');
+  Data.Delete(DefProjects, Id);
+  Check(Data.Count('tasks', 'project_id = ' + IntToStr(Id)) = 0, 'projects: DELETE удаляет задачи проекта');
 
   // ── уборка ──
   Data.Delete(DefItems, ItemGoods);

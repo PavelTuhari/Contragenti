@@ -25,7 +25,7 @@ uses
 
 type
   TNavSection = (nsWorkspace, nsKanban, nsProcess, nsGantt, nsAccounts, nsContacts, nsLeads,
-    nsDeals, nsItems, nsOrders, nsCalendar, nsReports, nsSettings);
+    nsDeals, nsItems, nsOrders, nsProjects, nsCalendar, nsReports, nsSettings);
 
   TMainForm = class(TForm)
   private
@@ -105,6 +105,10 @@ type
     procedure OnKanbanOpen(Board: TBoardKind; Id: Integer);
     procedure OnProcessOpenColumn(Board: TBoardKind; Col: Integer);
     procedure OnGanttOpen(OrderId: Integer);
+    procedure OnGanttOpenProject(Id: Integer);
+    procedure OnGanttOpenTask(Id: Integer);
+    procedure OnProjectTasks(Sender: TObject);
+    procedure OnProjectGantt(Sender: TObject);
     procedure OnCalendarOpenTask(TaskId: Integer);
     procedure OnCalendarNewTask(const ADate: TDateTime);
     procedure OnCalendarShowList(Sender: TObject);
@@ -158,6 +162,7 @@ type
     procedure TestClickSettings;
     procedure TestLeadConvert;
     procedure TestTaskDone;
+    procedure TestProjectTasks;
     procedure TestOverviewSet(const AType, Phone, Email, Contact: string);
     function  TestListCount: Integer;
     function  TestDbCount: Integer;
@@ -400,6 +405,7 @@ begin
   AddNavItem(nsDeals,     '$', T.S('nav.deals'));
   AddNavItem(nsItems,     '▤', T.S('nav.items'));
   AddNavItem(nsOrders,    '▥', T.S('nav.orders'));
+  AddNavItem(nsProjects,  '⚑', T.S('nav.projects'));
   AddNavItem(nsCalendar,  '▦', T.S('nav.calendar'));
   AddNavItem(nsReports,   '▤', T.S('nav.reports'));
 
@@ -660,6 +666,7 @@ begin
   FPages[nsItems]    := TEntityPage.Create(Self, FContent, FCrm, DefItems, Say);
   FPages[nsOrders]   := TEntityPage.Create(Self, FContent, FCrm, DefOrders, Say);
   FPages[nsCalendar] := TEntityPage.Create(Self, FContent, FCrm, DefTasks, Say);
+  FPages[nsProjects] := TEntityPage.Create(Self, FContent, FCrm, DefProjects, Say);
   for P in FPages do
     if P <> nil then
       P.OnChanged := OnPageChanged;
@@ -680,9 +687,20 @@ begin
      't.kind = ''Продажа''', 't.kind = ''Услуга''', 't.kind = ''Производство''']);
 
   FPages[nsCalendar].AddExtraButton('Выполнено', OnTaskDone, False, 120);
-  FPages[nsCalendar].SetPresets(['Открытые', 'Сегодня', 'Просроченные', 'Все'],
+  FPages[nsCalendar].SetPresets(['Открытые', 'Сегодня', 'Просроченные', 'Все', 'В работе', 'По проектам'],
     ['t.done = 0', 't.done = 0 AND t.due_at = date(''now'',''localtime'')',
-     't.done = 0 AND t.due_at < date(''now'',''localtime'')', '']);
+     't.done = 0 AND t.due_at < date(''now'',''localtime'')', '',
+     't.done = 0 AND t.stage = ''В работе''', 'COALESCE(t.project_id,0) > 0']);
+
+  // проекты: пресеты по этапам совпадают с колонками канбана и узлами схемы
+  FPages[nsProjects].AddExtraButton('Задачи проекта', OnProjectTasks, False, 140);
+  FPages[nsProjects].AddExtraButton('План (Гант)', OnProjectGantt, False, 120);
+  FPages[nsProjects].SetPresets(
+    ['Все', 'Тендер', 'Договор', 'Аванс', 'Дизайн', 'Производство', 'Сдача', 'Оплата', 'Закрыт', 'Проигран', 'Запаздывают'],
+    ['', 't.status = ''Тендер''', 't.status = ''Договор''', 't.status = ''Аванс''', 't.status = ''Дизайн''',
+     't.status = ''Производство''', 't.status = ''Сдача''', 't.status = ''Оплата''', 't.status = ''Закрыт''',
+     't.status = ''Проигран''',
+     't.status NOT IN (''Закрыт'',''Проигран'') AND COALESCE(t.due_date,'''') <> '''' AND t.due_date < date(''now'',''localtime'')']);
 end;
 
 { Пресеты разделов совпадают с плитками рабочего стола, поэтому нажатие на
@@ -718,6 +736,8 @@ begin
   FProcessPage.OnOpenColumn := OnProcessOpenColumn;
   FGanttPage := TGanttPage.Create(Self, FContent, FCrm, Say);
   FGanttPage.OnOpenOrder := OnGanttOpen;
+  FGanttPage.OnOpenProject := OnGanttOpenProject;
+  FGanttPage.OnOpenTask := OnGanttOpenTask;
   FCalendarPage := TCalendarPage.Create(Self, FContent, FCrm, Say);
   FCalendarPage.OnOpenTask := OnCalendarOpenTask;
   FCalendarPage.OnNewTask := OnCalendarNewTask;
@@ -806,7 +826,7 @@ procedure TMainForm.ApplyNavCaptions;
 const
   KEYS: array[TNavSection] of string = ('nav.workspace', 'nav.kanban', 'nav.process', 'nav.gantt',
     'nav.clients', 'nav.contacts', 'nav.leads', 'nav.deals', 'nav.items',
-    'nav.orders', 'nav.calendar', 'nav.reports', 'nav.settings');
+    'nav.orders', 'nav.projects', 'nav.calendar', 'nav.reports', 'nav.settings');
 var
   S: TNavSection;
 begin
@@ -856,8 +876,9 @@ end;
 
 procedure TMainForm.OnKanbanOpen(Board: TBoardKind; Id: Integer);
 const
-  SECTIONS: array[TBoardKind] of TNavSection = (nsOrders, nsDeals, nsCalendar);
+  SECTIONS: array[TBoardKind] of TNavSection = (nsOrders, nsDeals, nsCalendar, nsProjects, nsCalendar);
 begin
+  if Board in [bkTasks, bkProjectTasks] then FCalendarAsGrid := False;
   OpenRecord(SECTIONS[Board], Id);
 end;
 
@@ -877,6 +898,17 @@ begin
         // пресеты сделок: Все, Предложение, Переговоры, Выиграна, Проиграна
         FPages[nsDeals].SelectPreset(IfThen(Col >= 1, Col, 0));
       end;
+    bkProjects:
+      begin
+        SelectSection(nsProjects);
+        FPages[nsProjects].SelectPreset(Col + 1);   // пресеты идут в порядке этапов
+      end;
+    bkProjectTasks:
+      begin
+        FCalendarAsGrid := False;
+        SelectSection(nsCalendar);
+        FPages[nsCalendar].SelectPreset(5);         // «По проектам»
+      end;
   else
     FCalendarAsGrid := False;
     SelectSection(nsCalendar);
@@ -894,6 +926,38 @@ end;
 procedure TMainForm.OnGanttOpen(OrderId: Integer);
 begin
   OpenRecord(nsOrders, OrderId);
+end;
+
+procedure TMainForm.OnGanttOpenProject(Id: Integer);
+begin
+  OpenRecord(nsProjects, Id);
+end;
+
+procedure TMainForm.OnGanttOpenTask(Id: Integer);
+begin
+  FCalendarAsGrid := False;
+  OpenRecord(nsCalendar, Id);
+end;
+
+{ Кнопка «Задачи проекта»: доска задач выбранного проекта по этапам. }
+procedure TMainForm.OnProjectTasks(Sender: TObject);
+var
+  Id: Integer;
+begin
+  Id := FPages[nsProjects].SelectedId;
+  if Id = 0 then
+  begin
+    Say(mkWarn, 'Выберите проект в списке.');
+    Exit;
+  end;
+  SelectSection(nsKanban);
+  FKanbanPage.SelectProject(Id);
+end;
+
+procedure TMainForm.OnProjectGantt(Sender: TObject);
+begin
+  SelectSection(nsGantt);
+  FGanttPage.SelectFilter(3);
 end;
 
 { Календарь и список задач — два вида одного раздела. }
@@ -1008,6 +1072,7 @@ begin
   Titles[nsContacts] := T.S('nav.contacts'); Titles[nsLeads] := T.S('nav.leads');
   Titles[nsDeals] := T.S('nav.deals'); Titles[nsItems] := T.S('nav.items');
   Titles[nsOrders] := T.S('nav.orders'); Titles[nsCalendar] := T.S('nav.calendar');
+  Titles[nsProjects] := T.S('nav.projects');
   Titles[nsReports] := T.S('nav.reports'); Titles[nsSettings] := T.S('nav.settings');
 
   if Section = nsSettings then
@@ -1378,7 +1443,7 @@ begin
     Say(mkWarn, 'Выберите задачу в списке.');
     Exit;
   end;
-  FCrm.DB.Connection.ExecSQL('UPDATE tasks SET done = 1 WHERE id = :id', [Id]);
+  FCrm.SetTaskDone(Id, True);   // этап «Готово» и флаг — одно состояние
   FPages[nsCalendar].Cancel;
   FPages[nsCalendar].Refresh;
   Say(mkOk, 'Задача отмечена выполненной.');
@@ -1504,6 +1569,11 @@ end;
 procedure TMainForm.TestTaskDone;
 begin
   OnTaskDone(nil);
+end;
+
+procedure TMainForm.TestProjectTasks;
+begin
+  OnProjectTasks(nil);
 end;
 
 procedure TMainForm.TestOverviewSet(const AType, Phone, Email, Contact: string);

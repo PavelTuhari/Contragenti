@@ -32,6 +32,7 @@
       "nav.deals": "Oportunități",
       "nav.items": "Nomenclator",
       "nav.orders": "Comenzi",
+      "nav.projects": "Proiecte",
       "nav.calendar": "Calendar",
       "nav.reports": "Rapoarte",
       "nav.settings": "Setări",
@@ -162,7 +163,14 @@
       "process.saved": "Descrierea etapei „%s” salvată în %s.",
       "process.select_node": "Selectați o etapă pe schemă.",
       "process.missing": "Fișierul cu descrierea proceselor nu a fost găsit: %s",
-      "process.opened": "Secțiune deschisă cu filtrul etapei: %d înregistrări"
+      "process.opened": "Secțiune deschisă cu filtrul etapei: %d înregistrări",
+      "kanban.board_projects": "Proiecte — etape",
+      "kanban.board_project_tasks": "Sarcinile proiectului — etape",
+      "kanban.all_projects": "Toate proiectele",
+      "kanban.project": "Proiect: %s",
+      "kanban.tasks_of": "sarcini %s",
+      "report.projects": "Proiecte: licitații, avansuri, sarcini",
+      "report.projects.hint": "Fiecare proiect: etapă, buget, avans și plată, datorie, sarcini și întârzieri"
     },
     "enums": {
       "client_type": [
@@ -243,6 +251,37 @@
         "Executată, livrarea nu este întocmită",
         "Livrată, plata nu este închisă",
         "Livrată și plătită integral"
+      ],
+      "project_kind": [
+        "Publicitate",
+        "Gravură",
+        "Suveniruri",
+        "Montaj",
+        "Altele"
+      ],
+      "project_status": [
+        "Licitație",
+        "Contract",
+        "Avans",
+        "Design",
+        "Producție",
+        "Predare",
+        "Plată",
+        "Închis",
+        "Pierdut"
+      ],
+      "task_stage": [
+        "Nouă",
+        "În lucru",
+        "Așteptare",
+        "Verificare",
+        "Gata"
+      ],
+      "task_priority": [
+        "Scăzută",
+        "Normală",
+        "Ridicată",
+        "Urgent"
       ]
     }
   },
@@ -272,6 +311,7 @@
       "nav.deals": "Deals",
       "nav.items": "Items",
       "nav.orders": "Orders",
+      "nav.projects": "Projects",
       "nav.calendar": "Calendar",
       "nav.reports": "Reports",
       "nav.settings": "Settings",
@@ -402,7 +442,14 @@
       "process.saved": "Description of “%s” saved to %s.",
       "process.select_node": "Select a stage on the diagram.",
       "process.missing": "Process description file not found: %s",
-      "process.opened": "Section opened with the stage filter: %d records"
+      "process.opened": "Section opened with the stage filter: %d records",
+      "kanban.board_projects": "Projects — stages",
+      "kanban.board_project_tasks": "Project tasks — stages",
+      "kanban.all_projects": "All projects",
+      "kanban.project": "Project: %s",
+      "kanban.tasks_of": "tasks %s",
+      "report.projects": "Projects: tenders, advances, tasks",
+      "report.projects.hint": "Each project: stage, budget, advance and payment, debt, tasks and overdue"
     },
     "enums": {
       "client_type": [
@@ -483,6 +530,37 @@
         "Completed, shipment not recorded",
         "Shipped, payment not closed",
         "Shipped and fully paid"
+      ],
+      "project_kind": [
+        "Advertising",
+        "Engraving",
+        "Souvenirs",
+        "Installation",
+        "Other"
+      ],
+      "project_status": [
+        "Tender",
+        "Contract",
+        "Advance",
+        "Design",
+        "Production",
+        "Handover",
+        "Payment",
+        "Closed",
+        "Lost"
+      ],
+      "task_stage": [
+        "New",
+        "In progress",
+        "Waiting",
+        "Review",
+        "Done"
+      ],
+      "task_priority": [
+        "Low",
+        "Normal",
+        "High",
+        "Urgent"
       ]
     }
   },
@@ -512,6 +590,7 @@
       "nav.deals": "Сделки",
       "nav.items": "Номенклатура",
       "nav.orders": "Заказы",
+      "nav.projects": "Проекты",
       "nav.calendar": "Календарь",
       "nav.reports": "Отчёты",
       "nav.settings": "Настройки",
@@ -642,7 +721,14 @@
       "process.saved": "Описание этапа «%s» сохранено в %s.",
       "process.select_node": "Выберите этап на схеме.",
       "process.missing": "Не найден файл описания процессов: %s",
-      "process.opened": "Открыт раздел с фильтром этапа: записей %d"
+      "process.opened": "Открыт раздел с фильтром этапа: записей %d",
+      "kanban.board_projects": "Проекты — этапы",
+      "kanban.board_project_tasks": "Задачи проекта — этапы",
+      "kanban.all_projects": "Все проекты",
+      "kanban.project": "Проект: %s",
+      "kanban.tasks_of": "задач %s",
+      "report.projects": "Проекты: тендеры, авансы, задачи",
+      "report.projects.hint": "Каждый проект: этап, бюджет, аванс и оплата, долг, задачи и просрочка"
     },
     "enums": {
       "client_type": [
@@ -723,6 +809,37 @@
         "Исполнен, отгрузка не оформлена",
         "Отгружен, оплата не закрыта",
         "Отгружен и полностью оплачен"
+      ],
+      "project_kind": [
+        "Реклама",
+        "Гравировка",
+        "Сувениры",
+        "Монтаж",
+        "Другое"
+      ],
+      "project_status": [
+        "Тендер",
+        "Договор",
+        "Аванс",
+        "Дизайн",
+        "Производство",
+        "Сдача",
+        "Оплата",
+        "Закрыт",
+        "Проигран"
+      ],
+      "task_stage": [
+        "Новая",
+        "В работе",
+        "Ожидание",
+        "Проверка",
+        "Готово"
+      ],
+      "task_priority": [
+        "Низкий",
+        "Обычный",
+        "Высокий",
+        "Срочно"
       ]
     }
   }

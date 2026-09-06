@@ -13,7 +13,7 @@ uses
   System.SysUtils, System.Classes, uCrmData, uReportTable;
 
 type
-  TReportKind = (rkProcess, rkReceivables, rkSalesByClient, rkFunnel, rkStock);
+  TReportKind = (rkProcess, rkReceivables, rkSalesByClient, rkFunnel, rkStock, rkProjects);
 
   TReportInfo = record
     Kind: TReportKind;
@@ -34,7 +34,9 @@ const
     (Kind: rkFunnel;       Title: 'Воронка продаж';
      Hint: 'Сделки по этапам: количество, сумма, средний чек'),
     (Kind: rkStock;        Title: 'Остатки номенклатуры';
-     Hint: 'Товары и изделия: остаток и его стоимость'));
+     Hint: 'Товары и изделия: остаток и его стоимость'),
+    (Kind: rkProjects;     Title: 'Проекты: тендеры, авансы, задачи';
+     Hint: 'Каждый проект: этап, бюджет, аванс и оплата, долг, задачи и просрочка'));
 
 function BuildReport(Data: TCrmData; Kind: TReportKind): TReportTable;
 { Сохраняет отчёт в каталог и возвращает полный путь к файлу. }
@@ -265,6 +267,73 @@ begin
   Result := T;
 end;
 
+{ Проекты: по каждому — этап, тендер, деньги (бюджет, аванс по проценту и
+  фактически, оплачено, долг) и задачи (всего / готово / просрочено). }
+function ReportProjects(Data: TCrmData): TReportTable;
+var
+  T: TReportTable;
+  Q: TFDQuery;
+  Budget, Prepaid, Paid, Debt, SumBudget, SumPaid, SumDebt: Double;
+  Total, Done, Over, Cnt, OverAll: Integer;
+  HP, HF: Double;
+  Status: string;
+begin
+  T := TReportTable.Create;
+  T.Title := REPORTS[rkProjects].Title;
+  T.Subtitle := 'Состояние на ' + Today + '. Долг = бюджет − аванс − оплата (для незакрытых и не проигранных).';
+  T.AddCol('Проект', ckText, 200);
+  T.AddCol('Клиент', ckText, 150);
+  T.AddCol('Этап', ckText, 80);
+  T.AddCol('Тендер', ckText, 70);
+  T.AddCol('Бюджет, MDL', ckMoney, 90);
+  T.AddCol('Аванс, %', ckNumber, 55);
+  T.AddCol('Аванс, MDL', ckMoney, 85);
+  T.AddCol('Оплачено, MDL', ckMoney, 90);
+  T.AddCol('Долг, MDL', ckMoney, 85);
+  T.AddCol('Задач', ckNumber, 50);
+  T.AddCol('Готово', ckNumber, 55);
+  T.AddCol('Просрочено', ckNumber, 70);
+  T.AddCol('Сдача', ckDate, 80);
+  SumBudget := 0; SumPaid := 0; SumDebt := 0; Cnt := 0; OverAll := 0;
+  Q := Data.OpenQuery(
+    'SELECT p.id, p.name, COALESCE(c.denumire, ''—'') AS client, p.status, ' +
+    ' COALESCE(p.tender_no,'''') AS tender, COALESCE(p.budget,0) AS budget, ' +
+    ' COALESCE(p.prepay_pct,0) AS pct, COALESCE(p.prepaid,0) AS prepaid, COALESCE(p.paid,0) AS paid, ' +
+    ' COALESCE(p.due_date,'''') AS due ' +
+    'FROM projects p LEFT JOIN clients c ON c.id = p.client_id ' +
+    'ORDER BY CASE p.status WHEN ''Закрыт'' THEN 2 WHEN ''Проигран'' THEN 3 ELSE 1 END, p.due_date');
+  try
+    while not Q.Eof do
+    begin
+      Status := Q.FieldByName('status').AsString;
+      Budget := Q.FieldByName('budget').AsFloat;
+      Prepaid := Q.FieldByName('prepaid').AsFloat;
+      Paid := Q.FieldByName('paid').AsFloat;
+      if (Status = 'Закрыт') or (Status = 'Проигран') then Debt := 0
+      else Debt := Max(0, Budget - Prepaid - Paid);
+      Data.ProjectSummary(Q.FieldByName('id').AsInteger, Total, Done, Over, HP, HF);
+      T.AddRow([Q.FieldByName('name').AsString, Q.FieldByName('client').AsString, Status,
+        Q.FieldByName('tender').AsString, M(Budget), N(Round(Q.FieldByName('pct').AsFloat)),
+        M(Prepaid), M(Paid), IfThen(Debt > 0, M(Debt), ''), N(Total), N(Done),
+        IfThen(Over > 0, N(Over), ''), Q.FieldByName('due').AsString]);
+      if Status <> 'Проигран' then
+      begin
+        SumBudget := SumBudget + Budget;
+        SumPaid := SumPaid + Prepaid + Paid;
+        SumDebt := SumDebt + Debt;
+      end;
+      Inc(Cnt);
+      Inc(OverAll, Over);
+      Q.Next;
+    end;
+  finally
+    Q.Free;
+  end;
+  T.SetTotals(['Итого', Format('проектов: %d', [Cnt]), '', '', M(SumBudget), '', '',
+    M(SumPaid), M(SumDebt), '', '', N(OverAll), '']);
+  Result := T;
+end;
+
 function BuildReport(Data: TCrmData; Kind: TReportKind): TReportTable;
 begin
   case Kind of
@@ -273,6 +342,7 @@ begin
     rkSalesByClient: Result := ReportSalesByClient(Data);
     rkFunnel:        Result := ReportFunnel(Data);
     rkStock:         Result := ReportStock(Data);
+    rkProjects:      Result := ReportProjects(Data);
   else
     raise Exception.Create('Неизвестный отчёт');
   end;
@@ -295,7 +365,7 @@ function ExportReport(Data: TCrmData; Kind: TReportKind; Fmt: TExportFormat;
   const Dir: string): string;
 const
   FILES: array[TReportKind] of string = (
-    'process', 'receivables', 'sales_by_client', 'funnel', 'stock');
+    'process', 'receivables', 'sales_by_client', 'funnel', 'stock', 'projects');
 var
   T: TReportTable;
   Ext: string;

@@ -16,7 +16,7 @@ uses
 
 type
   TFieldKind = (fkText, fkMemo, fkNumber, fkMoney, fkDate, fkEnum,
-    fkLookupClient, fkLookupDeal, fkLookupItem, fkBool, fkReadOnly);
+    fkLookupClient, fkLookupDeal, fkLookupItem, fkLookupProject, fkBool, fkReadOnly);
 
   TFieldDef = record
     Name: string;        // колонка в таблице
@@ -115,6 +115,17 @@ type
     // лид → клиент
     function ConvertLead(LeadId: Integer; out ClientId: Integer): string;
 
+    { ── задачи и проекты ── }
+    { Этап и флаг «выполнено» — одно состояние с двух сторон: «Готово» ⇔ done.
+      Все переключения идут через эти два метода (кнопка, канбан, схема). }
+    procedure SetTaskDone(TaskId: Integer; Done: Boolean);
+    procedure SetTaskStage(TaskId: Integer; const Stage: string);
+    { Сводка по проекту: задач всего / готово / просрочено, часы план / факт. }
+    procedure ProjectSummary(ProjectId: Integer; out Total, Done, Overdue: Integer;
+      out HoursPlan, HoursFact: Double);
+    { Процент готовности проекта по задачам (0..100). }
+    function ProjectProgress(ProjectId: Integer): Integer;
+
     property DB: TClientsDB read FDB;
   end;
 
@@ -130,10 +141,16 @@ function EnumDisplayList(const EnumName, CanonicalList: string): TArray<string>;
 
 var
   // ── описания сущностей ──
-  DefContacts, DefLeads, DefDeals, DefItems, DefOrders, DefTasks: TEntityDef;
+  DefContacts, DefLeads, DefDeals, DefItems, DefOrders, DefTasks, DefProjects: TEntityDef;
 
 const
   ENUM_CLIENT_TYPE = 'Клиент;Поставщик;Партнёр';
+  // проект — единичное изделие/услуга под заказ (тендер → сдача → оплата)
+  ENUM_PROJECT_KIND   = 'Реклама;Гравировка;Сувениры;Монтаж;Другое';
+  ENUM_PROJECT_STATUS = 'Тендер;Договор;Аванс;Дизайн;Производство;Сдача;Оплата;Закрыт;Проигран';
+  // этап задачи — колонки доски задач проекта; «Готово» ⇔ done = 1
+  ENUM_TASK_STAGE    = 'Новая;В работе;Ожидание;Проверка;Готово';
+  ENUM_TASK_PRIORITY = 'Низкий;Обычный;Высокий;Срочно';
   ENUM_LEAD_STATUS = 'Новый;В работе;Конвертирован;Отказ';
   ENUM_LEAD_SOURCE = 'Сайт;Звонок;Рекомендация;Выставка;Реклама;Другое';
   ENUM_DEAL_STAGE  = 'Новая;Предложение;Переговоры;Выиграна;Проиграна';
@@ -146,7 +163,7 @@ const
 implementation
 
 uses
-  System.Variants, System.StrUtils, System.DateUtils, System.Hash, uI18n;
+  System.Variants, System.StrUtils, System.DateUtils, System.Hash, System.Math, uI18n;
 
 var
   // числа в базу пишутся с точкой независимо от локали Windows
@@ -260,6 +277,7 @@ begin
     FieldDef('number', '№', fkText, 60, True),
     FieldDef('order_date', 'Дата', fkDate, 85, True, '', 'today'),
     FieldDef('client_id', 'Клиент', fkLookupClient, 190),
+    FieldDef('project_id', 'Проект', fkLookupProject, 150),
     FieldDef('kind', 'Вид', fkEnum, 100, True, ENUM_ORDER_KIND, 'Продажа', 'order_kind'),
     FieldDef('status', 'Статус', fkEnum, 100, True, ENUM_ORDER_STATUS, 'Черновик', 'order_status'),
     FieldDef('total', 'Итого, MDL', fkReadOnly, 90),
@@ -269,19 +287,55 @@ begin
     FieldDef('ship_date', 'Отгружен', fkDate, 85),
     FieldDef('notes', 'Примечание', fkMemo)];
 
+  // Задача — единица работы по проекту: этап (колонка доски), приоритет,
+  // исполнитель, план начала и срок, часы план/факт, зависимость от другой
+  // задачи (№) и порядковый номер в проекте.
   DefTasks.Table := 'tasks';
   DefTasks.Title := 'Календарь';
   DefTasks.TitleOne := 'задачу';
-  DefTasks.OrderBy := 'done, due_at';
-  DefTasks.SearchCols := 'subject';
+  DefTasks.OrderBy := 'done, due_at, seq';
+  DefTasks.SearchCols := 'subject,assignee';
   DefTasks.Fields := [
-    FieldDef('subject', 'Тема', fkText, 240, True),
-    FieldDef('kind', 'Вид', fkEnum, 90, True, ENUM_TASK_KIND, 'Задача', 'task_kind'),
-    FieldDef('due_at', 'Срок', fkDate, 100, True, '', 'today'),
-    FieldDef('client_id', 'Клиент', fkLookupClient, 200),
-    FieldDef('deal_id', 'Сделка', fkLookupDeal, 160),
-    FieldDef('done', 'Выполнено', fkBool, 90),
+    FieldDef('subject', 'Тема', fkText, 220, True),
+    FieldDef('project_id', 'Проект', fkLookupProject, 170),
+    FieldDef('stage', 'Этап', fkEnum, 90, True, ENUM_TASK_STAGE, 'Новая', 'task_stage'),
+    FieldDef('priority', 'Приоритет', fkEnum, 80, True, ENUM_TASK_PRIORITY, 'Обычный', 'task_priority'),
+    FieldDef('assignee', 'Исполнитель', fkText, 120),
+    FieldDef('kind', 'Вид', fkEnum, 80, True, ENUM_TASK_KIND, 'Задача', 'task_kind'),
+    FieldDef('plan_start', 'Начало', fkDate, 85, False, '', 'today'),
+    FieldDef('due_at', 'Срок', fkDate, 85, True, '', 'today'),
+    FieldDef('hours_plan', 'Часы план', fkNumber, 70),
+    FieldDef('hours_fact', 'Часы факт', fkNumber, 70),
+    FieldDef('seq', '№ в проекте', fkNumber, 60),
+    FieldDef('depends_on', 'После задачи №', fkNumber, 0),
+    FieldDef('client_id', 'Клиент', fkLookupClient, 160),
+    FieldDef('deal_id', 'Сделка', fkLookupDeal, 0),
+    FieldDef('done', 'Выполнено', fkBool, 80),
     FieldDef('notes', 'Заметки', fkMemo)];
+
+  // Проект — единичное изделие или услуга под заказ: панно с логотипом,
+  // выжиг поздравлений на дереве, стенд… Путь: тендер → договор → аванс →
+  // дизайн → производство → сдача → оплата → закрыт (или проигран).
+  DefProjects.Table := 'projects';
+  DefProjects.Title := 'Проекты';
+  DefProjects.TitleOne := 'проект';
+  DefProjects.OrderBy := 'id DESC';
+  DefProjects.SearchCols := 'name,tender_no,manager';
+  DefProjects.Fields := [
+    FieldDef('name', 'Проект', fkText, 260, True),
+    FieldDef('client_id', 'Клиент', fkLookupClient, 170),
+    FieldDef('kind', 'Вид', fkEnum, 90, True, ENUM_PROJECT_KIND, 'Реклама', 'project_kind'),
+    FieldDef('status', 'Этап', fkEnum, 100, True, ENUM_PROJECT_STATUS, 'Тендер', 'project_status'),
+    FieldDef('tender_no', 'Тендер №', fkText, 90),
+    FieldDef('tender_deadline', 'Срок тендера', fkDate, 0),
+    FieldDef('budget', 'Бюджет, MDL', fkMoney, 100),
+    FieldDef('prepay_pct', 'Аванс, %', fkNumber, 60, False, '', '0'),
+    FieldDef('prepaid', 'Аванс получен', fkMoney, 95),
+    FieldDef('paid', 'Оплачено', fkMoney, 90),
+    FieldDef('start_date', 'Начало', fkDate, 85, False, '', 'today'),
+    FieldDef('due_date', 'Сдача', fkDate, 85, True, '', 'today+30'),
+    FieldDef('manager', 'Менеджер', fkText, 110),
+    FieldDef('notes', 'Описание', fkMemo)];
 end;
 
 { TCrmData }
@@ -328,21 +382,86 @@ const
     'CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT,' +
     ' subject TEXT NOT NULL, kind TEXT, due_at TEXT, client_id INTEGER, deal_id INTEGER,' +
     ' done INTEGER DEFAULT 0, notes TEXT, created_at TEXT DEFAULT (datetime(''now'',''localtime'')))');
+  PROJECTS_DDL =
+    'CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT,' +
+    ' name TEXT NOT NULL, client_id INTEGER, kind TEXT, status TEXT, tender_no TEXT,' +
+    ' tender_deadline TEXT, budget REAL DEFAULT 0, prepay_pct REAL DEFAULT 0,' +
+    ' prepaid REAL DEFAULT 0, paid REAL DEFAULT 0, start_date TEXT, due_date TEXT,' +
+    ' manager TEXT, notes TEXT, created_at TEXT DEFAULT (datetime(''now'',''localtime'')))';
   ClientCols: array[0..4] of string = ('client_type', 'phone', 'email', 'notes', 'contact_person');
   // колонки процесса исполнения заказа, добавленные позже создания таблицы
-  OrderCols: array[0..5] of string = ('advance REAL DEFAULT 0', 'paid REAL DEFAULT 0',
-    'due_date TEXT', 'ship_date TEXT', 'erp_batch TEXT', 'erp_sent_at TEXT');
+  OrderCols: array[0..6] of string = ('advance REAL DEFAULT 0', 'paid REAL DEFAULT 0',
+    'due_date TEXT', 'ship_date TEXT', 'erp_batch TEXT', 'erp_sent_at TEXT', 'project_id INTEGER');
+  // проектные поля задач (этап, приоритет, исполнитель, план, часы, зависимость)
+  TaskCols: array[0..8] of string = ('project_id INTEGER', 'stage TEXT', 'priority TEXT',
+    'assignee TEXT', 'plan_start TEXT', 'hours_plan REAL', 'hours_fact REAL',
+    'depends_on INTEGER', 'seq INTEGER');
 var
   S, C: string;
 begin
   for S in DDL do
     if S <> '' then
       Conn.ExecSQL(S);
+  Conn.ExecSQL(PROJECTS_DDL);
 
   for C in ClientCols do
     AddColumn('clients', C, 'TEXT');
   for C in OrderCols do
     AddColumn('orders', Copy(C, 1, Pos(' ', C + ' ') - 1), Copy(C, Pos(' ', C + ' ') + 1, MaxInt));
+  for C in TaskCols do
+    AddColumn('tasks', Copy(C, 1, Pos(' ', C + ' ') - 1), Copy(C, Pos(' ', C + ' ') + 1, MaxInt));
+  // задачи старой базы: этап из флага «выполнено», приоритет обычный
+  Conn.ExecSQL('UPDATE tasks SET stage = CASE WHEN COALESCE(done,0) = 1 THEN ''Готово'' ELSE ''Новая'' END ' +
+    'WHERE COALESCE(stage,'''') = ''''');
+  Conn.ExecSQL('UPDATE tasks SET priority = ''Обычный'' WHERE COALESCE(priority,'''') = ''''');
+  Conn.ExecSQL('UPDATE tasks SET plan_start = due_at WHERE COALESCE(plan_start,'''') = ''''');
+end;
+
+{ ── задачи и проекты ── }
+
+procedure TCrmData.SetTaskDone(TaskId: Integer; Done: Boolean);
+begin
+  if Done then
+    Conn.ExecSQL('UPDATE tasks SET done = 1, stage = ''Готово'' WHERE id = :i', [TaskId])
+  else
+    Conn.ExecSQL('UPDATE tasks SET done = 0, stage = CASE WHEN stage = ''Готово'' THEN ''В работе'' ELSE stage END ' +
+      'WHERE id = :i', [TaskId]);
+end;
+
+procedure TCrmData.SetTaskStage(TaskId: Integer; const Stage: string);
+begin
+  Conn.ExecSQL('UPDATE tasks SET stage = :s, done = :d WHERE id = :i',
+    [Stage, IfThen(Stage = 'Готово', 1, 0), TaskId]);
+end;
+
+procedure TCrmData.ProjectSummary(ProjectId: Integer; out Total, Done, Overdue: Integer;
+  out HoursPlan, HoursFact: Double);
+var
+  Q: TFDQuery;
+begin
+  Q := OpenQuery(Format(
+    'SELECT COUNT(*) AS n, SUM(CASE WHEN done = 1 THEN 1 ELSE 0 END) AS d, ' +
+    ' SUM(CASE WHEN done = 0 AND COALESCE(due_at,'''') <> '''' AND due_at < date(''now'',''localtime'') THEN 1 ELSE 0 END) AS o, ' +
+    ' COALESCE(SUM(hours_plan),0) AS hp, COALESCE(SUM(hours_fact),0) AS hf ' +
+    'FROM tasks WHERE project_id = %d', [ProjectId]));
+  try
+    Total := Q.FieldByName('n').AsInteger;
+    Done := Q.FieldByName('d').AsInteger;
+    Overdue := Q.FieldByName('o').AsInteger;
+    HoursPlan := Q.FieldByName('hp').AsFloat;
+    HoursFact := Q.FieldByName('hf').AsFloat;
+  finally
+    Q.Free;
+  end;
+end;
+
+function TCrmData.ProjectProgress(ProjectId: Integer): Integer;
+var
+  T, D, O: Integer;
+  HP, HF: Double;
+begin
+  ProjectSummary(ProjectId, T, D, O, HP, HF);
+  if T = 0 then Result := 0 else Result := Round(D * 100 / T);
 end;
 
 { ── пользователи ── }
@@ -495,6 +614,7 @@ begin
     fkLookupClient: begin Result := 'clients'; DispCol := 'denumire'; end;
     fkLookupDeal:   begin Result := 'deals';   DispCol := 'title'; end;
     fkLookupItem:   begin Result := 'items';   DispCol := 'name'; end;
+    fkLookupProject: begin Result := 'projects'; DispCol := 'name'; end;
   else
     Result := ''; DispCol := '';
   end;
@@ -549,7 +669,7 @@ begin
       begin
         Row.Values[I] := Q.FieldByName(Def.Fields[I].Name).AsString;
         case Def.Fields[I].Kind of
-          fkLookupClient, fkLookupDeal, fkLookupItem:
+          fkLookupClient, fkLookupDeal, fkLookupItem, fkLookupProject:
             Row.Display[I] := Q.FieldByName(Def.Fields[I].Name + '__disp').AsString;
           fkEnum:
             Row.Display[I] := EnumDisplay(Def.Fields[I].EnumName, Row.Values[I],
@@ -600,7 +720,7 @@ begin
     Q.SQL.Text := Format('INSERT INTO %s (%s) VALUES (%s)', [Def.Table, Cols, Pars]);
     for I := 0 to High(Def.Fields) do
       if Def.Fields[I].Kind <> fkReadOnly then
-        if (Values[I] = '') and (Def.Fields[I].Kind in [fkLookupClient, fkLookupDeal, fkLookupItem]) then
+        if (Values[I] = '') and (Def.Fields[I].Kind in [fkLookupClient, fkLookupDeal, fkLookupItem, fkLookupProject]) then
           begin
             // NULL для пустой ссылки: FireDAC требует тип параметра до Clear
             Q.ParamByName('p' + IntToStr(I)).DataType := ftInteger;
@@ -623,6 +743,10 @@ begin
   finally
     Q.Free;
   end;
+  if Def.Table = 'tasks' then
+    Conn.ExecSQL('UPDATE tasks SET done = CASE WHEN stage = ''Готово'' THEN 1 ELSE COALESCE(done,0) END, ' +
+      'stage = CASE WHEN COALESCE(done,0) = 1 AND COALESCE(stage,'''') <> ''Готово'' THEN ''Готово'' ELSE stage END ' +
+      'WHERE id = :i', [Result]);
 end;
 
 procedure TCrmData.Update(const Def: TEntityDef; Id: Integer; const Values: TArray<string>);
@@ -643,7 +767,7 @@ begin
     Q.SQL.Text := Format('UPDATE %s SET %s WHERE id = :id', [Def.Table, Sets]);
     for I := 0 to High(Def.Fields) do
       if Def.Fields[I].Kind <> fkReadOnly then
-        if (Values[I] = '') and (Def.Fields[I].Kind in [fkLookupClient, fkLookupDeal, fkLookupItem]) then
+        if (Values[I] = '') and (Def.Fields[I].Kind in [fkLookupClient, fkLookupDeal, fkLookupItem, fkLookupProject]) then
           begin
             // NULL для пустой ссылки: FireDAC требует тип параметра до Clear
             Q.ParamByName('p' + IntToStr(I)).DataType := ftInteger;
@@ -666,12 +790,22 @@ begin
   finally
     Q.Free;
   end;
+  // задача: этап и флаг «выполнено» — одно состояние; редактор мог поменять
+  // любое из двух полей, приводим их к согласию по этапу
+  if Def.Table = 'tasks' then
+    Conn.ExecSQL('UPDATE tasks SET done = CASE WHEN stage = ''Готово'' THEN 1 ELSE 0 END WHERE id = :i', [Id]);
 end;
 
 procedure TCrmData.Delete(const Def: TEntityDef; Id: Integer);
 begin
   if Def.Table = 'orders' then
     Conn.ExecSQL('DELETE FROM order_lines WHERE order_id = :o', [Id]);
+  if Def.Table = 'projects' then
+  begin
+    // задачи проекта уходят вместе с ним; заказы остаются, ссылка снимается
+    Conn.ExecSQL('DELETE FROM tasks WHERE project_id = :p', [Id]);
+    Conn.ExecSQL('UPDATE orders SET project_id = NULL WHERE project_id = :p', [Id]);
+  end;
   Conn.ExecSQL(Format('DELETE FROM %s WHERE id = :id', [Def.Table]), [Id]);
 end;
 

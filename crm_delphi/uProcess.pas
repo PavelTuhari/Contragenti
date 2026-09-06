@@ -491,6 +491,8 @@ begin
       Node.HasBoard := Board <> '';
       if Board = 'deals' then Node.Board := bkDeals
       else if Board = 'tasks' then Node.Board := bkTasks
+      else if Board = 'projects' then Node.Board := bkProjects
+      else if Board = 'project_tasks' then Node.Board := bkProjectTasks
       else Node.Board := bkOrders;
       Node.Col := LInt(N, 'col', 0);
       Node.X := LInt(N, 'x', I);

@@ -355,7 +355,7 @@ begin
     Y := 36 + RowN * 52;
     MakeLabel(Self, FEditor, F.Caption + IfThen(F.Required, ' *', ''), X, Y, W);
     case F.Kind of
-      fkEnum, fkLookupClient, fkLookupDeal, fkLookupItem:
+      fkEnum, fkLookupClient, fkLookupDeal, fkLookupItem, fkLookupProject:
         begin
           Cb := TComboBox.Create(Self);
           Cb.Parent := FEditor;
@@ -467,7 +467,7 @@ var
   Cb: TComboBox;
 begin
   for I := 0 to High(FDef.Fields) do
-    if FDef.Fields[I].Kind in [fkLookupClient, fkLookupDeal, fkLookupItem] then
+    if FDef.Fields[I].Kind in [fkLookupClient, fkLookupDeal, fkLookupItem, fkLookupProject] then
     begin
       Cb := FCtrls[I] as TComboBox;
       Cb.Items.Clear;
@@ -561,7 +561,7 @@ begin
     case F.Kind of
       fkEnum:
         (FCtrls[I] as TComboBox).ItemIndex := Max(0, IndexStr(V, F.Enum.Split([';'])));
-      fkLookupClient, fkLookupDeal, fkLookupItem:
+      fkLookupClient, fkLookupDeal, fkLookupItem, fkLookupProject:
         begin
           (FCtrls[I] as TComboBox).ItemIndex := 0;
           for J := 0 to High(FLookupIds[I]) do
@@ -641,7 +641,7 @@ begin
           // принимаем каноническое значение — оно же лежит в базе
           (FCtrls[I] as TComboBox).ItemIndex :=
             IndexStr(Value, FDef.Fields[I].Enum.Split([';']));
-        fkLookupClient, fkLookupDeal, fkLookupItem:
+        fkLookupClient, fkLookupDeal, fkLookupItem, fkLookupProject:
           begin
             // значение — id или отображаемое имя
             J := (FCtrls[I] as TComboBox).Items.IndexOf(Value);
@@ -669,7 +669,7 @@ begin
           // из показанного перевода возвращаем каноническое значение
           if (FCtrls[I] as TComboBox).ItemIndex >= 0 then
             Result := FDef.Fields[I].Enum.Split([';'])[(FCtrls[I] as TComboBox).ItemIndex];
-        fkLookupClient, fkLookupDeal, fkLookupItem:
+        fkLookupClient, fkLookupDeal, fkLookupItem, fkLookupProject:
           if (FCtrls[I] as TComboBox).ItemIndex > 0 then
             Result := IntToStr(FLookupIds[I][(FCtrls[I] as TComboBox).ItemIndex]);
         fkBool: Result := IfThen((FCtrls[I] as TCheckBox).Checked, '1', '0');

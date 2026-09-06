@@ -1,15 +1,26 @@
 ﻿unit uBoardCards;
 {
-  Общие данные досок: карточки заказов / сделок / задач по колонкам-этапам.
+  Общие данные досок: карточки заказов / сделок / задач / проектов по
+  колонкам-этапам.
 
   Одни и те же карточки показывают канбан (uKanban) и схема бизнес-процесса
   (uProcess): здесь — загрузка карточек колонки, единственная точка смены
   этапа (MoveBoardCard) и фабрика информативной карточки VCL с цветной
   полосой, значком, суммой, прогрессом оплаты и бейджем срока.
 
+  Доски:
+    bkOrders       — заказы по этапам исполнения (аванс → … → закрыто);
+    bkDeals        — сделки по воронке;
+    bkTasks        — задачи по срокам (просрочено / сегодня / позже / выполнено);
+    bkProjects     — проекты по этапам (тендер → договор → аванс → дизайн →
+                     производство → сдача → оплата → закрыт | проигран);
+    bkProjectTasks — задачи одного проекта по этапам работы (новая → в работе →
+                     ожидание → проверка → готово); проект задаёт
+                     BoardProjectFilter (0 — все задачи с проектом).
+
   Смена этапа выставляет те же поля, по которым считаются этапы на рабочем
-  столе (аванс, статус, дата отгрузки, оплата), поэтому канбан, схема
-  процесса и плитки рабочего стола всегда показывают одно и то же.
+  столе и в отчётах, поэтому канбан, схема процесса, Гант и плитки всегда
+  показывают одно и то же.
 }
 
 interface
@@ -19,15 +30,15 @@ uses
   Vcl.Graphics, uCrmData, uEspoTheme;
 
 type
-  TBoardKind = (bkOrders, bkDeals, bkTasks);
+  TBoardKind = (bkOrders, bkDeals, bkTasks, bkProjects, bkProjectTasks);
 
   TBoardCard = record
     Id: Integer;
     Col: Integer;
     Title, Subtitle, Amount, Due: string;
     KindValue: string;      // вид заказа / этап сделки / вид задачи (канонический)
-    KindText: string;       // то же в переводе
-    Total, Paid: Double;    // прогресс оплаты (заказы)
+    KindText: string;       // то же в переводе (+ исполнитель, приоритет)
+    Total, Paid: Double;    // прогресс оплаты (заказы, проекты)
     Overdue, Done: Boolean;
     DaysLeft: Integer;      // до срока; MaxInt — срока нет
     Icon: string;
@@ -39,6 +50,10 @@ type
 
 const
   CARD_H = 96;
+
+var
+  { Фильтр доски задач проекта: id проекта (0 — все задачи, у которых есть проект). }
+  BoardProjectFilter: Integer = 0;
 
 function BoardTable(Kind: TBoardKind): string;
 function BoardColumnTitles(Kind: TBoardKind): TArray<string>;
@@ -74,12 +89,18 @@ const
   ORDER_COLORS: array[0..4] of TColor = (CLR_AMBER, CLR_BLUE, CLR_GREEN, CLR_VIOLET, CLR_GRAY);
   DEAL_COLORS:  array[0..4] of TColor = (CLR_TEAL, CLR_BLUE, CLR_AMBER, CLR_GREEN, CLR_RED);
   TASK_COLORS:  array[0..3] of TColor = (CLR_RED, CLR_AMBER, CLR_BLUE, CLR_GREEN);
+  // тендер, договор, аванс, дизайн, производство, сдача, оплата, закрыт, проигран
+  PROJECT_COLORS: array[0..8] of TColor = (CLR_TEAL, CLR_BLUE, CLR_AMBER, CLR_VIOLET,
+    CLR_AMBER, CLR_GREEN, CLR_VIOLET, CLR_GRAY, CLR_RED);
+  // новая, в работе, ожидание, проверка, готово
+  TSTAGE_COLORS: array[0..4] of TColor = (CLR_TEAL, CLR_BLUE, CLR_AMBER, CLR_VIOLET, CLR_GREEN);
 
 function BoardTable(Kind: TBoardKind): string;
 begin
   case Kind of
     bkDeals: Result := 'deals';
-    bkTasks: Result := 'tasks';
+    bkTasks, bkProjectTasks: Result := 'tasks';
+    bkProjects: Result := 'projects';
   else Result := 'orders';
   end;
 end;
@@ -89,8 +110,17 @@ begin
   case Kind of
     bkDeals: Result := T.S('kanban.board_deals');
     bkTasks: Result := T.S('kanban.board_tasks');
+    bkProjects: Result := T.S('kanban.board_projects');
+    bkProjectTasks: Result := T.S('kanban.board_project_tasks');
   else Result := T.S('kanban.board_orders');
   end;
+end;
+
+function EnumTitles(const EnumName, Canonical: string): TArray<string>;
+begin
+  Result := T.EnumList(EnumName);
+  if Length(Result) <> Length(Canonical.Split([';'])) then
+    Result := Canonical.Split([';']);
 end;
 
 function BoardColumnTitles(Kind: TBoardKind): TArray<string>;
@@ -107,11 +137,9 @@ begin
           if Result[I] = '' then Result[I] := 'stage ' + IntToStr(I);
         end;
       end;
-    bkDeals:
-      begin
-        Result := T.EnumList('deal_stage');
-        if Length(Result) <> 5 then Result := ENUM_DEAL_STAGE.Split([';']);
-      end;
+    bkDeals: Result := EnumTitles('deal_stage', ENUM_DEAL_STAGE);
+    bkProjects: Result := EnumTitles('project_status', ENUM_PROJECT_STATUS);
+    bkProjectTasks: Result := EnumTitles('task_stage', ENUM_TASK_STAGE);
   else
     Result := T.S('kanban.task_cols').Split([';']);
     if Length(Result) <> 4 then
@@ -131,6 +159,20 @@ begin
         Stages := ENUM_DEAL_STAGE.Split([';']);
         Result := 't.stage = ''' + Stages[Col] + '''';
       end;
+    bkProjects:
+      begin
+        Stages := ENUM_PROJECT_STATUS.Split([';']);
+        Result := 't.status = ''' + Stages[Col] + '''';
+      end;
+    bkProjectTasks:
+      begin
+        Stages := ENUM_TASK_STAGE.Split([';']);
+        Result := 't.stage = ''' + Stages[Col] + '''';
+        if BoardProjectFilter > 0 then
+          Result := Result + ' AND t.project_id = ' + IntToStr(BoardProjectFilter)
+        else
+          Result := Result + ' AND COALESCE(t.project_id,0) > 0';
+      end;
   else
     case Col of
       0: Result := 't.done = 0 AND t.due_at < date(''now'',''localtime'')';
@@ -148,6 +190,8 @@ begin
     bkOrders: if (Col >= 0) and (Col <= 4) then Result := ORDER_COLORS[Col];
     bkDeals:  if (Col >= 0) and (Col <= 4) then Result := DEAL_COLORS[Col];
     bkTasks:  if (Col >= 0) and (Col <= 3) then Result := TASK_COLORS[Col];
+    bkProjects: if (Col >= 0) and (Col <= 8) then Result := PROJECT_COLORS[Col];
+    bkProjectTasks: if (Col >= 0) and (Col <= 4) then Result := TSTAGE_COLORS[Col];
   end;
 end;
 
@@ -179,18 +223,32 @@ begin
     bkOrders:
       SQL := 'SELECT t.id, t.number AS a, COALESCE(c.denumire,'''') AS b, ' +
              ' COALESCE(t.total,0) AS amt, COALESCE(t.paid,0) AS paid, ' +
-             ' COALESCE(t.due_date,'''') AS due, t.kind AS k ' +
+             ' COALESCE(t.due_date,'''') AS due, t.kind AS k, '''' AS extra ' +
              'FROM orders t LEFT JOIN clients c ON c.id = t.client_id WHERE ' +
              BoardColumnWhere(Data, Kind, Col) + ' ORDER BY t.due_date, t.id';
     bkDeals:
       SQL := 'SELECT t.id, t.title AS a, COALESCE(c.denumire,'''') AS b, ' +
              ' COALESCE(t.amount,0) AS amt, 0 AS paid, COALESCE(t.close_date,'''') AS due, ' +
-             ' t.stage AS k ' +
+             ' t.stage AS k, '''' AS extra ' +
              'FROM deals t LEFT JOIN clients c ON c.id = t.client_id WHERE ' +
              BoardColumnWhere(Data, Kind, Col) + ' ORDER BY t.close_date, t.id';
+    bkProjects:
+      SQL := 'SELECT t.id, t.name AS a, COALESCE(c.denumire,'''') AS b, ' +
+             ' COALESCE(t.budget,0) AS amt, COALESCE(t.prepaid,0) + COALESCE(t.paid,0) AS paid, ' +
+             ' COALESCE(t.due_date,'''') AS due, t.kind AS k, ' +
+             ' (SELECT COUNT(*) FROM tasks x WHERE x.project_id = t.id) || ''/'' || ' +
+             ' (SELECT COUNT(*) FROM tasks x WHERE x.project_id = t.id AND x.done = 1) AS extra ' +
+             'FROM projects t LEFT JOIN clients c ON c.id = t.client_id WHERE ' +
+             BoardColumnWhere(Data, Kind, Col) + ' ORDER BY t.due_date, t.id';
+    bkProjectTasks:
+      SQL := 'SELECT t.id, t.subject AS a, COALESCE(p.name,'''') AS b, 0 AS amt, 0 AS paid, ' +
+             ' COALESCE(t.due_at,'''') AS due, COALESCE(t.priority,''Обычный'') AS k, ' +
+             ' COALESCE(t.assignee,'''') AS extra ' +
+             'FROM tasks t LEFT JOIN projects p ON p.id = t.project_id WHERE ' +
+             BoardColumnWhere(Data, Kind, Col) + ' ORDER BY COALESCE(t.seq,0), t.due_at, t.id';
   else
     SQL := 'SELECT t.id, t.subject AS a, COALESCE(c.denumire,'''') AS b, 0 AS amt, 0 AS paid, ' +
-           ' COALESCE(t.due_at,'''') AS due, t.kind AS k ' +
+           ' COALESCE(t.due_at,'''') AS due, t.kind AS k, COALESCE(t.assignee,'''') AS extra ' +
            'FROM tasks t LEFT JOIN clients c ON c.id = t.client_id WHERE ' +
            BoardColumnWhere(Data, Kind, Col) + ' ORDER BY t.due_at, t.id';
   end;
@@ -212,7 +270,6 @@ begin
         C.Amount := FormatFloat('#,##0.00', C.Total) + ' MDL';
       C.Due := Q.FieldByName('due').AsString;
       C.Done := Col = LastCol;
-      C.Overdue := (C.Due <> '') and (C.Due < Today) and not C.Done;
       C.DaysLeft := MaxInt;
       if (C.Due <> '') and TryISO8601ToDate(C.Due, D, False) then
         C.DaysLeft := DaysBetween(Trunc(D), Date) * IfThen(Trunc(D) < Date, -1, 1);
@@ -237,9 +294,43 @@ begin
             C.Icon := '◆';
             C.Stripe := BoardColumnColor(bkDeals, Col);
           end;
+        bkProjects:
+          begin
+            Idx := KindIndex(ENUM_PROJECT_KIND, C.KindValue);
+            C.KindText := T.EnumAt('project_kind', Idx);
+            if C.KindText = '' then C.KindText := C.KindValue;
+            // задач всего/готово — в строке суммы, чтобы не наезжать на «оплачено»
+            C.Amount := C.Amount + '   ·   ' + T.F('kanban.tasks_of', [Q.FieldByName('extra').AsString]);
+            case Idx of
+              0: begin C.Icon := '▣'; C.Stripe := CLR_BLUE; end;      // реклама
+              1: begin C.Icon := '✎'; C.Stripe := CLR_AMBER; end;     // гравировка
+              2: begin C.Icon := '★'; C.Stripe := CLR_VIOLET; end;    // сувениры
+              3: begin C.Icon := '⚒'; C.Stripe := CLR_TEAL; end;      // монтаж
+            else begin C.Icon := '▤'; C.Stripe := CLR_GRAY; end;
+            end;
+            // проигранный тендер — закрыт, но не «сделано»
+            C.Done := Col = 7;
+            if Col = 8 then begin C.Icon := '✖'; C.Stripe := CLR_RED; end;
+          end;
+        bkProjectTasks:
+          begin
+            Idx := KindIndex(ENUM_TASK_PRIORITY, C.KindValue);
+            C.KindText := T.EnumAt('task_priority', Idx);
+            if C.KindText = '' then C.KindText := C.KindValue;
+            if Q.FieldByName('extra').AsString <> '' then
+              C.KindText := C.KindText + '  ·  ' + Q.FieldByName('extra').AsString;
+            case Idx of
+              2: begin C.Icon := '▲'; C.Stripe := CLR_AMBER; end;     // высокий
+              3: begin C.Icon := '‼'; C.Stripe := CLR_RED; end;       // срочно
+              0: begin C.Icon := '▽'; C.Stripe := CLR_GRAY; end;      // низкий
+            else begin C.Icon := '☑'; C.Stripe := CLR_BLUE; end;
+            end;
+          end;
       else
         Idx := KindIndex(ENUM_TASK_KIND, C.KindValue);
         C.KindText := T.EnumAt('task_kind', Idx);
+        if Q.FieldByName('extra').AsString <> '' then
+          C.KindText := C.KindText + '  ·  ' + Q.FieldByName('extra').AsString;
         case Idx of
           1: begin C.Icon := '☎'; C.Stripe := CLR_TEAL; end;         // звонок
           2: begin C.Icon := '☺'; C.Stripe := CLR_VIOLET; end;       // встреча
@@ -247,6 +338,8 @@ begin
         end;
       end;
       if C.KindText = '' then C.KindText := C.KindValue;
+      C.Overdue := (C.Due <> '') and (C.Due < Today) and not C.Done and
+                   not ((Kind = bkProjects) and (Col = 8));
       if C.Done then begin C.Icon := '✔'; C.Stripe := CLR_GREEN; end
       else if C.Overdue then C.Stripe := CLR_RED;
 
@@ -308,12 +401,31 @@ begin
     bkDeals:
       Data.DB.Connection.ExecSQL('UPDATE deals SET stage = :s WHERE id = :i',
         [ENUM_DEAL_STAGE.Split([';'])[NewCol], Id]);
+    bkProjects:
+      begin
+        Data.DB.Connection.ExecSQL('UPDATE projects SET status = :s WHERE id = :i',
+          [ENUM_PROJECT_STATUS.Split([';'])[NewCol], Id]);
+        // деньги следуют за этапом: аванс получен — записан по проценту,
+        // закрыт — оплачен полностью
+        case NewCol of
+          0, 1: Data.DB.Connection.ExecSQL('UPDATE projects SET prepaid = 0, paid = 0 WHERE id = :i', [Id]);
+          2..5: Data.DB.Connection.ExecSQL(
+                  'UPDATE projects SET prepaid = ROUND(COALESCE(budget,0) * COALESCE(prepay_pct,0) / 100, 2), paid = 0 WHERE id = :i', [Id]);
+          7:    Data.DB.Connection.ExecSQL(
+                  'UPDATE projects SET paid = COALESCE(budget,0) - COALESCE(prepaid,0) WHERE id = :i', [Id]);
+        end;
+      end;
+    bkProjectTasks:
+      Data.SetTaskStage(Id, ENUM_TASK_STAGE.Split([';'])[NewCol]);
   else
     if NewCol = High(Titles) then
-      Data.DB.Connection.ExecSQL('UPDATE tasks SET done = 1 WHERE id = :i', [Id])
+      Data.SetTaskDone(Id, True)
     else
-      Data.DB.Connection.ExecSQL('UPDATE tasks SET done = 0, due_at = :d WHERE id = :i',
+    begin
+      Data.SetTaskDone(Id, False);
+      Data.DB.Connection.ExecSQL('UPDATE tasks SET due_at = :d WHERE id = :i',
         [FormatDateTime('yyyy-mm-dd', Now + IfThen(NewCol = 0, -1, IfThen(NewCol = 1, 0, 7))), Id]);
+    end;
   end;
 end;
 
@@ -402,7 +514,7 @@ begin
   L.Font.Style := [fsBold]; L.Transparent := True;
   if Assigned(AHook) then AHook(L);
 
-  // прогресс оплаты (только заказы с суммой)
+  // прогресс оплаты (только записи с суммой)
   if (C.Total > 0) and (C.Paid >= 0) and (C.Icon <> '◆') then
   begin
     Pct := Min(100, Round(C.Paid / C.Total * 100));

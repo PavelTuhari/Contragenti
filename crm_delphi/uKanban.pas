@@ -36,7 +36,10 @@ type
     FData: TCrmData;
     FOnSay: TSayProc;
     FBoard: TComboBox;
-    FBody: TPanel;
+    FProject: TComboBox;          // проект для доски задач проекта
+    FProjectIds: TArray<Integer>;
+    FBody: TScrollBox;             // колонок может быть больше, чем влезает — горизонтальная прокрутка
+    FColW: Integer;
     FCols: TArray<TPanel>;
     FColBodies: TArray<TScrollBox>;
     FColHeads: TArray<TLabel>;
@@ -63,6 +66,8 @@ type
     procedure RebuildColumns;
     procedure LoadCards;
     procedure OnBoardChange(Sender: TObject);
+    procedure OnProjectChange(Sender: TObject);
+    procedure FillProjects;
     procedure OnCardClick(Sender: TObject);
     procedure OnCardDblClick(Sender: TObject);
     procedure CardMouseDown(Sender: TObject; Button: TMouseButton;
@@ -91,6 +96,9 @@ type
 
     // хуки самотеста
     procedure SelectBoard(Kind: TBoardKind);
+    { Доска задач проекта: выбрать проект (0 — все задачи с проектом). }
+    procedure SelectProject(ProjectId: Integer);
+    function  ProjectId: Integer;
     function  ColumnCount: Integer;
     function  CardsInColumn(Col: Integer): Integer;
     function  SelectFirstCard(Col: Integer): Boolean;
@@ -114,7 +122,7 @@ type
 implementation
 
 uses
-  System.StrUtils, System.Math, uI18n;
+  System.StrUtils, System.Math, System.Generics.Collections, uI18n;
 
 const
   COL_W = 202;
@@ -188,8 +196,18 @@ begin
   FBoard.Items.Add(T.S('kanban.board_orders'));
   FBoard.Items.Add(T.S('kanban.board_deals'));
   FBoard.Items.Add(T.S('kanban.board_tasks'));
+  FBoard.Items.Add(T.S('kanban.board_projects'));
+  FBoard.Items.Add(T.S('kanban.board_project_tasks'));
   FBoard.ItemIndex := 0;
   FBoard.OnChange := OnBoardChange;
+
+  // выбор проекта — только для доски задач проекта
+  FProject := TComboBox.Create(Self);
+  FProject.Parent := Hdr;
+  FProject.Style := csDropDownList;
+  FProject.SetBounds(395, 14, 250, 28);
+  FProject.Visible := False;
+  FProject.OnChange := OnProjectChange;
 
   Btn := MakeButton(Self, Hdr, T.S('btn.forward'), True, OnForwardClick, 130);
   Btn.Anchors := [akTop, akRight];
@@ -214,12 +232,15 @@ begin
   Legend('■', T.S('kanban.overdue'), ST_DANGER_FG);
   Legend('■', T.S('kanban.done_badge'), ST_SUCCESS_FG);
 
-  FBody := TPanel.Create(Self);
+  FBody := TScrollBox.Create(Self);
   FBody.Parent := Self;
   FBody.Align := alClient;
-  FBody.BevelOuter := bvNone;
+  FBody.BorderStyle := bsNone;
   FBody.Color := ESPO_BODY;
   FBody.ParentBackground := False;
+  FBody.ParentColor := False;
+  FBody.VertScrollBar.Visible := False;
+  FBody.HorzScrollBar.Tracking := True;
 
   RebuildColumns;
 end;
@@ -238,12 +259,14 @@ begin
   FCardPanels := nil; FCards := nil; FSelected := -1; FHoverCol := -1;
 
   Titles := BoardColumnTitles(FKind);
+  // до пяти колонок — широкие; больше — уже и с горизонтальной прокруткой
+  if Length(Titles) <= 5 then FColW := COL_W else FColW := 176;
   X := 15;
   for I := 0 to High(Titles) do
   begin
     P := TPanel.Create(Self);
     P.Parent := FBody;
-    P.SetBounds(X, 12, COL_W, FBody.Height - 24);
+    P.SetBounds(X, 12, FColW, FBody.ClientHeight - 24 - IfThen(Length(Titles) > 5, 18, 0));
     P.Anchors := [akLeft, akTop, akBottom];
     P.BevelOuter := bvNone;
     P.BevelKind := bkFlat;
@@ -254,20 +277,20 @@ begin
     // цветная кромка колонки — тот же цвет, что у узла схемы процесса
     Stripe := TPanel.Create(Self);
     Stripe.Parent := P;
-    Stripe.SetBounds(0, 0, COL_W - 4, 4);
+    Stripe.SetBounds(0, 0, FColW - 4, 4);
     Stripe.Anchors := [akLeft, akTop, akRight];
     Stripe.BevelOuter := bvNone;
     Stripe.Color := BoardColumnColor(FKind, I);
     Stripe.ParentBackground := False;
 
-    FColHeads := FColHeads + [MakeLabel(Self, P, Titles[I], 10, 12, COL_W - 20, ESPO_SOFT, 9)];
+    FColHeads := FColHeads + [MakeLabel(Self, P, Titles[I], 10, 12, FColW - 20, ESPO_SOFT, 9)];
     FColHeads[I].Font.Style := [fsBold];
-    FColCounts := FColCounts + [MakeLabel(Self, P, '', 10, 30, COL_W - 20, ESPO_MUTED, 8)];
-    FColLate := FColLate + [MakeLabel(Self, P, '', 10, 44, COL_W - 20, ST_DANGER_FG, 8)];
+    FColCounts := FColCounts + [MakeLabel(Self, P, '', 10, 30, FColW - 20, ESPO_MUTED, 8)];
+    FColLate := FColLate + [MakeLabel(Self, P, '', 10, 44, FColW - 20, ST_DANGER_FG, 8)];
 
     SB := TScrollBox.Create(Self);
     SB.Parent := P;
-    SB.SetBounds(6, 62, COL_W - 12, P.Height - 70);
+    SB.SetBounds(6, 62, FColW - 12, P.Height - 70);
     SB.Anchors := [akLeft, akTop, akRight, akBottom];
     SB.BorderStyle := bsNone;
     SB.Color := ESPO_WHITE;
@@ -276,7 +299,7 @@ begin
     SB.VertScrollBar.Tracking := True;
     FColBodies := FColBodies + [SB];
 
-    Inc(X, COL_W + COL_GAP);
+    Inc(X, FColW + COL_GAP);
   end;
 end;
 
@@ -304,7 +327,7 @@ begin
     for C in Cards do
     begin
       Idx := Length(FCards);
-      P := MakeBoardCard(Self, FColBodies[Col], C, 4, Y, COL_W - 34,
+      P := MakeBoardCard(Self, FColBodies[Col], C, 4, Y, FColW - 34,
         procedure(Ctrl: TControl) begin HookMouse(Ctrl, Idx); end);
       FCards := FCards + [C];
       FCardPanels := FCardPanels + [P];
@@ -329,9 +352,62 @@ end;
 procedure TKanbanPage.OnBoardChange(Sender: TObject);
 begin
   FKind := TBoardKind(FBoard.ItemIndex);
+  FProject.Visible := FKind = bkProjectTasks;
+  if FKind = bkProjectTasks then
+  begin
+    FillProjects;
+    BoardProjectFilter := ProjectId;
+  end;
   RebuildColumns;
   LoadCards;
   Say(mkInfo, T.F('kanban.board', [FBoard.Text]));
+end;
+
+{ Список проектов для доски задач: первый пункт — все задачи с проектом. }
+procedure TKanbanPage.FillProjects;
+var
+  Pairs: TArray<TPair<Integer, string>>;
+  I, Keep: Integer;
+begin
+  Keep := ProjectId;
+  FProject.Items.Clear;
+  FProject.Items.Add(T.S('kanban.all_projects'));
+  FProjectIds := [0];
+  Pairs := FData.LookupPairs(fkLookupProject);
+  for I := 0 to High(Pairs) do
+  begin
+    FProject.Items.Add(Pairs[I].Value);
+    FProjectIds := FProjectIds + [Pairs[I].Key];
+  end;
+  FProject.ItemIndex := 0;
+  for I := 0 to High(FProjectIds) do
+    if FProjectIds[I] = Keep then FProject.ItemIndex := I;
+end;
+
+procedure TKanbanPage.OnProjectChange(Sender: TObject);
+begin
+  BoardProjectFilter := ProjectId;
+  LoadCards;
+  Say(mkInfo, T.F('kanban.project', [FProject.Text]));
+end;
+
+function TKanbanPage.ProjectId: Integer;
+begin
+  if (FProject.ItemIndex >= 0) and (FProject.ItemIndex <= High(FProjectIds)) then
+    Result := FProjectIds[FProject.ItemIndex]
+  else
+    Result := 0;
+end;
+
+procedure TKanbanPage.SelectProject(ProjectId: Integer);
+var
+  I: Integer;
+begin
+  if FKind <> bkProjectTasks then SelectBoard(bkProjectTasks);
+  FillProjects;
+  for I := 0 to High(FProjectIds) do
+    if FProjectIds[I] = ProjectId then FProject.ItemIndex := I;
+  OnProjectChange(FProject);
 end;
 
 procedure TKanbanPage.SelectBoard(Kind: TBoardKind);
@@ -392,7 +468,7 @@ begin
   if (FDragIdx < 0) or (FDragIdx > High(FCards)) then Exit;
   if FGhost = nil then
   begin
-    FGhost := MakeBoardCard(Self, Self, FCards[FDragIdx], 0, 0, COL_W - 34, nil);
+    FGhost := MakeBoardCard(Self, Self, FCards[FDragIdx], 0, 0, FColW - 34, nil);
     FGhost.Color := ST_PRIMARY_BG;
     FGhost.BevelKind := bkFlat;
     FGhost.BevelOuter := bvRaised;
@@ -441,7 +517,7 @@ begin
       if FCards[I].Col = Col then Inc(Y, CARD_H + CARD_GAP);
     FSlot := TPanel.Create(Self);
     FSlot.Parent := FColBodies[Col];
-    FSlot.SetBounds(4, Y, COL_W - 34, CARD_H);
+    FSlot.SetBounds(4, Y, FColW - 34, CARD_H);
     FSlot.BevelOuter := bvNone;
     FSlot.BevelKind := bkFlat;
     FSlot.Color := ESPO_HEAD_BG;

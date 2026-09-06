@@ -102,7 +102,7 @@ python3.12 -m venv .venv
 ### Windows: MSI-установщик и мастер настройки
 
 **Скачать установщик (рекомендуется):**
-[Contragenti-1.3.1-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.1-setup.exe)
+[Contragenti-1.3.2-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.2-setup.exe)
 — обычный exe без Windows Installer: ставит программу в
 `C:\Program Files\Contragenti` (запрос UAC; без прав — `/D=%LOCALAPPDATA%\Contragenti`),
 создаёт ярлыки и запись в «Программы и компоненты», запускает мастер
@@ -110,11 +110,11 @@ python3.12 -m venv .venv
 date.gov.md) и `DemoCRM\clients.db` (демо-фирма для SDK); рабочие копии и
 настройки — в `%LOCALAPPDATA%\Contragenti`. Не зависит от политик MSI
 (ошибка «The system administrator has set policies to prevent this
-installation» его не касается). Тихо: `Contragenti-1.3.1-setup.exe /S`,
+installation» его не касается). Тихо: `Contragenti-1.3.2-setup.exe /S`,
 портативно: `--extract-only D:\Contragenti`.
 
-Второй вариант — MSI: [Contragenti-1.3.1-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.1-win64.msi).
-Рядом — [Contragenti-update-1.3.1.zip](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.3.1.zip):
+Второй вариант — MSI: [Contragenti-1.3.2-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.2-win64.msi).
+Рядом — [Contragenti-update-1.3.2.zip](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.3.2.zip):
 пакет обновления поверх установки (Demo CRM, переводы, процессы, SDK,
 инструкции, стартовая база); он пересобирается автоматически при каждой
 компиляции Demo CRM и перед каждым коммитом (`tools/make_release.py`),
@@ -122,7 +122,7 @@ installation» его не касается). Тихо: `Contragenti-1.3.1-setup
 
 > Браузер может написать «isn't commonly downloaded» — файлы не подписаны
 > сертификатом разработчика. «⋯» → «Keep» / «Сохранить». Подлинность можно
-> сверить по sha256 из `release.json`: `Get-FileHash .\Contragenti-1.3.1-setup.exe`.
+> сверить по sha256 из `release.json`: `Get-FileHash .\Contragenti-1.3.2-setup.exe`.
 
 Для чистого Windows без Git MSI (`python setup.py bdist_msi`
 → `dist/Contragenti-<версия>-win64.msi`, затем `python tools/make_release.py`

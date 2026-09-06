@@ -28,7 +28,7 @@ import sys
 import zipfile
 from cx_Freeze import setup, Executable
 
-APP_VERSION = "1.3.1"   # то же значение — в VERSION, release.json и company_search.py
+APP_VERSION = "1.3.2"   # то же значение — в VERSION, release.json и company_search.py
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DEMO_CRM_EXE = os.path.join(_HERE, "crm_delphi", "ContragentiCRM.exe")

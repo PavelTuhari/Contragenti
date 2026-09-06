@@ -23,8 +23,11 @@ uses
 
 type
   TGanttRow = record
-    IsWork: Boolean;        // строка заказа (операция), а не сам заказ
+    IsWork: Boolean;        // строка заказа (операция) или задача проекта, а не сам заказ/проект
     OrderId: Integer;
+    ProjectId: Integer;     // режим «Проекты и задачи»
+    TaskId: Integer;        // > 0 — задача проекта (её можно тянуть)
+    DependsOn: Integer;     // задача, после которой идёт эта (стрелка на схеме)
     Caption: string;
     Sub: string;
     Start, PlanEnd, FactEnd: TDateTime;
@@ -35,6 +38,7 @@ type
   TDragMode = (dmNone, dmMove, dmStart, dmEnd);
 
   TOpenOrderEvent = procedure(OrderId: Integer) of object;
+  TOpenIdEvent = procedure(Id: Integer) of object;
 
   TGanttPage = class(TPanel)
   private
@@ -48,6 +52,7 @@ type
     FMin, FMax: TDateTime;
     FChartW: Integer;
     FOnOpenOrder: TOpenOrderEvent;
+    FOnOpenProject, FOnOpenTask: TOpenIdEvent;
     // перетаскивание полосы мышью
     FDragRow: Integer;
     FDragMode: TDragMode;
@@ -66,6 +71,8 @@ type
     procedure CommitDrag;
     procedure BuildUI;
     procedure LoadRows;
+    procedure LoadProjectRows;
+    procedure FinishRows;
     procedure PaintChart(Sender: TObject);
     procedure OnFilterChange(Sender: TObject);
     procedure OnRefreshClick(Sender: TObject);
@@ -86,7 +93,12 @@ type
     function RowStart(Row: Integer): TDateTime;
     function RowPlanEnd(Row: Integer): TDateTime;
     function RowOrderId(Row: Integer): Integer;
+    function RowTaskId(Row: Integer): Integer;
+    function RowProjectId(Row: Integer): Integer;
+    function FirstTaskRow: Integer;
     property OnOpenOrder: TOpenOrderEvent read FOnOpenOrder write FOnOpenOrder;
+    property OnOpenProject: TOpenIdEvent read FOnOpenProject write FOnOpenProject;
+    property OnOpenTask: TOpenIdEvent read FOnOpenTask write FOnOpenTask;
   end;
 
 implementation
@@ -151,6 +163,7 @@ begin
   FFilter.Items.Add('Производство');
   FFilter.Items.Add('Все заказы');
   FFilter.Items.Add('Только незакрытые');
+  FFilter.Items.Add('Проекты и задачи');
   FFilter.ItemIndex := 0;
   FFilter.OnChange := OnFilterChange;
 
@@ -205,14 +218,20 @@ var
 begin
   Result := dmNone;
   Row := (Y - HEAD_H) div ROW_H;
-  if (Row < 0) or (Row > High(FRows)) or FRows[Row].IsWork then
+  if (Row < 0) or (Row > High(FRows)) or (FRows[Row].IsWork and (FRows[Row].TaskId = 0)) then
   begin
     Row := -1;
     Exit;
   end;
   X1 := XOfDate(FRows[Row].Start);
   X2 := XOfDate(FRows[Row].PlanEnd);
-  if Abs(X - X1) <= 4 then Result := dmStart
+  // короткая полоса (день-два) — только сдвиг: у неё нет «краёв», за которые
+  // можно тянуть, иначе клик по середине попадал бы в растяжение
+  if (X2 - X1 < 14) then
+  begin
+    if (X >= X1 - 4) and (X <= X2 + 4) then Result := dmMove else Row := -1;
+  end
+  else if Abs(X - X1) <= 4 then Result := dmStart
   else if Abs(X - X2) <= 4 then Result := dmEnd
   else if (X > X1) and (X < X2) then Result := dmMove
   else Row := -1;
@@ -282,9 +301,18 @@ begin
     Say(mkWarn, 'Срок не может быть раньше даты заказа — изменение отменено.');
     Exit;
   end;
-  FData.DB.Connection.ExecSQL(
-    'UPDATE orders SET order_date = :d1, due_date = :d2 WHERE id = :i',
-    [FormatDateTime('yyyy-mm-dd', NewStart), FormatDateTime('yyyy-mm-dd', NewEnd), R.OrderId]);
+  if R.TaskId > 0 then
+    FData.DB.Connection.ExecSQL(
+      'UPDATE tasks SET plan_start = :d1, due_at = :d2 WHERE id = :i',
+      [FormatDateTime('yyyy-mm-dd', NewStart), FormatDateTime('yyyy-mm-dd', NewEnd), R.TaskId])
+  else if R.ProjectId > 0 then
+    FData.DB.Connection.ExecSQL(
+      'UPDATE projects SET start_date = :d1, due_date = :d2 WHERE id = :i',
+      [FormatDateTime('yyyy-mm-dd', NewStart), FormatDateTime('yyyy-mm-dd', NewEnd), R.ProjectId])
+  else
+    FData.DB.Connection.ExecSQL(
+      'UPDATE orders SET order_date = :d1, due_date = :d2 WHERE id = :i',
+      [FormatDateTime('yyyy-mm-dd', NewStart), FormatDateTime('yyyy-mm-dd', NewEnd), R.OrderId]);
   LoadRows;
   // «%+d» Delphi не поддерживает — знак ставим сами
   Say(mkOk, Format('%s: %s — %s → %s (%s%d дн.)',
@@ -301,7 +329,15 @@ begin
   P := FCanvas.ScreenToClient(Mouse.CursorPos);
   Row := (P.Y - HEAD_H) div ROW_H;
   if (Row < 0) or (Row > High(FRows)) then Exit;
-  if Assigned(FOnOpenOrder) then
+  if FRows[Row].TaskId > 0 then
+  begin
+    if Assigned(FOnOpenTask) then FOnOpenTask(FRows[Row].TaskId);
+  end
+  else if FRows[Row].ProjectId > 0 then
+  begin
+    if Assigned(FOnOpenProject) then FOnOpenProject(FRows[Row].ProjectId);
+  end
+  else if Assigned(FOnOpenOrder) then
     FOnOpenOrder(FRows[Row].OrderId);
 end;
 
@@ -309,7 +345,8 @@ function TGanttPage.DragBar(Row: Integer; Mode: TDragMode; Days: Integer): Boole
 var
   X0, Y0: Integer;
 begin
-  Result := (Row >= 0) and (Row <= High(FRows)) and not FRows[Row].IsWork and (Mode <> dmNone);
+  Result := (Row >= 0) and (Row <= High(FRows)) and (Mode <> dmNone) and
+            (not FRows[Row].IsWork or (FRows[Row].TaskId > 0));
   if not Result then Exit;
   Y0 := HEAD_H + Row * ROW_H + ROW_H div 2;
   case Mode of
@@ -338,6 +375,109 @@ begin
   if (Row >= 0) and (Row <= High(FRows)) then Result := FRows[Row].OrderId else Result := 0;
 end;
 
+function TGanttPage.RowTaskId(Row: Integer): Integer;
+begin
+  if (Row >= 0) and (Row <= High(FRows)) then Result := FRows[Row].TaskId else Result := 0;
+end;
+
+function TGanttPage.RowProjectId(Row: Integer): Integer;
+begin
+  if (Row >= 0) and (Row <= High(FRows)) then Result := FRows[Row].ProjectId else Result := 0;
+end;
+
+function TGanttPage.FirstTaskRow: Integer;
+var
+  I: Integer;
+begin
+  Result := -1;
+  for I := 0 to High(FRows) do
+    if FRows[I].TaskId > 0 then Exit(I);
+end;
+
+{ Режим «Проекты и задачи»: строка — проект (от начала до сдачи), под ним —
+  его задачи в порядке выполнения (план начала → срок), готовые зелёным,
+  просроченные красным. Задачи можно тянуть: меняются plan_start / due_at. }
+procedure TGanttPage.LoadProjectRows;
+var
+  Q, QT: TFDQuery;
+  R, W: TGanttRow;
+  Today: TDateTime;
+  Status: string;
+
+  function AsDate(const S: string; Def: TDateTime): TDateTime;
+  var
+    Y, M, D: Integer;
+  begin
+    Result := Def;
+    if Length(S) < 10 then Exit;
+    Y := StrToIntDef(Copy(S, 1, 4), 0);
+    M := StrToIntDef(Copy(S, 6, 2), 0);
+    D := StrToIntDef(Copy(S, 9, 2), 0);
+    if (Y > 1900) and (M >= 1) and (M <= 12) and (D >= 1) and (D <= 31) then
+      Result := EncodeDate(Y, M, D);
+  end;
+
+begin
+  FRows := nil;
+  Today := Date;
+  Q := FData.OpenQuery(
+    'SELECT p.id, p.name, p.status, p.kind, COALESCE(c.denumire,''(без клиента)'') AS client, ' +
+    ' COALESCE(p.start_date,'''') AS d1, COALESCE(p.due_date,'''') AS d2 ' +
+    'FROM projects p LEFT JOIN clients c ON c.id = p.client_id ' +
+    'WHERE p.status NOT IN (''Проигран'') ORDER BY p.start_date, p.id');
+  try
+    while not Q.Eof do
+    begin
+      R := Default(TGanttRow);
+      R.ProjectId := Q.FieldByName('id').AsInteger;
+      Status := Q.FieldByName('status').AsString;
+      R.Caption := Q.FieldByName('name').AsString;
+      R.Sub := Q.FieldByName('client').AsString + '  ·  ' + Status;
+      R.Start := AsDate(Q.FieldByName('d1').AsString, Today);
+      R.PlanEnd := AsDate(Q.FieldByName('d2').AsString, R.Start + 30);
+      if R.PlanEnd < R.Start then R.PlanEnd := R.Start + 1;
+      R.Closed := Status = 'Закрыт';
+      if R.Closed then R.FactEnd := R.PlanEnd else R.FactEnd := Today;
+      R.Overdue := (not R.Closed) and (R.PlanEnd < Today);
+      FRows := FRows + [R];
+
+      QT := FData.OpenQuery(
+        'SELECT t.id, t.subject, COALESCE(t.assignee,'''') AS who, COALESCE(t.stage,'''') AS stage, ' +
+        ' COALESCE(t.done,0) AS done, COALESCE(t.plan_start,'''') AS d1, COALESCE(t.due_at,'''') AS d2, ' +
+        ' COALESCE(t.depends_on,0) AS dep, COALESCE(t.hours_plan,0) AS hp ' +
+        'FROM tasks t WHERE t.project_id = ' + IntToStr(R.ProjectId) +
+        ' ORDER BY COALESCE(t.seq,0), t.plan_start, t.id');
+      try
+        while not QT.Eof do
+        begin
+          W := Default(TGanttRow);
+          W.IsWork := True;
+          W.ProjectId := R.ProjectId;
+          W.TaskId := QT.FieldByName('id').AsInteger;
+          W.DependsOn := QT.FieldByName('dep').AsInteger;
+          W.Caption := '   ' + QT.FieldByName('subject').AsString;
+          W.Sub := QT.FieldByName('who').AsString + '  ·  ' + QT.FieldByName('stage').AsString +
+                   IfThen(QT.FieldByName('hp').AsFloat > 0, '  ·  ' + FormatFloat('0.#', QT.FieldByName('hp').AsFloat) + ' ч', '');
+          W.PlanEnd := AsDate(QT.FieldByName('d2').AsString, R.PlanEnd);
+          W.Start := AsDate(QT.FieldByName('d1').AsString, W.PlanEnd - 1);
+          if W.PlanEnd < W.Start then W.PlanEnd := W.Start + 1;
+          W.Closed := QT.FieldByName('done').AsInteger = 1;
+          if W.Closed then W.FactEnd := W.PlanEnd else W.FactEnd := Min(Today, W.PlanEnd);
+          if W.FactEnd < W.Start then W.FactEnd := W.Start;
+          W.Overdue := (not W.Closed) and (W.PlanEnd < Today);
+          FRows := FRows + [W];
+          QT.Next;
+        end;
+      finally
+        QT.Free;
+      end;
+      Q.Next;
+    end;
+  finally
+    Q.Free;
+  end;
+end;
+
 procedure TGanttPage.LoadRows;
 var
   Q, QL: TFDQuery;
@@ -361,6 +501,12 @@ var
   end;
 
 begin
+  if FFilter.ItemIndex = 3 then
+  begin
+    LoadProjectRows;
+    FinishRows;
+    Exit;
+  end;
   FRows := nil;
   Today := Date;
   case FFilter.ItemIndex of
@@ -434,8 +580,15 @@ begin
     Q.Free;
   end;
 
-  // диапазон времени по всем строкам
-  FMin := Today; FMax := Today + 7;
+  FinishRows;
+end;
+
+{ Диапазон времени по всем строкам, высота холста, строка сведений. }
+procedure TGanttPage.FinishRows;
+var
+  I: Integer;
+begin
+  FMin := Date; FMax := Date + 7;
   for I := 0 to High(FRows) do
   begin
     if FRows[I].Start < FMin then FMin := FRows[I].Start;
@@ -454,7 +607,7 @@ end;
 procedure TGanttPage.PaintChart(Sender: TObject);
 var
   C: TCanvas;
-  W, ChartW, X, Y, I, BarY: Integer;
+  W, ChartW, X, Y, I, J, X2, Y2, BarY: Integer;
   D: TDateTime;
   Total: Double;
   R: TGanttRow;
@@ -470,7 +623,12 @@ var
   procedure ApplyDrag(var Row: TGanttRow; Index: Integer);
   begin
     if (FDragMode = dmNone) or (FDragRow < 0) or (FDragDays = 0) then Exit;
-    if Row.OrderId <> FRows[FDragRow].OrderId then Exit;
+    if FRows[FDragRow].TaskId > 0 then
+    begin
+      if Index <> FDragRow then Exit;      // задача двигается одна
+    end
+    else if (Row.OrderId <> FRows[FDragRow].OrderId) or (Row.ProjectId <> FRows[FDragRow].ProjectId) then
+      Exit;
     case FDragMode of
       dmMove:  begin Row.Start := Row.Start + FDragDays; Row.PlanEnd := Row.PlanEnd + FDragDays; end;
       dmStart: if Index = FDragRow then Row.Start := Row.Start + FDragDays;
@@ -556,6 +714,27 @@ begin
       Bar(XOf(R.Start), XOf(R.FactEnd), BarY, IfThen(R.IsWork, 8, 14), ESPO_PRIMARY);
   end;
 
+  // стрелки зависимостей задач: конец предшественника → начало задачи
+  C.Pen.Color := ESPO_GRAY;
+  C.Pen.Width := 1;
+  for I := 0 to High(FRows) do
+    if (FRows[I].TaskId > 0) and (FRows[I].DependsOn > 0) then
+      for J := 0 to High(FRows) do
+        if FRows[J].TaskId = FRows[I].DependsOn then
+        begin
+          R := FRows[J]; ApplyDrag(R, J);
+          X := XOf(R.PlanEnd);
+          Y := HEAD_H + J * ROW_H + 11;
+          R := FRows[I]; ApplyDrag(R, I);
+          X2 := XOf(R.Start);
+          Y2 := HEAD_H + I * ROW_H + 11;
+          C.MoveTo(X, Y); C.LineTo(X + 4, Y); C.LineTo(X + 4, Y2); C.LineTo(X2, Y2);
+          C.Brush.Style := bsSolid; C.Brush.Color := ESPO_GRAY;
+          C.Polygon([Point(X2, Y2), Point(X2 - 5, Y2 - 3), Point(X2 - 5, Y2 + 3)]);
+          C.Brush.Style := bsClear;
+          Break;
+        end;
+
   // легенда
   Y := HEAD_H + Length(FRows) * ROW_H + 8;
   C.Brush.Style := bsSolid;
@@ -570,7 +749,10 @@ begin
   C.Brush.Style := bsSolid;
   Bar(280, 300, Y, 10, ST_SUCCESS_FG); C.Brush.Style := bsClear;
   C.TextOut(306, Y - 2, 'закрыт');
-  C.TextOut(380, Y - 2, 'отступом показаны работы заказа — строки в порядке исполнения');
+  if FFilter.ItemIndex = 3 then
+    C.TextOut(380, Y - 2, 'отступом показаны задачи проекта в порядке выполнения; стрелка — «после задачи»; задачи можно тянуть')
+  else
+    C.TextOut(380, Y - 2, 'отступом показаны работы заказа — строки в порядке исполнения');
 end;
 
 procedure TGanttPage.Refresh;
