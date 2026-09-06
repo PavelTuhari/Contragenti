@@ -66,8 +66,8 @@
     "email": "ptuhari@gmail.com"
   },
   "update_zip": "https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.1.0.zip",
-  "update_zip_size": 2675443,
-  "update_zip_sha256": "e1e9165fc91095056aeb8ccd4aa376142d5e8872230a1b395db7600ec478f863",
-  "msi_size": 40783872,
-  "msi_sha256": "9e4939ec44a85896289465c6cf9bac254b39e1d8fe52a95ad422b648925a5715"
+  "update_zip_size": 2680267,
+  "update_zip_sha256": "6ac6b1a161f18e01575a86646ab796e3c4b4bddf4f358207269181e954445615",
+  "msi_size": 40792064,
+  "msi_sha256": "3346d93a8677d3a5269133b4c810e4acd816f75ed7efd51b777c25b7f8ed7e3e"
 }

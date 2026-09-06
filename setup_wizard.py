@@ -7,9 +7,16 @@
 копии и без ручных шагов:
 
   1. технический паспорт компьютера (ОС, память, диск, Chrome, Python, сеть);
-  2. Python: если команда python ещё не работает, мастер в PowerShell
-     запускает `python` — на свежих Windows интерпретатор ставится сам
-     (App Installer / Store), без привязки к версии 3.12 и без exe с python.org;
+  2. Python (нужен только для sdk/python — exe работают без него). Два вида
+     Windows:
+       - современные (10 с 1903 / 11, есть псевдоним python из App Installer
+         или winget): `winget install Python.Python.3.12` тихо, а если winget
+         нет — команда `python` в PowerShell, Windows ставит сам через Store;
+       - старые (8.1, ранние 10, LTSC без Store): скачивается официальный
+         установщик с python.org (3.12.10; для 7/8 — 3.8.10), проверяется
+         подпись Python Software Foundation и ставится тихо в профиль
+         пользователя с PATH и py-лаунчером.
+     Порядок: winget → Store → python.org; что сработало, видно в логе;
   3. обновление компонентов из GitHub (Demo CRM, переводы, описания
      процессов, инструкции) — по списку из release.json репозитория;
      если в репозитории вышла новая версия MSI — предлагает скачать её;
@@ -81,7 +88,7 @@ TR = {
         "intro": "Мастер настроит компьютер так, чтобы Contragenti, Demo CRM и SDK заработали сразу. "
                  "Отметьте нужные шаги и нажмите «Выполнить».",
         "language": "Язык:",
-        "opt_python": "Если нет Python — выполнить в PowerShell команду python (Windows ставит сам)",
+        "opt_python": "Если нет Python — установить: новый Windows через winget / Store, старый — с python.org",
         "opt_update": "Обновить компоненты из GitHub (Demo CRM, переводы, описания процессов)",
         "opt_db": "Загрузить стартовую базу компаний date.gov.md (zip из GitHub)",
         "opt_seed": "Заполнить Demo CRM демонстрационными данными",
@@ -121,6 +128,16 @@ TR = {
                           "нужен для sdk/python. В PowerShell выполните: python",
         "python_get": "Установить Python (команда python)",
         "python_offline": "Python не найден, команда python пропущена (нет сети / --offline).",
+        "python_missing_modern": "Python не найден. Это современный Windows: нажмите «Установить Python» — "
+                                 "поставится через winget или Microsoft Store (в одно касание). "
+                                 "Contragenti.exe и Demo CRM работают и без него; нужен для sdk/python.",
+        "python_missing_legacy": "Python не найден. Это старый Windows без Store: нажмите «Установить Python» — "
+                                 "мастер скачает официальный установщик с python.org, проверит подпись и "
+                                 "поставит его в профиль пользователя. Exe и Demo CRM работают и без него.",
+        "python_installed": "Python установлен: %s %s (через %s).",
+        "python_get_store": "Установить Python (winget / Microsoft Store)",
+        "python_get_org": "Установить Python 3.12 с python.org",
+        "python_installing": "Ставим Python… это может занять несколько минут.",
         "net_fail": "GitHub недоступен (%s). Обновление и загрузка базы пропущены; "
                     "программы работают и без них.",
         "new_version": "В репозитории версия %s (установлена %s). Скачать новый установщик?",
@@ -135,7 +152,7 @@ TR = {
         "intro": "This wizard configures the computer so that Contragenti, Demo CRM and the SDK work right away. "
                  "Tick the steps you need and press Run.",
         "language": "Language:",
-        "opt_python": "If Python is missing, run python in PowerShell (Windows installs it)",
+        "opt_python": "If Python is missing, install it: modern Windows via winget / Store, older — from python.org",
         "opt_update": "Update components from GitHub (Demo CRM, translations, process descriptions)",
         "opt_db": "Download the starter company database from date.gov.md (zip from GitHub)",
         "opt_seed": "Fill Demo CRM with demo data",
@@ -175,6 +192,17 @@ TR = {
                           "it is needed for sdk/python. In PowerShell run: python",
         "python_get": "Install Python (python command)",
         "python_offline": "Python not found; python command skipped (offline / --offline).",
+        "python_missing_modern": "Python not found. This is a modern Windows: press “Install Python” — "
+                                 "it installs via winget or Microsoft Store (one click). "
+                                 "Contragenti.exe and Demo CRM work without it; needed for sdk/python.",
+        "python_missing_legacy": "Python not found. This is an older Windows without the Store: press "
+                                 "“Install Python” — the wizard downloads the official python.org installer, "
+                                 "verifies its signature and installs it for the current user. "
+                                 "The exe and Demo CRM work without it.",
+        "python_installed": "Python installed: %s %s (via %s).",
+        "python_get_store": "Install Python (winget / Microsoft Store)",
+        "python_get_org": "Install Python 3.12 from python.org",
+        "python_installing": "Installing Python… this can take a few minutes.",
         "net_fail": "GitHub is unreachable (%s). Update and database download skipped; "
                     "the programs work without them.",
         "new_version": "The repository has version %s (installed %s). Download the new installer?",
@@ -189,7 +217,7 @@ TR = {
         "intro": "Asistentul configurează calculatorul astfel încât Contragenti, Demo CRM și SDK să funcționeze imediat. "
                  "Bifați pașii necesari și apăsați „Execută”.",
         "language": "Limba:",
-        "opt_python": "Dacă lipsește Python — execută python în PowerShell (Windows îl instalează)",
+        "opt_python": "Dacă lipsește Python — instalează: Windows nou prin winget / Store, vechi — de pe python.org",
         "opt_update": "Actualizează componentele din GitHub (Demo CRM, traduceri, descrieri de procese)",
         "opt_db": "Descarcă baza inițială de companii date.gov.md (zip din GitHub)",
         "opt_seed": "Completează Demo CRM cu date demonstrative",
@@ -229,6 +257,17 @@ TR = {
                           "este necesară pentru sdk/python. În PowerShell: python",
         "python_get": "Instalează Python (comanda python)",
         "python_offline": "Python nu a fost găsit; comanda python a fost omisă (offline / --offline).",
+        "python_missing_modern": "Python nu a fost găsit. Acesta este un Windows modern: apăsați „Instalează Python” — "
+                                 "se instalează prin winget sau Microsoft Store (un singur clic). "
+                                 "Contragenti.exe și Demo CRM funcționează și fără el; este necesar pentru sdk/python.",
+        "python_missing_legacy": "Python nu a fost găsit. Acesta este un Windows vechi, fără Store: apăsați "
+                                 "„Instalează Python” — asistentul descarcă instalatorul oficial de pe python.org, "
+                                 "verifică semnătura și îl instalează pentru utilizatorul curent. "
+                                 "Exe-ul și Demo CRM funcționează și fără el.",
+        "python_installed": "Python instalat: %s %s (prin %s).",
+        "python_get_store": "Instalează Python (winget / Microsoft Store)",
+        "python_get_org": "Instalează Python 3.12 de pe python.org",
+        "python_installing": "Se instalează Python… poate dura câteva minute.",
         "net_fail": "GitHub nu este accesibil (%s). Actualizarea și descărcarea bazei au fost omise; "
                     "programele funcționează și fără ele.",
         "new_version": "În repozitoriu este versiunea %s (instalată %s). Descărcați noul instalator?",
@@ -445,6 +484,97 @@ def trigger_windows_python(quiet=False):
     )
 
 
+def windows_kind():
+    """Современный Windows (10 с 1903 / 11: есть псевдоним python из App Installer
+    или winget — Python ставится в одно касание) или старый (8.1, ранние 10,
+    LTSC без Store — нужен установщик с python.org)."""
+    wv = sys.getwindowsversion() if hasattr(sys, "getwindowsversion") else None
+    apps = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WindowsApps")
+    alias = os.path.exists(os.path.join(apps, "python.exe"))
+    winget = bool(shutil.which("winget")) or os.path.exists(os.path.join(apps, "winget.exe"))
+    build = wv.build if wv else 0
+    modern = wv is not None and wv.major >= 10 and build >= 18362 and (alias or winget)
+    return {"kind": "modern" if modern else "legacy", "alias": alias, "winget": winget,
+            "major": wv.major if wv else 0, "minor": wv.minor if wv else 0, "build": build}
+
+
+def python_org_installer():
+    """Официальный установщик python.org для этой Windows и архитектуры.
+    3.12.10 — последний 3.12 с бинарным установщиком (Windows 8.1+);
+    для Windows 7/8 — 3.8.10 (последняя ветка с их поддержкой)."""
+    wv = sys.getwindowsversion() if hasattr(sys, "getwindowsversion") else None
+    ver = "3.12.10"
+    if wv and (wv.major < 6 or (wv.major == 6 and wv.minor <= 2)):
+        ver = "3.8.10"
+    m = platform.machine().upper()
+    if m in ("AMD64", "X86_64"):
+        suffix = "-amd64"
+    elif m == "ARM64" and ver.startswith("3.12"):
+        suffix = "-arm64"
+    else:
+        suffix = ""
+    name = "python-%s%s.exe" % (ver, suffix)
+    return ver, name, "https://www.python.org/ftp/python/%s/%s" % (ver, name)
+
+
+def authenticode_ok(path):
+    """Подпись установщика: Valid и издатель Python Software Foundation."""
+    try:
+        out = subprocess.run(
+            [_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+             "$s = Get-AuthenticodeSignature -LiteralPath '%s'; "
+             "Write-Output $s.Status; Write-Output $s.SignerCertificate.Subject" % path.replace("'", "''")],
+            capture_output=True, text=True, timeout=60, errors="replace", creationflags=_NO_WINDOW)
+        text = out.stdout or ""
+        return ("Valid" in text.splitlines()[0] if text.strip() else False) and \
+            "Python Software Foundation" in text, text.strip().replace("\n", " | ")
+    except (OSError, subprocess.SubprocessError, IndexError) as exc:
+        return False, str(exc)
+
+
+def winget_install_python(log, quiet=True):
+    """Современный Windows: winget ставит Python тихо, без Store и без кликов."""
+    args = ["winget", "install", "-e", "--id", "Python.Python.3.12", "--scope", "user",
+            "--accept-package-agreements", "--accept-source-agreements", "--disable-interactivity"]
+    kwargs = {"timeout": 1500, "errors": "replace", "text": True, "capture_output": True}
+    if quiet:
+        kwargs["creationflags"] = _NO_WINDOW
+    proc = subprocess.run(args, **kwargs)
+    tail = ((proc.stdout or "") + " " + (proc.stderr or "")).strip().replace("\n", " | ")
+    log("winget: код %d %s" % (proc.returncode, tail[-400:]))
+    return proc.returncode == 0
+
+
+def python_org_install(log, logs_dir, quiet=True):
+    """Старый Windows: скачать установщик с python.org, проверить подпись,
+    поставить тихо в профиль пользователя (PATH, py-лаунчер, без тестов)."""
+    ver, name, url = python_org_installer()
+    dst = os.path.join(logs_dir, name)
+    size = download_to(url, dst, timeout=900)
+    log("python.org: %s (%d байт)" % (url, size))
+    ok, detail = authenticode_ok(dst)
+    log("подпись: %s" % detail[:200])
+    if not ok:
+        raise ValueError("подпись установщика не подтверждена (%s) — не запускаем" % detail[:120])
+    args = [dst, "/quiet" if quiet else "/passive", "InstallAllUsers=0", "PrependPath=1",
+            "Include_launcher=1", "Include_test=0", "AssociateFiles=0", "Shortcuts=0",
+            "SimpleInstall=1"]
+    proc = subprocess.run(args, timeout=1800, creationflags=_NO_WINDOW if quiet else 0)
+    log("установщик python.org: код %d" % proc.returncode)
+    # 3010 = нужна перезагрузка, установка при этом выполнена
+    if proc.returncode not in (0, 3010):
+        raise ValueError("установщик python.org завершился с кодом %d" % proc.returncode)
+    # PATH нового процесса + типичный каталог установки в профиль
+    refresh_env_path()
+    major_minor = "".join(ver.split(".")[:2])
+    pdir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Python", "Python" + major_minor)
+    for extra in (pdir, os.path.join(pdir, "Scripts"),
+                  os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Python", "Launcher")):
+        if os.path.isdir(extra) and extra not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = extra + os.pathsep + os.environ.get("PATH", "")
+    return ver
+
+
 def memory_mb():
     try:
         class MemStatus(ctypes.Structure):
@@ -513,10 +643,15 @@ def passport(paths):
     except OSError:
         disk = "?"
     wv = sys.getwindowsversion() if hasattr(sys, "getwindowsversion") else None
+    wk = windows_kind()
     lines = [
         ("Дата", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         ("ОС", platform.platform()),
         ("Сборка Windows", "%d.%d.%d" % (wv.major, wv.minor, wv.build) if wv else "?"),
+        ("Вид Windows", "%s (псевдоним python из Store: %s; winget: %s) — Python ставится %s" % (
+            "современный" if wk["kind"] == "modern" else "старый",
+            "да" if wk["alias"] else "нет", "да" if wk["winget"] else "нет",
+            "в одно касание (winget / Store)" if wk["kind"] == "modern" else "установщиком с python.org")),
         ("Архитектура", platform.machine()),
         ("Компьютер / пользователь", "%s / %s" % (os.environ.get("COMPUTERNAME", "?"), os.environ.get("USERNAME", "?"))),
         ("Права администратора", "да" if is_admin() else "нет"),
@@ -539,7 +674,7 @@ def passport(paths):
     ]
     return lines, {
         "chrome": chrome_path, "chrome_ver": chrome_ver,
-        "python": py_cmd, "python_ver": py_ver,
+        "python": py_cmd, "python_ver": py_ver, "win": wk,
     }
 
 
@@ -642,9 +777,12 @@ class Wizard:
         line = "%s  %s" % (datetime.datetime.now().strftime("%H:%M:%S"), text)
         self.log_lines.append(line)
         try:
+            if self._log_fh.closed:
+                # после close() кнопки окна ещё пишут в лог — открываем снова
+                self._log_fh = open(self.paths.log_file, "a", encoding="utf-8")
             self._log_fh.write(line + "\n")
             self._log_fh.flush()
-        except OSError:
+        except (OSError, ValueError):
             pass
         if self.log_cb:
             try:
@@ -693,7 +831,70 @@ class Wizard:
         else:
             self.step("st_chrome", "warn", self.t["chrome_missing"])
 
+    def python_missing_text(self):
+        wk = self.info.get("win") or windows_kind()
+        return self.t["python_missing_modern" if wk["kind"] == "modern" else "python_missing_legacy"]
+
+    def wait_python(self, rounds=40):
+        """После установки подождать, пока команда python начнёт отвечать."""
+        for _ in range(rounds):
+            refresh_env_path()
+            cmd, ver = find_python()
+            if cmd:
+                return cmd, ver
+            time.sleep(3)
+        return "", ""
+
+    def install_python(self, interactive):
+        """Порядок: winget → Store (только с окном) → python.org. Возвращает
+        (cmd, ver, как поставили) или ('', '', причина)."""
+        wk = self.info.get("win") or windows_kind()
+        self.info["win"] = wk
+        self.log("Windows: %s (build %d; псевдоним python: %s; winget: %s)" % (
+            "современный" if wk["kind"] == "modern" else "старый", wk["build"],
+            "да" if wk["alias"] else "нет", "да" if wk["winget"] else "нет"))
+        reasons = []
+        if wk["kind"] == "modern":
+            if wk["winget"]:
+                try:
+                    self.log("ставим Python через winget (тихо, в профиль пользователя)…")
+                    if winget_install_python(self.log, quiet=not interactive):
+                        cmd, ver = self.wait_python(10)
+                        if cmd:
+                            return cmd, ver, "winget"
+                    reasons.append("winget")
+                except Exception as exc:  # noqa: BLE001
+                    self.log("winget: %s" % exc)
+                    reasons.append("winget: %s" % exc)
+            if wk["alias"] and interactive:
+                try:
+                    self.log("команда python в PowerShell — Windows ставит Python из Store сам…")
+                    proc = trigger_windows_python(quiet=False)
+                    tail = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+                    self.log("python: код %d %s" % (proc.returncode, tail[:300].replace("\n", " | ")))
+                    cmd, ver = self.wait_python(40)
+                    if cmd:
+                        return cmd, ver, "Microsoft Store"
+                    reasons.append("Store")
+                except Exception as exc:  # noqa: BLE001
+                    self.log("Store: %s" % exc)
+                    reasons.append("Store: %s" % exc)
+        # старый Windows — или на современном не сработало ни winget, ни Store
+        try:
+            ver_org, name, _ = python_org_installer()
+            self.log("установщик python.org %s (%s)…" % (ver_org, name))
+            python_org_install(self.log, self.paths.logs, quiet=not interactive)
+            cmd, ver = self.wait_python(10)
+            if cmd:
+                return cmd, ver, "python.org %s" % ver_org
+            reasons.append("python.org: команда python не отвечает после установки")
+        except Exception as exc:  # noqa: BLE001
+            self.log("python.org: %s" % exc)
+            reasons.append("python.org: %s" % exc)
+        return "", "", "; ".join(reasons)
+
     def do_python(self):
+        self.info["win"] = windows_kind()
         cmd, ver = find_python()
         if cmd:
             self.info["python"] = cmd
@@ -701,33 +902,21 @@ class Wizard:
             self.step("st_python", "ok", "%s %s" % (cmd, ver))
             return
         if not self.opt.get("python", True):
-            self.step("st_python", "warn", self.t["python_missing"])
+            self.step("st_python", "warn", self.python_missing_text())
             return
         if self.offline:
             self.step("st_python", "warn", self.t["python_offline"])
             return
         try:
-            self.log("команда python не работает — запускаем её в PowerShell (Windows ставит сам)")
-            proc = trigger_windows_python(quiet=self.quiet)
-            tail = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
-            self.log("python: код %d %s" % (proc.returncode, tail[:400].replace("\n", " | ")))
-            refresh_env_path()
-            cmd, ver = find_python()
-            if not cmd:
-                for _ in range(40):
-                    time.sleep(3)
-                    refresh_env_path()
-                    cmd, ver = find_python()
-                    if cmd:
-                        break
+            cmd, ver, how = self.install_python(interactive=not self.quiet)
             if cmd:
                 self.info["python"] = cmd
                 self.info["python_ver"] = ver
-                self.step("st_python", "ok", "после команды python: %s %s" % (cmd, ver))
+                self.step("st_python", "ok", self.t["python_installed"] % (cmd, ver, how))
             else:
-                self.step("st_python", "warn", self.t["python_missing"])
+                self.step("st_python", "warn", "%s %s" % (self.python_missing_text(), how))
         except Exception as exc:  # noqa: BLE001
-            self.step("st_python", "warn", "%s %s" % (self.t["python_missing"], exc))
+            self.step("st_python", "warn", "%s %s" % (self.python_missing_text(), exc))
 
     def do_network(self):
         if self.offline:
@@ -776,8 +965,22 @@ class Wizard:
         return dst
 
     def apply_file(self, dst_rel, new_b, is_exe):
-        """Кладёт файл поверх установки. Возвращает 'same' | 'updated'."""
+        """Кладёт файл поверх установки. Возвращает 'same' | 'updated' | 'dry'.
+
+        Из исходников (не frozen exe) файлы репозитория не заменяются: иначе
+        мастер, запущенный из git-клона, затирал бы правки рабочего дерева
+        версиями с GitHub. В этом режиме только сверяем и пишем в лог."""
         dst = self.target_path(dst_rel)
+        if not is_frozen():
+            differs = True
+            if os.path.exists(dst):
+                with open(dst, "rb") as f1:
+                    old_b = f1.read()
+                differs = old_b != new_b if is_exe else \
+                    old_b.replace(b"\r\n", b"\n") != new_b.replace(b"\r\n", b"\n")
+            self.log("  %s %s (из исходников: %s)" % ("~" if differs else "=", dst_rel,
+                     "отличается, не заменяю" if differs else "без изменений"))
+            return "dry"
         if is_exe and (new_b[:2] != b"MZ" or len(new_b) < 100000):
             raise ValueError("не exe (LFS-указатель или обрыв): %d байт" % len(new_b))
         if os.path.exists(dst):
@@ -871,6 +1074,8 @@ class Wizard:
             self.step("st_update", "fail", "; ".join(errors))
         elif errors:
             self.step("st_update", "warn", "обновлено %d, ошибок %d: %s" % (len(updated), len(errors), "; ".join(errors)))
+        elif not is_frozen():
+            self.step("st_update", "ok", "запуск из исходников: %d файлов сверено, ничего не заменялось" % total)
         else:
             self.step("st_update", "ok", "обновлено %d из %d" % (len(updated), total))
 
@@ -1137,8 +1342,8 @@ def run_gui(lang, offline, auto=False, shot=""):
 
     root = tk.Tk()
     root.title("Contragenti Setup")
-    root.geometry("760x620")
-    root.minsize(640, 520)
+    root.geometry("780x700")
+    root.minsize(640, 560)
     try:
         ico = os.path.join(app_dir(), "app_icon.ico")
         if os.path.exists(ico):
@@ -1183,12 +1388,31 @@ def run_gui(lang, offline, auto=False, shot=""):
     start_btn = ttk.Button(btns, text=t("start_apps"))
     chrome_btn = ttk.Button(btns, text=t("chrome_get"), command=lambda: webbrowser.open("https://www.google.com/chrome/"))
     def _run_python_cmd():
-        try:
-            trigger_windows_python(quiet=False)
-        except Exception:  # noqa: BLE001
-            pass
+        # та же цепочка, что и в шаге мастера: winget → Store → python.org,
+        # но с видимыми окнами установщиков; лог идёт в то же поле
+        wiz = state.get("wizard")
+        if wiz is None or state.get("python_busy"):
+            return
+        state["python_busy"] = True
+        python_btn.configure(state="disabled")
+        summary.configure(text=t("python_installing"), fg="#9a6700")
 
-    python_btn = ttk.Button(btns, text=t("python_get"), command=_run_python_cmd)
+        def _work():
+            try:
+                cmd, ver, how = wiz.install_python(interactive=True)
+                if cmd:
+                    wiz.info["python"], wiz.info["python_ver"] = cmd, ver
+                    wiz.log(t("python_installed") % (cmd, ver, how))
+                    events.put(("python_done", True))
+                else:
+                    wiz.log(how)
+                    events.put(("python_done", False))
+            except Exception as exc:  # noqa: BLE001
+                wiz.log("Python: %s" % exc)
+                events.put(("python_done", False))
+        threading.Thread(target=_work, daemon=True).start()
+
+    python_btn = ttk.Button(btns, text=t("python_get_store"), command=_run_python_cmd)
     msi_btn = ttk.Button(btns, text=t("download_msi"))
 
     prog = ttk.Progressbar(root, mode="determinate", maximum=11)
@@ -1240,7 +1464,7 @@ def run_gui(lang, offline, auto=False, shot=""):
         close_btn.configure(text=t("close"))
         start_btn.configure(text=t("start_apps"))
         chrome_btn.configure(text=t("chrome_get"))
-        python_btn.configure(text=t("python_get"))
+        python_btn.configure(text=t("python_get_store"))
         msi_btn.configure(text=t("download_msi"))
         for key, b in rep_btns.items():
             b.configure(text=t(key))
@@ -1287,6 +1511,9 @@ def run_gui(lang, offline, auto=False, shot=""):
             if not wiz.info.get("chrome"):
                 chrome_btn.pack(side="left", padx=4)
             if not wiz.info.get("python"):
+                wk = wiz.info.get("win") or windows_kind()
+                python_btn.configure(text=t("python_get_store" if wk["kind"] == "modern" else "python_get_org"),
+                                     state="normal")
                 python_btn.pack(side="left", padx=4)
             if wiz.new_msi_url:
                 msi_btn.configure(command=lambda: webbrowser.open(wiz.new_msi_url))
@@ -1300,8 +1527,14 @@ def run_gui(lang, offline, auto=False, shot=""):
                         capture_window(hwnd, shot)
                         wiz.log("снимок окна: %s" % shot)
                     except Exception:  # noqa: BLE001
-                        wiz.log("снимок не удался:\n" + traceback.format_exc())
-                    root.after(200, root.destroy)
+                        traceback.print_exc()
+                        try:
+                            wiz.log("снимок не удался:\n" + traceback.format_exc())
+                        except Exception:  # noqa: BLE001
+                            pass
+                    finally:
+                        # окно закрывается в любом случае — иначе --auto зависает
+                        root.after(200, root.destroy)
                 root.after(900, _shot)
 
     def poll():
@@ -1314,6 +1547,15 @@ def run_gui(lang, offline, auto=False, shot=""):
                     ui_ask(ev[1], ev[2], ev[3])
                 elif ev[0] == "done":
                     ui_finish(ev[1], ev[2])
+                elif ev[0] == "python_done":
+                    state["python_busy"] = False
+                    if ev[1]:
+                        python_btn.pack_forget()
+                        summary.configure(text=t("done_ok"), fg="#1a7f37")
+                    else:
+                        python_btn.configure(state="normal")
+                        wiz = state.get("wizard")
+                        summary.configure(text=wiz.python_missing_text() if wiz else "", fg="#b02a37")
         except queue.Empty:
             pass
         root.after(100, poll)

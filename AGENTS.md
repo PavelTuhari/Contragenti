@@ -156,6 +156,11 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   путь). После `python setup.py bdist_msi` выполни
   `python tools/make_release.py` — MSI попадёт в `release/`, а в
   `release.json` обновятся `msi_url`, размер и sha256.
+- Мастер, запущенный **из исходников** (не frozen), файлы репозитория не
+  заменяет — только сверяет с GitHub и пишет в лог (`apply_file` → `dry`).
+  Иначе онлайн-прогон из git-клона затирал правки рабочего дерева
+  версиями из репозитория (так 06.09.2026 пропали правки setup_wizard.py и
+  двух инструкций — спасли `.bak`). Не снимай этот предохранитель.
 - Перед коммитом: `python setup_wizard.py --check --offline --no-seed`
   должен закончиться с кодом 0 (паспорт, настройка, самопроверка Demo CRM).
   После пуша — `--check` без `--offline` (проверяет `release.json` и

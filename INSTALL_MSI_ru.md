@@ -35,30 +35,46 @@ Git на компьютере не нужен. Google Chrome нужен для �
 
 ---
 
-## Python: команда `python` в PowerShell
+## Python: два вида Windows
 
-Версия **не фиксируется** (не 3.12 и не exe с python.org). На последних
-Windows в PowerShell достаточно написать `python` — система ставит
-интерпретатор сама (App Installer / Microsoft Store). После этого команда
-начинает работать, и можно идти дальше.
+Contragenti.exe и Demo CRM **работают без системного Python** — это
+замороженные exe. Python нужен для `sdk/python` и для запуска из
+исходников. Мастер сначала проверяет `python -c "import sys; print(sys.version)"`
+(и `py -3`, `python3`); если отвечает номером версии — шаг готов, любая 3.x.
 
-Мастер делает то же самое:
+Если Python нет, мастер смотрит, какой это Windows (строка «Вид Windows»
+в техническом паспорте), и ставит его подходящим способом:
 
-1. Проверяет, отвечает ли `python -c "import sys; print(sys.version)"`
-   номером версии. Если да — шаг готов (любая 3.x).
-2. Если нет — запускает в PowerShell ту же команду `python` (без аргументов:
-   так Windows и ставит Python). Ждёт окончания и снова проверяет `python`.
-3. Contragenti.exe и Demo CRM **работают и без системного Python** (это
-   замороженные exe). Команда `python` нужна для `sdk/python` и для запуска
-   из исходников.
+| Вид Windows | Признак | Как ставится |
+|---|---|---|
+| **Современный** — Windows 10 с 1903 (сборка 18362+) и Windows 11 | есть псевдоним `python` от App Installer (`%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe`) или `winget` | 1) `winget install -e --id Python.Python.3.12 --scope user` — тихо, без кликов; 2) если winget нет — в PowerShell выполняется команда `python`: Windows сам открывает Microsoft Store и ставит Python «в одно касание» |
+| **Старый** — Windows 8.1, ранние Windows 10 (до 1903), LTSC/сборки без Store | псевдонима и winget нет | скачивается официальный установщик **python.org** (3.12.10 — последний 3.12 с установщиком; для Windows 7/8 — 3.8.10, x64/x86/ARM64 по архитектуре), проверяется подпись Python Software Foundation (`Get-AuthenticodeSignature`), затем тихая установка в профиль пользователя: `InstallAllUsers=0 PrependPath=1 Include_launcher=1 Include_test=0` |
 
-Снять галочку в окне мастера или передать `--no-python` / `--offline` —
-шаг пропускается.
+Порядок на современном Windows: winget → Store → python.org (если первые
+два не сработали, старый способ работает и там). После установки мастер
+перечитывает PATH из реестра и ждёт, пока `python` начнёт отвечать. Что
+именно сработало, видно в логе и в строке шага: «Python установлен: python
+3.12.10 (через winget)».
 
-Вручную, если мастер ещё не запускали:
+В окне мастера при отсутствии Python появляется кнопка: на современном
+Windows — «Установить Python (winget / Microsoft Store)», на старом —
+«Установить Python 3.12 с python.org». В режиме без окна (`--check`)
+используются только тихие способы (winget, python.org) — Store требует
+клика в его окне.
+
+Снять галочку «Если нет Python — установить…» или передать `--no-python` /
+`--offline` — шаг пропускается. Установщик с python.org сохраняется в
+`logs\` (можно запустить вручную).
+
+Вручную:
 
 ```powershell
+# современный Windows
+winget install -e --id Python.Python.3.12 --scope user
+# или просто
 python
+# старый Windows: скачать https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe
+.\python-3.12.10-amd64.exe /passive InstallAllUsers=0 PrependPath=1 Include_launcher=1
 ```
 
 После установки откройте новое окно PowerShell и проверьте:
@@ -66,6 +82,10 @@ python
 ```powershell
 python -c "import sys; print(sys.version)"
 ```
+
+> Windows 7 сам MSI не запустит: Contragenti.exe собран на Python 3.12,
+> которому нужен Windows 8.1 и новее. Для Windows 7 остаётся запуск из
+> исходников на Python 3.8 (`INSTALL_WINDOWS_ru.md`).
 
 ---
 
@@ -78,7 +98,7 @@ python -c "import sys; print(sys.version)"
 |---|---|
 | Технический паспорт | ОС, сборка, память, диск, Chrome, Python, версии файлов, размер баз |
 | Google Chrome | реестр и типичные папки; если нет — кнопка «Скачать Chrome» |
-| Python | команда `python` в PowerShell: если не работает — Windows ставит сам |
+| Python | нет — ставит: современный Windows через winget / Store, старый — установщиком с python.org (см. выше) |
 | Доступ к GitHub | читает `release.json` |
 | Новая версия | сравнивает с `VERSION`; если новее и есть `msi_url` — предлагает MSI |
 | Обновление компонентов | zip `release/Contragenti-update-*.zip` или файлы из `components` |
@@ -145,8 +165,9 @@ cx_Freeze запускает именно его по «Launch on finish». По
 
 | Симптом | Что сделать |
 |---|---|
-| `Python was not found` | В PowerShell выполните `python` без аргументов — Windows поставит его сам. Затем новое окно PowerShell. |
-| Команда python так и не заработала | Мастер: кнопка «Установить Python (команда python)». Нужен интернет. |
+| `Python was not found` (современный Windows) | В PowerShell выполните `python` без аргументов — Windows поставит его сам; или `winget install -e --id Python.Python.3.12`. Затем новое окно PowerShell. |
+| `python не является внутренней или внешней командой` (старый Windows) | Кнопка мастера «Установить Python 3.12 с python.org» или установщик из `logs\python-3.12.10-amd64.exe`. |
+| Команда python так и не заработала | Откройте новое окно PowerShell (PATH обновляется для новых процессов); проверьте `py -3 --version`. |
 | Chrome не найден | Кнопка «Скачать Chrome»; без него портал date.gov.md недоступен |
 | Самопроверка Demo CRM FAIL | Смотрите `logs\selftest_democrm.log`; отчёт мастера |
 
