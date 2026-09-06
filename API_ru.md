@@ -117,6 +117,7 @@ HTML-страница со справкой по эндпоинтам (удоб�
   <lichidata>Nu</lichidata>
   <adresa>mun. Chişinău, sec. Buiucani, str. Alba-Iulia, 75/B</adresa>
   <administratori>TUHARI PAVEL [Administrator]</administratori>
+  <source>date.gov.md</source>
   <founders>
     <founder name="TUHARI PAVEL" share="100,00"/>
   </founders>
@@ -129,6 +130,12 @@ HTML-страница со справкой по эндпоинтам (удоб�
 ```
 
 Элементы `founders`/`debts` могут быть пустыми, если данных нет.
+
+Атрибут и элемент `source` показывают, откуда получена запись:
+`date.gov.md` (полная карточка) или `data2b.md` — второй источник, который
+используется для компаний, отсутствующих на портале. У записей из data2b.md
+заполнены только `idno`, `denumire` и `adresa`; остальные поля появятся после
+запроса деталей на портале.
 
 ---
 

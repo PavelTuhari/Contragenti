@@ -10,6 +10,7 @@ __pycache__/
 # Локальная база данных пользователя (не выкладывается)
 companies.db
 companies.db-journal
+companies.db.bak*
 
 # Параметры подключения к una.md (содержат пароль) — не выкладываются
 tms_config.json
@@ -80,3 +81,6 @@ crm_delphi/gui_test.log
 crm_delphi/shots_gui/test_clients.db
 # lock-файлы Office (открытая презентация)
 ~$*
+
+# Пользовательские настройки GUI (источники поиска)
+settings.json

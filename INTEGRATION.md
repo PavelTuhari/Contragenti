@@ -95,7 +95,7 @@ exit code всё равно `0` (это не ошибка, а отказ пол�
 | `<founders>/<founder@name,@share>` | массив | отдельная таблица `founders(company_idno, name, share)` | `share` — строка с процентом, десятичный разделитель `,` |
 | `<debts>/<debt@nr,@type,@sum>`, `<debts@currency>` | массив | отдельная таблица `debts(company_idno, type, sum, currency)` | Пусто, если долгов нет |
 | `<details_text>` | текст | `details_text` / `search_text` | Готовый текст для полнотекстового индекса, дублирует остальные поля |
-| `@source`, `@updated` | атрибуты корня | `source`, `updated_at` | `source` всегда `date.gov.md`; `updated_at` — момент получения с портала |
+| `@source`, `@updated` | атрибуты корня | `source`, `updated_at` | `source` — откуда запись: `date.gov.md` или `data2b.md` (второй источник для компаний, которых нет на портале); `updated_at` — момент получения |
 
 `founders` и `debts` могут быть пустыми элементами без дочерних узлов —
 это не ошибка, а «нет данных».

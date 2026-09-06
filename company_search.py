@@ -53,6 +53,13 @@ import openpyxl
 APP_VERSION = "1.3.3"
 SEARCH_URL = "https://date.gov.md/open/company-search"
 DETAILS_URL = "https://date.gov.md/open/company-details"
+# Второй источник: data2b.md — публичный поиск сайта (тот же запрос, который
+# делает сама страница). Без ключа, без регистрации и без reCAPTCHA, поэтому
+# работает обычным HTTP-запросом и идёт параллельно порталу date.gov.md.
+DATA2B_URL = "https://data2b.md/api/companies/"
+DATA2B_SITE = "https://data2b.md"
+SOURCE_GOV = "date.gov.md"
+SOURCE_D2B = "data2b.md"
 def _app_dir():
     """Каталог рядом с исполняемым файлом — и для скрипта, и для frozen exe
     (cx_Freeze/PyInstaller кладут __file__ внутрь library.zip, а не рядом с exe)."""
@@ -117,7 +124,7 @@ UNA_BANNER_BG = "#e3efec"
 EXPORT_COLUMNS = (
     "idno", "denumire", "administratori", "inregistrare",
     "forma_juridica", "lichidata", "adresa", "details_text",
-    "founders_json", "debts_json", "updated_at",
+    "founders_json", "debts_json", "source", "updated_at",
 )
 
 
@@ -134,6 +141,21 @@ TR = {
         "clear_btn": "×",
         "show_from_db": "Show from DB",
         "headless": "Headless browser",
+        "d2b_chk": "also data2b.md",
+        "src_lbl": "Sources:",
+        "src_gov": "date.gov.md",
+        "src_d2b": "data2b.md",
+        "src_db": "own DB",
+        "status_no_data": "{src}: no data for this query.",
+        "status_details_none": "Portal has no card for IDNO {idno} (shown from DB).",
+        "status_sources_off": "All online sources are off — showing the local DB.",
+        "mi_restart": "Restart",
+        "status_restart": "Restarting…",
+        "st_d2b": "Searching data2b.md…",
+        "status_d2b": "data2b.md: {n} of {total} for “{q}”.",
+        "status_d2b_none": "data2b.md: nothing found for “{q}”.",
+        "d2b_error": "data2b.md unavailable: {err}",
+        "f_source": "Source",
         "tab_online": "Online search",
         "tab_offline": "DB only (offline)",
         "offline_find": "Find in DB",
@@ -275,6 +297,21 @@ TR = {
         "clear_btn": "×",
         "show_from_db": "Показывать из БД",
         "headless": "Скрытый браузер",
+        "d2b_chk": "плюс data2b.md",
+        "src_lbl": "Источники:",
+        "src_gov": "date.gov.md",
+        "src_d2b": "data2b.md",
+        "src_db": "своя БД",
+        "status_no_data": "{src}: по этому запросу данных нет.",
+        "status_details_none": "На портале нет карточки по IDNO {idno} (показано из БД).",
+        "status_sources_off": "Онлайн-источники отключены — показана локальная БД.",
+        "mi_restart": "Перезапустить",
+        "status_restart": "Перезапуск…",
+        "st_d2b": "Ищу на data2b.md…",
+        "status_d2b": "data2b.md: {n} из {total} по «{q}».",
+        "status_d2b_none": "data2b.md: по «{q}» ничего не найдено.",
+        "d2b_error": "data2b.md недоступен: {err}",
+        "f_source": "Источник",
         "tab_online": "Онлайн-поиск",
         "tab_offline": "Только БД (офлайн)",
         "offline_find": "Найти в БД",
@@ -418,6 +455,21 @@ TR = {
         "clear_btn": "×",
         "show_from_db": "Arată din BD",
         "headless": "Browser ascuns",
+        "d2b_chk": "plus data2b.md",
+        "src_lbl": "Surse:",
+        "src_gov": "date.gov.md",
+        "src_d2b": "data2b.md",
+        "src_db": "baza proprie",
+        "status_no_data": "{src}: nu sunt date pentru această căutare.",
+        "status_details_none": "Portalul nu are fișă pentru IDNO {idno} (afișat din BD).",
+        "status_sources_off": "Sursele online sunt oprite — se afișează baza locală.",
+        "mi_restart": "Repornește",
+        "status_restart": "Repornire…",
+        "st_d2b": "Caut pe data2b.md…",
+        "status_d2b": "data2b.md: {n} din {total} pentru „{q}”.",
+        "status_d2b_none": "data2b.md: nimic găsit pentru „{q}”.",
+        "d2b_error": "data2b.md indisponibil: {err}",
+        "f_source": "Sursa",
         "tab_online": "Căutare online",
         "tab_offline": "Doar BD (offline)",
         "offline_find": "Caută în BD",
@@ -729,6 +781,114 @@ def classify_tables(tables):
     return founders, debts
 
 
+# ──────────────────────── Второй источник: data2b.md ────────────────────────
+#
+# На date.gov.md встречаются действующие компании, которых портал не отдаёт
+# (например IDNO 1007602003320). data2b.md — публичный B2B-справочник Молдовы;
+# его страница поиска обращается к открытому адресу /api/companies/?q=…,
+# который отвечает без ключа, без регистрации и без капчи. Мы делаем ровно
+# тот же простой запрос, что и обычный посетитель сайта.
+
+
+def data2b_parse(payload):
+    """Разбирает ответ поиска data2b.md в записи формата приложения.
+
+    Принимает dict (уже разобранный JSON) или строку/байты с JSON.
+    Отсутствующие у источника поля (руководители, дата регистрации) остаются
+    пустыми — db_upsert не затирает ими данные, полученные с портала.
+    """
+    if isinstance(payload, (bytes, bytearray)):
+        payload = payload.decode("utf-8", "replace")
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    rows = []
+    for item in (payload or {}).get("results") or []:
+        idno = str(item.get("idno") or "").strip()
+        name = (item.get("name") or "").strip()
+        if not idno and not name:
+            continue
+        rows.append({
+            "idno": idno,
+            "denumire": name,
+            "administratori": "",
+            "inregistrare": "",
+            "adresa": " ".join((item.get("address") or "").split()),
+            "source": SOURCE_D2B,
+        })
+    return rows
+
+
+def data2b_total(payload):
+    """Сколько всего совпадений нашёл источник (для строки состояния)."""
+    if isinstance(payload, (bytes, bytearray)):
+        payload = payload.decode("utf-8", "replace")
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    try:
+        return int((payload or {}).get("count") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def data2b_fetch(query, page=1, timeout=20):
+    """Один простой поисковый запрос к data2b.md. Возвращает разобранный JSON."""
+    import urllib.request
+    from urllib.parse import urlencode
+    url = DATA2B_URL + "?" + urlencode({"q": query, "page": page})
+    req = urllib.request.Request(url, headers={
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                       "(KHTML, like Gecko) Chrome/140.0 Safari/537.36"),
+        "Accept": "application/json",
+        "Accept-Language": "ro,ru;q=0.9,en;q=0.8",
+        "Referer": DATA2B_SITE + "/ro/",
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+
+def data2b_search(query, max_pages=3, timeout=20):
+    """Поиск на data2b.md с постраничным добором. Возвращает (rows, total)."""
+    query = (query or "").strip()
+    if not query:
+        return [], 0
+    rows, total, seen = [], 0, set()
+    for page in range(1, max(1, max_pages) + 1):
+        payload = data2b_fetch(query, page=page, timeout=timeout)
+        if page == 1:
+            total = data2b_total(payload)
+        chunk = data2b_parse(payload)
+        if not chunk:
+            break
+        for rec in chunk:
+            key = rec["idno"] or "name:" + rec["denumire"]
+            if key not in seen:
+                seen.add(key)
+                rows.append(rec)
+        if len(rows) >= total:
+            break
+    return rows, total
+
+
+class Data2bWorker(threading.Thread):
+    """Параллельный поиск на data2b.md — обычный HTTP, без браузера и капчи."""
+
+    def __init__(self, query, out_queue, tr, max_pages=3):
+        super().__init__(daemon=True)
+        self.query = query
+        self.out = out_queue
+        self.tr = tr
+        self.max_pages = max_pages
+
+    def run(self):
+        try:
+            self.out.put(("status", self.tr.get("st_d2b", "data2b.md…")))
+            rows, total = data2b_search(self.query, max_pages=self.max_pages)
+            self.out.put(("d2b_done", {"rows": rows, "total": total,
+                                       "query": self.query}))
+        except Exception as exc:  # noqa: BLE001
+            self.out.put(("d2b_error", f"{type(exc).__name__}: {exc}"))
+
+
 # ────────────────────────────── Слой SQLite ──────────────────────────────
 
 
@@ -754,13 +914,14 @@ def db_init():
             details_text   TEXT,
             founders_json  TEXT,
             debts_json     TEXT,
+            source         TEXT,
             updated_at     TEXT
         )
         """
     )
     # миграция: добить недостающие колонки в старой БД
     have = {r[1] for r in conn.execute("PRAGMA table_info(companies)")}
-    for col in ("founders_json", "debts_json"):
+    for col in ("founders_json", "debts_json", "source"):
         if col not in have:
             conn.execute(f"ALTER TABLE companies ADD COLUMN {col} TEXT")
     conn.commit()
@@ -804,7 +965,13 @@ def db_save_search_rows(rows):
     conn = db_connect()
     try:
         for rec in rows:
-            db_upsert(conn, {k: rec.get(k) for k in COLUMNS})
+            fields = {k: rec.get(k) for k in COLUMNS}
+            # data2b.md даёт ещё адрес и метку источника — они не входят в
+            # COLUMNS (колонки таблицы результатов), но нужны в базе
+            for extra in ("adresa", "source"):
+                if rec.get(extra):
+                    fields[extra] = rec[extra]
+            db_upsert(conn, fields)
         conn.commit()
     finally:
         conn.close()
@@ -824,6 +991,7 @@ def db_save_details(data):
             "details_text": data.get("text"),
             "founders_json": json.dumps(data.get("founders", []), ensure_ascii=False),
             "debts_json": json.dumps(data.get("debts", []), ensure_ascii=False),
+            "source": SOURCE_GOV,
         })
         conn.commit()
     finally:
@@ -910,6 +1078,7 @@ def company_markdown(rec, lang="ru"):
         f"- **{tr['f_lichidata']}:** {rec.get('lichidata','') or ''}",
         f"- **{tr['f_adresa']}:** {rec.get('adresa','') or ''}",
         f"- **{tr['f_admin']}:** {rec.get('administratori','') or ''}",
+        f"- **{tr['f_source']}:** {rec.get('source','') or SOURCE_GOV}",
         f"- **{tr['f_updated']}:** {rec.get('updated_at','') or ''}",
         "",
     ]
@@ -949,7 +1118,7 @@ def _safe_filename(rec):
 def build_card_xml(rec):
     """XML полной карточки контрагента для внешних систем (1С и т.п.)."""
     root = ET.Element("counterparty", {
-        "source": "date.gov.md",
+        "source": (rec.get("source") or SOURCE_GOV),
         "idno": rec.get("idno", "") or "",
         "updated": rec.get("updated_at", "") or "",
     })
@@ -957,6 +1126,7 @@ def build_card_xml(rec):
         ("idno", "idno"), ("denumire", "denumire"), ("inregistrare", "inregistrare"),
         ("forma_juridica", "forma_juridica"), ("lichidata", "lichidata"),
         ("adresa", "adresa"), ("administratori", "administratori"),
+        ("source", "source"),
     ):
         ET.SubElement(root, tag).text = rec.get(key, "") or ""
     founders_el = ET.SubElement(root, "founders")
@@ -986,6 +1156,7 @@ def build_card_html(rec, xml, lang="ru"):
         ("f_idno", "idno"), ("f_denumire", "denumire"), ("f_reg", "inregistrare"),
         ("f_forma", "forma_juridica"), ("f_lichidata", "lichidata"),
         ("f_adresa", "adresa"), ("f_admin", "administratori"),
+        ("f_source", "source"),
     ]
     field_rows = "".join(
         "<tr><th>%s</th><td>%s</td></tr>" % (esc(tr[k]), esc(rec.get(fk, "") or ""))
@@ -1127,14 +1298,60 @@ class BrowserWorker(threading.Thread):
             # Что-то всё же перекрыло кнопку — жмём напрямую через DOM.
             driver.execute_script("arguments[0].click();", btn)
 
+    def _wait_fragment(self, driver, timeout=120):
+        """Ждёт, пока портал отрисует фрагмент ответа.
+
+        Портал отвечает одним из двух способов: содержательным фрагментом
+        (таблица результатов или поля карточки) либо коротким сообщением
+        «Rezultat căutare persoană juridică — Nu sunt date.» (так он отвечает,
+        например, на IDNO 1007602003320). Второй случай раньше не отличался от
+        «ещё грузится», и поиск впустую ждал полный таймаут; теперь мы ловим
+        его сразу и закрываем браузер.
+
+        Возвращает True, если пришли данные, и False, если портал сообщил,
+        что данных нет.
+        """
+        wait = WebDriverWait(driver, timeout)
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#fragments-accordion")))
+
+        def ready(d):
+            if d.find_elements(By.CSS_SELECTOR, "#fragments-accordion .fragment-loading"):
+                return False          # ещё крутится спиннер загрузки
+            bodies = d.find_elements(By.CSS_SELECTOR, "#fragments-accordion .output-data")
+            if not bodies:
+                return False
+            if d.find_elements(By.CSS_SELECTOR,
+                               "#fragments-accordion .output-data table, "
+                               "#fragments-accordion .output-data .simple-title"):
+                return True           # содержательный ответ
+            # текст без таблицы и полей — это сообщение «нет данных»
+            return any((b.get_attribute("textContent") or "").strip() for b in bodies)
+
+        wait.until(ready)
+        return bool(driver.find_elements(
+            By.CSS_SELECTOR, "#fragments-accordion .output-data table, "
+                             "#fragments-accordion .output-data .simple-title"))
+
+    def _no_data_text(self, driver):
+        """Что именно ответил портал (для строки состояния)."""
+        parts = []
+        for el in driver.find_elements(By.CSS_SELECTOR, "#fragments-accordion .output-data"):
+            parts.append(" ".join((el.get_attribute("textContent") or "").split()))
+        return " ".join(p for p in parts if p)[:120]
+
     def _run_search(self, driver):
         self._status("st_open_search")
         driver.get(SEARCH_URL)
         self._fill_and_submit(driver, "q")
         self._status("st_results")
-        result_wait = WebDriverWait(driver, 120)
-        table = result_wait.until(EC.presence_of_element_located(
-            (By.CSS_SELECTOR, "div[data-fragment-id] table, .table-responsive table")))
+        if not self._wait_fragment(driver):
+            # «Nu sunt date.» — сразу отдаём пустой результат и закрываемся
+            self._shot(driver, "sdk_1_portal_no_data")
+            self.out.put(("portal_no_data", self._no_data_text(driver)))
+            self.out.put(("search_done", []))
+            return
+        table = driver.find_element(
+            By.CSS_SELECTOR, "div[data-fragment-id] table, .table-responsive table")
         try:
             WebDriverWait(driver, 10).until(
                 lambda d: len(table.find_elements(By.CSS_SELECTOR, "tbody tr")) > 0)
@@ -1153,10 +1370,11 @@ class BrowserWorker(threading.Thread):
             (By.CSS_SELECTOR, "#fragments-accordion")))
         result_wait.until(lambda d: len(
             accordion.find_elements(By.CSS_SELECTOR, ".accordion-item")) > 0)
-        result_wait.until(lambda d:
-            len(accordion.find_elements(By.CSS_SELECTOR, ".fragment-loading")) == 0
-            and len(accordion.find_elements(
-                By.CSS_SELECTOR, ".output-data .simple-title, .output-data table")) > 0)
+        if not self._wait_fragment(driver):
+            self._shot(driver, "sdk_2_portal_no_data")
+            self.out.put(("portal_no_data", self._no_data_text(driver)))
+            self.out.put(("details_none", self.value))
+            return
         driver.execute_script(
             "document.querySelectorAll('#fragments-accordion .accordion-collapse')"
             ".forEach(function(e){e.classList.add('show'); e.style.height='auto';"
@@ -1191,6 +1409,36 @@ class BrowserWorker(threading.Thread):
 # ─────────────────────── интеграция с ERP una.md ───────────────────────
 
 TMS_CONFIG_PATH = os.path.join(DATA_DIR, "tms_config.json")
+# Пользовательские настройки GUI (источники поиска и т.п.) — рядом с базой,
+# чтобы они сохранялись и при установке в Program Files (см. _data_dir)
+SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
+
+
+def settings_load():
+    """Настройки интерфейса, запоминаемые между запусками.
+
+    Источники поиска можно включать и отключать независимо: портал
+    date.gov.md, справочник data2b.md и собственная база (офлайн).
+    """
+    cfg = {"src_gov": True, "src_d2b": True, "src_db": True, "headless": False}
+    try:
+        with open(SETTINGS_PATH, encoding="utf-8") as f:
+            saved = json.load(f)
+        for key in cfg:
+            if key in saved:
+                cfg[key] = bool(saved[key])
+    except Exception:  # noqa: BLE001
+        pass          # файла ещё нет или он повреждён — берём значения по умолчанию
+    return cfg
+
+
+def settings_save(cfg):
+    try:
+        with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def tms_load_config():
@@ -1429,6 +1677,7 @@ class App(tk.Tk):
             port=DEFAULT_PORT, host="127.0.0.1", lang="ru", q=None,
             pick=False, out=None, no_server=False, no_tray=False)
         self.lang = self.args.lang if self.args.lang in LANGS else "ru"
+        self.settings = settings_load()   # запомненные источники поиска
         db_init()
         self.queue = queue.Queue()
         self.worker = None
@@ -1472,6 +1721,8 @@ class App(tk.Tk):
         self.menubar = tk.Menu(self)
         self.file_menu = tk.Menu(self.menubar, tearoff=0)
         self.file_menu.add_command(label="", command=self._hide_window)
+        self.file_menu.add_command(label="", command=self._restart_app)
+        self.file_menu.add_separator()
         self.file_menu.add_command(label="", command=self.do_quit)
         self.menubar.add_cascade(menu=self.file_menu, label="")
         self.export_menu = tk.Menu(self.menubar, tearoff=0)
@@ -1582,12 +1833,28 @@ class App(tk.Tk):
             entry.bind("<Return>", lambda e: self.on_search())
             self.online_entry, self.online_label = entry, lbl
             self.online_clear_btn, self.online_search_btn = clr, btn
-            self.show_from_db_var = tk.BooleanVar(value=True)
-            self.headless_var = tk.BooleanVar(value=False)
-            self.chk_db = ttk.Checkbutton(bar, variable=self.show_from_db_var)
-            self.chk_db.grid(row=0, column=4, padx=6)
+            # Источники поиска: каждый включается и отключается отдельно,
+            # состояние запоминается между запусками (settings.json).
+            cfg = self.settings
+            self.src_gov_var = tk.BooleanVar(value=cfg.get("src_gov", True))
+            self.src_d2b_var = tk.BooleanVar(
+                value=cfg.get("src_d2b", True)
+                and not getattr(self.args, "no_data2b", False))
+            self.src_db_var = tk.BooleanVar(value=cfg.get("src_db", True))
+            self.headless_var = tk.BooleanVar(value=cfg.get("headless", False))
+            self.src_label = ttk.Label(bar)
+            self.src_label.grid(row=0, column=4, padx=(10, 2))
+            self.chk_gov = ttk.Checkbutton(bar, variable=self.src_gov_var)
+            self.chk_gov.grid(row=0, column=5, padx=3)
+            self.chk_d2b = ttk.Checkbutton(bar, variable=self.src_d2b_var)
+            self.chk_d2b.grid(row=0, column=6, padx=3)
+            self.chk_db = ttk.Checkbutton(bar, variable=self.src_db_var)
+            self.chk_db.grid(row=0, column=7, padx=3)
             self.chk_headless = ttk.Checkbutton(bar, variable=self.headless_var)
-            self.chk_headless.grid(row=0, column=5, padx=6)
+            self.chk_headless.grid(row=0, column=8, padx=(10, 3))
+            for var in (self.src_gov_var, self.src_d2b_var,
+                        self.src_db_var, self.headless_var):
+                var.trace_add("write", lambda *_: self._save_settings())
         else:
             entry.bind("<Return>", lambda e: self.on_db_find())
             self.offline_entry, self.offline_label = entry, lbl
@@ -1645,6 +1912,7 @@ class App(tk.Tk):
         pairs = [
             ("f_idno", "idno"), ("f_reg", "inregistrare"), ("f_forma", "forma_juridica"),
             ("f_lichidata", "lichidata"), ("f_adresa", "adresa"), ("f_admin", "administratori"),
+            ("f_source", "source"),
         ]
         for i, (lkey, fkey) in enumerate(pairs):
             r, c = 1 + i // 3, (i % 3) * 2
@@ -1675,7 +1943,8 @@ class App(tk.Tk):
         self.menubar.entryconfig(3, label=self.t("menu_lang"))
         self.menubar.entryconfig(4, label=self.t("menu_help"))
         self.file_menu.entryconfig(0, label=self.t("mi_hide"))
-        self.file_menu.entryconfig(1, label=self.t("mi_quit"))
+        self.file_menu.entryconfig(1, label=self.t("mi_restart"))
+        self.file_menu.entryconfig(3, label=self.t("mi_quit"))
         self.help_menu.entryconfig(0, label=self.t("mi_about"))
         self.help_menu.entryconfig(1, label=self.t("mi_selftest"))
         self.help_menu.entryconfig(3, label=self.t("mi_una"))
@@ -1696,8 +1965,11 @@ class App(tk.Tk):
         self.offline_find_btn.config(text=self.t("offline_find"))
         for b in (self.online_clear_btn, self.offline_clear_btn):
             b.config(text=self.t("clear_btn"))
-        self.chk_db.config(text=self.t("show_from_db"))
         self.chk_headless.config(text=self.t("headless"))
+        self.src_label.config(text=self.t("src_lbl"))
+        self.chk_gov.config(text=self.t("src_gov"))
+        self.chk_d2b.config(text=self.t("src_d2b"))
+        self.chk_db.config(text=self.t("src_db"))
         self.detail.config(text=self.t("detail_title"))
         self.details_btn.config(text=self.t("details_btn"))
         self.export_md_btn.config(text=self.t("export_md"))
@@ -1979,6 +2251,53 @@ class App(tk.Tk):
 
     # ── общие действия ──
 
+    def _save_settings(self):
+        """Запомнить состояние переключателей источников (settings.json)."""
+        try:
+            self.settings.update({
+                "src_gov": bool(self.src_gov_var.get()),
+                "src_d2b": bool(self.src_d2b_var.get()),
+                "src_db": bool(self.src_db_var.get()),
+                "headless": bool(self.headless_var.get()),
+            })
+            settings_save(self.settings)
+        except Exception:  # noqa: BLE001
+            pass          # настройки — не критичный ресурс, поиск важнее
+
+    def _restart_app(self):
+        """Перезапуск приложения: закрываем сервер и трей, стартуем себя заново.
+
+        Новый процесс запускается тем же интерпретатором с теми же аргументами;
+        порт освобождается до старта, иначе новый экземпляр его не займёт.
+        """
+        import subprocess
+        self._save_settings()
+        self.status.set(self.t("status_restart"))
+        self.update_idletasks()
+        self._alive = False
+        try:
+            if self.httpd:
+                self.httpd.shutdown()
+                self.httpd.server_close()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            if self.tray_icon:
+                self.tray_icon.stop()
+        except Exception:  # noqa: BLE001
+            pass
+        if getattr(sys, "frozen", False):          # собранный exe
+            cmd = [sys.executable] + sys.argv[1:]
+        else:
+            cmd = [sys.executable, os.path.abspath(__file__)] + sys.argv[1:]
+        try:
+            subprocess.Popen(cmd, cwd=os.getcwd(), close_fds=True)
+        except Exception as exc:  # noqa: BLE001
+            self._alive = True
+            self.status.set(f"restart failed: {exc}")
+            return
+        self.destroy()
+
     def _busy(self, busy):
         state = "disabled" if busy else "normal"
         self.online_search_btn.config(state=state)
@@ -1999,12 +2318,32 @@ class App(tk.Tk):
         if self._worker_active():
             return
         self.last_query = query
+        use_gov = bool(self.src_gov_var.get())
+        use_d2b = bool(self.src_d2b_var.get())
+        self._gov_rows = None
+        self._d2b_rows = None
+        if not (use_gov or use_d2b):
+            # оба онлайн-источника отключены — работаем по локальной базе
+            records = db_query(query)
+            self._populate(self.tree_online, records)
+            self.status.set(self.t("status_sources_off"))
+            return
         self._busy(True)
         self.status.set(self.t("status_search"))
-        self.worker = BrowserWorker("search", query, self.queue, TR[self.lang],
-                                    headless=self.headless_var.get(),
+        # Включённые источники опрашиваются параллельно: портал date.gov.md
+        # (браузер, капча) и data2b.md (обычный HTTP). Кнопки разблокируются,
+        # когда завершится последний из них.
+        self._search_pending = 0
+        if use_gov:
+            self._search_pending += 1
+            self.worker = BrowserWorker("search", query, self.queue, TR[self.lang],
+                                        headless=self.headless_var.get(),
                                         shots_dir=getattr(self.args, "shots_dir", None))
-        self.worker.start()
+            self.worker.start()
+        if use_d2b:
+            self._search_pending += 1
+            self.d2b_worker = Data2bWorker(query, self.queue, TR[self.lang])
+            self.d2b_worker.start()
 
     def on_db_find(self):
         query = self.offline_entry.get().strip()
@@ -2069,6 +2408,17 @@ class App(tk.Tk):
                     self.status.set(payload)
                 elif kind == "search_done":
                     self._on_search_done(payload)
+                elif kind == "portal_no_data":
+                    # портал ответил «Nu sunt date.» — сообщаем и не ждём таймаут
+                    self.status.set(self.t("status_no_data", src=SOURCE_GOV))
+                elif kind == "details_none":
+                    self._on_details_none(payload)
+                elif kind == "d2b_done":
+                    self._on_d2b_done(payload)
+                elif kind == "d2b_error":
+                    # второй источник необязателен: не мешаем основному поиску
+                    self._search_task_finished()
+                    self.status.set(self.t("d2b_error", err=str(payload)[:90]))
                 elif kind == "details_done":
                     self._on_details_done(payload)
                 elif kind == "error":
@@ -2111,30 +2461,81 @@ class App(tk.Tk):
         if getattr(self, "_alive", True):
             self.after(120, self._poll_queue)
 
+    def _search_task_finished(self):
+        """Один из параллельных источников завершился; кнопки — когда оба."""
+        self._search_pending = max(0, getattr(self, "_search_pending", 1) - 1)
+        if self._search_pending == 0:
+            self._busy(False)
+
+    def _merge_rows(self, *groups):
+        """Объединяет выдачи источников, дедуплицируя по IDNO (портал первым)."""
+        merged, seen = [], set()
+        for group in groups:
+            for rec in group or []:
+                key = (rec.get("idno") or "").strip() or "name:" + (rec.get("denumire") or "")
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(rec)
+        return merged
+
+    def _maybe_auto_pick(self, rows):
+        """--pick --auto-pick: интеграционный тест SDK — вернуть первую найденную
+        карточку без участия пользователя (детали дозагрузятся в resolve_pick)."""
+        if not (getattr(self, "_oneshot", False)
+                and getattr(self.args, "auto_pick", False) and rows):
+            return
+        if getattr(self, "_auto_pick_started", False):
+            return
+        first = (rows[0].get("idno") or "").strip()
+        if first:
+            self._auto_pick_started = True
+            self.status.set(f"auto-pick → {first}")
+            self.after(400, lambda: self._self_shot("sdk_3_contragenti_results"))
+            self._auto_pick_when_idle(first)
+
     def _on_search_done(self, rows):
-        self._busy(False)
+        for rec in rows:
+            rec.setdefault("source", SOURCE_GOV)
+        self._gov_rows = rows
+        self._search_task_finished()
         db_save_search_rows(rows)
         self._refresh_title()
-        if self.show_from_db_var.get():
+        if self.src_db_var.get():
             records = db_query(self.last_query)
             self._populate(self.tree_online, records)
             self.status.set(self.t("status_from_db", q=self.last_query,
                                     n=len(records), r=len(rows)))
         else:
-            self._populate(self.tree_online, rows)
+            shown = self._merge_rows(rows, getattr(self, "_d2b_rows", None))
+            self._populate(self.tree_online, shown)
             self.status.set(self.t("status_online", n=len(rows)))
         # авто-режим una.md: сразу отправить свежие результаты поиска
         if getattr(self, "tms_auto_var", None) and self.tms_auto_var.get() and rows:
             self._tms_send(rows)
-        # --pick --auto-pick: интеграционный тест SDK — вернуть первую найденную
-        # карточку без участия пользователя (детали дозагрузятся в resolve_pick)
-        if (getattr(self, "_oneshot", False) and getattr(self.args, "auto_pick", False)
-                and rows):
-            first = (rows[0].get("idno") or "").strip()
-            if first:
-                self.status.set(f"auto-pick → {first}")
-                self.after(400, lambda: self._self_shot("sdk_3_contragenti_results"))
-                self._auto_pick_when_idle(first)
+        self._maybe_auto_pick(rows)
+
+    def _on_d2b_done(self, payload):
+        """Результат параллельного поиска на data2b.md."""
+        rows = payload.get("rows") or []
+        total = payload.get("total") or len(rows)
+        query = payload.get("query") or self.last_query
+        self._d2b_rows = rows
+        self._search_task_finished()
+        if rows:
+            db_save_search_rows(rows)
+            self._refresh_title()
+        if self.src_db_var.get():
+            self._populate(self.tree_online, db_query(query))
+        else:
+            self._populate(self.tree_online,
+                           self._merge_rows(getattr(self, "_gov_rows", None), rows))
+        self.status.set(self.t("status_d2b", n=len(rows), total=total, q=query)
+                        if rows else self.t("status_d2b_none", q=query))
+        # Портал уже ответил и ничего не дал (компании там нет) — в режиме SDK
+        # отдаём то, что нашёл второй источник.
+        if not (getattr(self, "_gov_rows", None) or []):
+            self._maybe_auto_pick(rows)
 
     def _self_shot(self, name):
         """Снимок собственного окна (--shots-dir) через PrintWindow изнутри процесса."""
@@ -2164,6 +2565,21 @@ class App(tk.Tk):
         rec = db_get(idno) or {}
         self._show_detail(rec)
         self.status.set(self.t("status_details", idno=idno))
+        if self.pick_after_details == idno:
+            self.pick_after_details = None
+            self._finish_pick(idno)
+
+    def _on_details_none(self, idno):
+        """Портал не отдал карточку по этому IDNO (например 1007602003320).
+
+        Ничего не ждём: показываем то, что уже есть в базе (например запись,
+        найденную на data2b.md), и, если шёл возврат контрагента, завершаем его
+        с имеющимися данными — вызывающая программа не должна зависать.
+        """
+        self._busy(False)
+        rec = db_get(idno) or self.current_rec or {"idno": idno}
+        self._show_detail(rec)
+        self.status.set(self.t("status_details_none", idno=idno))
         if self.pick_after_details == idno:
             self.pick_after_details = None
             self._finish_pick(idno)
@@ -2524,12 +2940,60 @@ def run_selftest():
         assert m["univers"]["DENUMIREA"] == "SELFTEST SRL"
         assert tms_export.iban_bank_prefix("MD24AG000225100013104168") == "AG"
 
+    def check_data2b():
+        # разбор ответа второго источника — на реальном образце выдачи сайта
+        sample = {"count": 1, "results": [{
+            "registered": None, "id": "1007602003320",
+            "slug": "institutie-publica-colegiul-de-muzica-si-pedagogie-din-balti",
+            "name": "INSTITUȚIE PUBLICĂ COLEGIUL DE MUZICĂ ȘI PEDAGOGIE DIN BĂLȚI",
+            "idno": "1007602003320", "address": "MUN.BALTI Ciprian Porumbescu 18 ",
+            "has_web_contacts": True, "has_phone_contacts": True}]}
+        rows = data2b_parse(sample)
+        assert len(rows) == 1, f"expected 1 row, got {len(rows)}"
+        rec = rows[0]
+        assert rec["idno"] == "1007602003320", rec["idno"]
+        assert "COLEGIUL" in rec["denumire"], rec["denumire"]
+        assert rec["adresa"] == "MUN.BALTI Ciprian Porumbescu 18", repr(rec["adresa"])
+        assert rec["source"] == SOURCE_D2B, rec["source"]
+        assert data2b_total(sample) == 1
+        # тот же разбор из строки JSON и устойчивость к пустой выдаче
+        assert data2b_parse(json.dumps(sample))[0]["idno"] == "1007602003320"
+        assert data2b_parse({"count": 0, "results": []}) == []
+        assert data2b_search("") == ([], 0)
+        # источник попадает в XML карточки
+        xml = build_card_xml({"idno": "1007602003320", "denumire": "X",
+                              "source": SOURCE_D2B})
+        assert f'source="{SOURCE_D2B}"' in xml, xml[:200]
+
+    def check_settings():
+        # запоминаемые источники поиска: запись → чтение → восстановление файла
+        global SETTINGS_PATH
+        keep = SETTINGS_PATH
+        import tempfile
+        SETTINGS_PATH = os.path.join(tempfile.mkdtemp(), "settings.json")
+        try:
+            defaults = settings_load()          # файла нет — значения по умолчанию
+            assert defaults == {"src_gov": True, "src_d2b": True,
+                                "src_db": True, "headless": False}, defaults
+            assert settings_save({"src_gov": False, "src_d2b": True,
+                                  "src_db": False, "headless": True})
+            got = settings_load()
+            assert got["src_gov"] is False and got["src_db"] is False, got
+            assert got["src_d2b"] is True and got["headless"] is True, got
+            with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+                f.write("{ broken")           # повреждённый файл не должен ронять
+            assert settings_load()["src_gov"] is True
+        finally:
+            SETTINGS_PATH = keep
+
     add("database (SQLite)", check_db)
     add("i18n (en/ru/ro)", check_i18n)
     add("xml export", check_xml_export)
     add("network socket", check_network)
     add("html parsers", check_html_parsers)
     add("una.md mapping", check_tms)
+    add("data2b.md search parsing", check_data2b)
+    add("settings (search sources)", check_settings)
 
     ok = all(c[1] for c in checks)
     lines = ["Contragenti self-test: " + ("PASS" if ok else "FAIL"), ""]
@@ -2767,6 +3231,8 @@ def parse_args(argv=None):
     ap.add_argument("--shots-dir", default=None,
                     help="with --pick: save portal/browser and own-window screenshots "
                          "(sdk_*.png) to this directory for the caller's test report")
+    ap.add_argument("--no-data2b", action="store_true",
+                    help="do not search data2b.md in parallel with date.gov.md")
     ap.add_argument("--no-server", action="store_true", help="do not start HTTP API")
     ap.add_argument("--no-tray", action="store_true", help="do not create tray icon")
     ap.add_argument("--selftest", action="store_true",
