@@ -937,7 +937,10 @@ class Wizard:
             return
         remote = str(self.release.get("version", "0"))
         local = self.paths.installed_version()
-        msi = self.release.get("msi_url") or ""
+        # setup.exe без Windows Installer предпочтительнее MSI: на него не
+        # действуют политики, запрещающие MSI (код 1625)
+        msi = self.release.get("exe_url") or self.release.get("msi_url") or ""
+        msi_sha_key = "exe_sha256" if self.release.get("exe_url") else "msi_sha256"
         if ver_tuple(remote) > ver_tuple(local) and msi:
             self.new_msi_url = msi
             self.step("st_release", "warn", self.t["new_version"] % (remote, local))
@@ -945,9 +948,9 @@ class Wizard:
                 dst = os.path.join(self.paths.logs, os.path.basename(urllib.parse.urlparse(msi).path) or "Contragenti.msi")
                 try:
                     size = download_to(msi, dst, timeout=600)
-                    want = (self.release.get("msi_sha256") or "").lower()
+                    want = (self.release.get(msi_sha_key) or "").lower()
                     if want and sha256_of(dst) != want:
-                        raise ValueError("sha256 MSI не совпал с release.json — файл не запущен")
+                        raise ValueError("sha256 установщика не совпал с release.json — файл не запущен")
                     self.log("MSI: %s (%d байт)" % (dst, size))
                     os.startfile(dst)  # noqa: S606 — установщик запускает сам пользователь
                 except Exception as exc:  # noqa: BLE001
@@ -1061,6 +1064,11 @@ class Wizard:
             return
         if not self.release:
             self.step("st_update", "skip", "GitHub")
+            return
+        # компоненты старой версии поверх более новой установки не кладём
+        if ver_tuple(str(self.release.get("version", "0"))) < ver_tuple(self.paths.installed_version()):
+            self.step("st_update", "skip", "в репозитории %s, установлена %s — новее" % (
+                self.release.get("version"), self.paths.installed_version()))
             return
         result = None
         try:
@@ -1651,10 +1659,53 @@ def run_gui(lang, offline, auto=False, shot=""):
     return 0
 
 
+# ────────────────────────────── удаление ──────────────────────────────
+
+UNINST_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Contragenti"
+
+
+def uninstall_app(silent):
+    """Удаление установки от setup.exe: ярлыки, папка в «Пуск», запись в
+    «Программы и компоненты», затем сам каталог (после выхода процесса)."""
+    root = app_dir()
+    if not silent:
+        import tkinter as tk
+        from tkinter import messagebox
+        r = tk.Tk()
+        r.withdraw()
+        ok = messagebox.askyesno("Contragenti", "Удалить Contragenti из %s?\n(companies.db и clients.db "
+                                 "тоже будут удалены — сохраните их, если нужны)" % root)
+        r.destroy()
+        if not ok:
+            return 1
+    desk = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
+    for name in ("Contragenti.lnk", "Demo CRM (SDK Contragenti).lnk"):
+        try:
+            os.remove(os.path.join(desk, name))
+        except OSError:
+            pass
+    sm = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", "Contragenti")
+    shutil.rmtree(sm, ignore_errors=True)
+    if winreg is not None:
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, UNINST_KEY)
+        except OSError:
+            pass
+    # каталог удаляется после завершения этого процесса (он сам лежит внутри);
+    # до 20 попыток с паузой — файлы могут ещё держать антивирус или трей
+    script = ('for /l %%i in (1,1,20) do (ping -n 3 127.0.0.1 >nul & rd /s /q "%s" 2>nul & '
+              'if not exist "%s" exit /b 0)') % (root, root)
+    subprocess.Popen('cmd /c "%s"' % script, shell=True,
+                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return 0
+
+
 # ────────────────────────────── main ──────────────────────────────
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if "--uninstall" in argv:
+        return uninstall_app("--silent" in argv)
     lang = default_lang()
     offline = "--offline" in argv
     if "--lang" in argv:

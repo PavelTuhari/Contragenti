@@ -8,7 +8,37 @@
 Репозиторий: [github.com/PavelTuhari/Contragenti](https://github.com/PavelTuhari/Contragenti).
 
 **Скачать установщик:**
-[release/Contragenti-1.1.0-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.1.0-win64.msi)
+
+| Файл | Когда |
+|---|---|
+| **[Contragenti-1.3.0-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.0-setup.exe)** | Рекомендуется. Обычный exe **без Windows Installer**; работает там, где MSI запрещён политикой |
+| [Contragenti-1.3.0-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.0-win64.msi) | Если в организации ставят только MSI (SCCM/Intune, групповые политики) |
+
+---
+
+## Если MSI не запускается: «The system administrator has set policies to prevent this installation»
+
+Это код 1625 Windows Installer: политика (обычно `DisableUserInstalls`,
+запрет MSI из интернета или установок не от администратора) не пускает
+именно **msiexec**. Программа тут ни при чём. Берите
+**`Contragenti-1.3.0-setup.exe`** — он Windows Installer не вызывает:
+распаковывает программу в `%LOCALAPPDATA%\Contragenti`, создаёт ярлыки
+(рабочий стол, «Пуск»), запись в «Программы и компоненты» (HKCU, без
+прав администратора) и запускает мастер настройки. Удаление — через
+«Программы и компоненты» или «Пуск → Contragenti → Удалить Contragenti».
+
+Ключи: `/S` — тихо; `/S /D=C:\Contragenti` — тихо в каталог;
+`--extract-only D:\Contragenti` — только распаковать (портативно, без
+ярлыков и реестра); `--no-shortcuts`, `--no-wizard`, `--lang ro|en|ru`.
+
+Предупреждение браузера «isn't commonly downloaded» относится к обоим
+файлам: они не подписаны сертификатом разработчика (для его снятия нужен
+платный code-signing сертификат и накопленная репутация SmartScreen).
+«⋯» → «Keep», затем сверьте sha256 с `release.json`:
+
+```powershell
+Get-FileHash .\Contragenti-1.3.0-setup.exe
+```
 
 ---
 

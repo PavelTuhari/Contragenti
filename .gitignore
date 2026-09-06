@@ -64,6 +64,9 @@ export/
 # готовые сборки: MSI и zip-пакет обновления (tools/make_release.py)
 !release/*.zip
 !release/*.msi
+!release/*.exe
+# PyInstaller (tools/build_exe_installer.py)
+*.spec
 
 # Собранные дистрибутивы (cx_Freeze / MSI) — не хранятся в репозитории
 build/

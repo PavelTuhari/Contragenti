@@ -95,19 +95,28 @@ def build_zip(ver):
     return out
 
 
-def copy_msi(ver):
-    src = os.path.join(ROOT, "dist", f"Contragenti-{ver}-win64.msi")
-    dst = os.path.join(REL_DIR, f"Contragenti-{ver}-win64.msi")
+def copy_artifact(ver, pattern, ext):
+    """Копирует dist/<pattern> в release/, старые версии того же типа удаляет."""
+    src = os.path.join(ROOT, "dist", pattern % ver)
+    dst = os.path.join(REL_DIR, pattern % ver)
     if os.path.exists(src) and (not os.path.exists(dst) or sha256(src) != sha256(dst)):
         shutil.copy2(src, dst)
-        print("  MSI скопирован:", dst)
+        print("  скопирован:", dst)
     for name in os.listdir(REL_DIR):
-        if name.endswith(".msi") and name != os.path.basename(dst):
+        if name.endswith(ext) and name != os.path.basename(dst):
             os.remove(os.path.join(REL_DIR, name))
     return dst if os.path.exists(dst) else ""
 
 
-def update_manifest(ver, zip_path, msi_path):
+def copy_msi(ver):
+    return copy_artifact(ver, "Contragenti-%s-win64.msi", ".msi")
+
+
+def copy_exe(ver):
+    return copy_artifact(ver, "Contragenti-%s-setup.exe", "-setup.exe")
+
+
+def update_manifest(ver, zip_path, msi_path, exe_path=""):
     path = os.path.join(ROOT, "release.json")
     with open(path, encoding="utf-8") as f:
         text = f.read()
@@ -120,6 +129,11 @@ def update_manifest(ver, zip_path, msi_path):
         rel["msi_url"] = RAW + "release/" + os.path.basename(msi_path)
         rel["msi_size"] = os.path.getsize(msi_path)
         rel["msi_sha256"] = sha256(msi_path)
+    if exe_path:
+        # setup.exe без Windows Installer — мастер предпочитает его MSI
+        rel["exe_url"] = RAW + "release/" + os.path.basename(exe_path)
+        rel["exe_size"] = os.path.getsize(exe_path)
+        rel["exe_sha256"] = sha256(exe_path)
     new_text = json.dumps(rel, ensure_ascii=False, indent=2) + "\n"
     if new_text != text:
         with open(path, "w", encoding="utf-8") as f:
@@ -131,13 +145,17 @@ def main(argv):
     ver = version()
     zip_path = build_zip(ver)
     print("  zip:", zip_path, os.path.getsize(zip_path), "байт")
-    msi_path = ""
+    msi_path, exe_path = "", ""
     if "--zip-only" in argv:
-        existing = [n for n in os.listdir(REL_DIR) if n.endswith(".msi")] if os.path.isdir(REL_DIR) else []
-        msi_path = os.path.join(REL_DIR, existing[0]) if existing else ""
+        names = os.listdir(REL_DIR) if os.path.isdir(REL_DIR) else []
+        msi = [n for n in names if n.endswith(".msi")]
+        exe = [n for n in names if n.endswith("-setup.exe")]
+        msi_path = os.path.join(REL_DIR, msi[0]) if msi else ""
+        exe_path = os.path.join(REL_DIR, exe[0]) if exe else ""
     else:
         msi_path = copy_msi(ver)
-    update_manifest(ver, zip_path, msi_path)
+        exe_path = copy_exe(ver)
+    update_manifest(ver, zip_path, msi_path, exe_path)
     return 0
 
 

@@ -24,8 +24,10 @@ Git **не нужен**, нужен Google Chrome. Если команда `pyth
 ставится сам. Подробно — [INSTALL_MSI_ru.md](INSTALL_MSI_ru.md).
 
 1. Скачайте установщик из репозитория:
-   **[release/Contragenti-1.1.0-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.1.0-win64.msi)**
-   (рядом лежит `Contragenti-update-1.1.0.zip` — пакет обновления, его
+   **[release/Contragenti-1.3.0-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.0-setup.exe)**
+   (обычный exe без Windows Installer; если у вас в организации ставят
+   только MSI — [Contragenti-1.3.0-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.0-win64.msi);
+   рядом лежит `Contragenti-update-1.3.0.zip` — пакет обновления, его
    мастер скачивает сам; ссылки и sha256 в `release.json`) и запустите. Установка идёт в
    `%LOCALAPPDATA%\Contragenti`, без прав администратора. На рабочем столе
    появляются ярлыки **Contragenti** и **Demo CRM (SDK Contragenti)**, в меню

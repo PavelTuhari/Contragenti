@@ -145,8 +145,16 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   в `setup.py` и `company_search.py` (все четыре — одно значение).
 - Стартовая база компаний — `data/companies_seed.zip`
   (`python tools/make_seed.py`); в `.gitignore` для неё исключение из `*.zip`.
-- Готовые сборки лежат в репозитории, в `release/`: MSI и zip-пакет
-  обновления. Zip пересобирает `tools/make_release.py --zip-only` — он
+- Основной установщик — `Contragenti-<версия>-setup.exe` без Windows
+  Installer (`installer_exe.py` + `tools/build_exe_installer.py`,
+  PyInstaller-onefile с payload.zip из `build/exe.win-*`): MSI на части
+  компьютеров блокирует политика (код 1625 «administrator has set
+  policies»). MSI остаётся вторым вариантом. Порядок выпуска:
+  `python setup.py bdist_msi` → `python tools/build_exe_installer.py` →
+  `python tools/make_release.py`. Удаление exe-установки делает мастер
+  (`Contragenti Setup.exe --uninstall`), запись в HKCU\...\Uninstall.
+- Готовые сборки лежат в репозитории, в `release/`: setup.exe, MSI и
+  zip-пакет обновления. Zip пересобирает `tools/make_release.py --zip-only` — он
   вызывается из `crm_delphi\build.bat` после компиляции и из pre-commit
   хука (`.githooks/pre-commit`; включить один раз:
   `git config core.hooksPath .githooks`). Zip детерминированный, без
