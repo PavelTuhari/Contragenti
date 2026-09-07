@@ -84,3 +84,12 @@ crm_delphi/shots_gui/test_clients.db
 
 # Пользовательские настройки GUI (источники поиска)
 settings.json
+
+# Demo CRM для macOS (crm_macos/): сборка и результаты тестов
+crm_macos/build/
+crm_macos/DerivedData/
+crm_macos/gui_test/
+crm_macos/DemoCRM/
+crm_macos/DemoCRM.xcodeproj/xcuserdata/
+crm_macos/DemoCRM.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcuserstate
