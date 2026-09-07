@@ -157,6 +157,11 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   `CERTIFICATE_VERIFY_FAILED` повторяет запрос с корнями certifi (в сборке
   cx_Freeze certifi включён явно), проверку сертификата не отключать.
 - Короткая инструкция для пользователей — `INSTALL_RO.md` (румынский);
+- Постановка для порта на macOS (установка `.pkg`/тонкий `.sh`, мастер
+  `setup_wizard_macos.py` + общий `setup_common.py`, Demo CRM на Swift в
+  Xcode по `crm_delphi/`, поля `macos_*` в `release.json`) —
+  `PORT_MACOS_ru.md`; выполняется моделью на Mac, Windows-часть при этом
+  не трогается;
   при смене версии обновляй ссылки и в ней (скрипт bump правит `1.x.y`). Новый файл, который программа пишет, — только через эти
   функции, не рядом с exe напрямую.
 - В установку входят базы с данными: `build/seed/companies.db` (из

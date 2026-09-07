@@ -128,6 +128,12 @@ python3.12 -m venv .venv
 > Если при запуске появляется `ModuleNotFoundError: No module named '_tkinter'`,
 > выполните `brew install python-tk@3.12`.
 
+> **macOS — полный аналог Windows-установки и нативная Demo CRM в Xcode:**
+> постановка для ИИ-модели, запущенной на Mac с этим репозиторием, —
+> [PORT_MACOS_ru.md](PORT_MACOS_ru.md) (`.pkg`/тонкий установщик, мастер
+> настройки, Demo CRM на Swift по исходникам `crm_delphi/`, та же схема
+> `clients.db`, тот же контракт с Contragenti, приёмка по фазам).
+
 Драйвер Chrome загружается автоматически (Selenium Manager) — вручную ставить
 `chromedriver` не нужно.
 
