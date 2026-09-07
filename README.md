@@ -33,6 +33,11 @@
 - ⏱️ **Без пустого ожидания**: если портал ответил «Nu sunt date.», утилита
   понимает это сразу, закрывает браузер и возвращает управление.
 - 🔁 **Самоперезапуск** из меню «Файл → Перезапустить».
+- ⬆️ **Самообновление из git** (macOS/Linux, запуск из клона репозитория):
+  проверка при старте и по кнопке «Файл → Проверить обновления», `git pull
+  --ff-only`, если рабочая копия чистая, затем автоматический перезапуск. На
+  Windows программа фризится в exe и обновляется отдельно — через мастер
+  настройки и `release.json`.
 - 📇 **Карточка компании** по IDNO: базовые данные, **учредители**,
   **задолженность перед бюджетом**.
 - 💾 **Локальная база SQLite** — все результаты сохраняются автоматически
@@ -137,7 +142,7 @@ python3.12 -m venv .venv
 > Windows Server 2022.
 
 **Скачать установщик (рекомендуется):**
-[Contragenti-1.3.6-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.6-setup.exe)
+[Contragenti-1.3.7-setup.exe](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.7-setup.exe)
 — обычный exe без Windows Installer, сам файл маленький (ни Python, ни
 программ внутри — только окно и загрузчик): при запуске скачивает полную
 сборку из репозитория (**нужен интернет**), проверяет её по sha256 и ставит
@@ -148,13 +153,13 @@ python3.12 -m venv .venv
 (демо-фирма для SDK); рабочие копии и настройки — в
 `%LOCALAPPDATA%\Contragenti`. Не зависит от политик MSI (ошибка «The system
 administrator has set policies to prevent this installation» его не
-касается). Тихо: `Contragenti-1.3.6-setup.exe /S`, портативно:
+касается). Тихо: `Contragenti-1.3.7-setup.exe /S`, портативно:
 `--extract-only D:\Contragenti`.
 
 Без интернета при установке или там, где ставят только MSI — второй
-вариант: [Contragenti-1.3.6-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.6-win64.msi),
+вариант: [Contragenti-1.3.7-win64.msi](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-1.3.7-win64.msi),
 он несёт всё в себе и ничего не докачивает.
-Рядом — [Contragenti-update-1.3.6.zip](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.3.6.zip):
+Рядом — [Contragenti-update-1.3.7.zip](https://github.com/PavelTuhari/Contragenti/raw/main/release/Contragenti-update-1.3.7.zip):
 пакет обновления поверх установки (Demo CRM, переводы, процессы, SDK,
 инструкции, стартовая база); он пересобирается автоматически при каждой
 компиляции Demo CRM и перед каждым коммитом (`tools/make_release.py`),
@@ -162,7 +167,7 @@ administrator has set policies to prevent this installation» его не
 
 > Браузер может написать «isn't commonly downloaded» — файлы не подписаны
 > сертификатом разработчика. «⋯» → «Keep» / «Сохранить». Подлинность можно
-> сверить по sha256 из `release.json`: `Get-FileHash .\Contragenti-1.3.6-setup.exe`.
+> сверить по sha256 из `release.json`: `Get-FileHash .\Contragenti-1.3.7-setup.exe`.
 
 Для чистого Windows без Git MSI (`python setup.py bdist_msi`
 → `dist/Contragenti-<версия>-win64.msi`, затем `python tools/make_release.py`

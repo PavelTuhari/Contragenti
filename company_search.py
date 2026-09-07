@@ -17,6 +17,11 @@ GUI-утилита с локальным HTTP-API для интеграции (1
     внешняя программа шлёт фильтр, по которому не нашла контрагента, — утилита
     открывается с этим поиском на нужном языке; после выбора возвращает XML
     полной карточки контрагента.
+  * При запуске из git-клона (обычный сценарий на macOS/Linux) сама проверяет
+    обновления на GitHub — при старте и по кнопке «Файл → Проверить
+    обновления» — и подтягивает их (git pull --ff-only), если рабочая копия
+    чистая. На Windows программа фризится в exe и обновляется отдельно, через
+    setup_wizard.py/release.json.
 
 Запуск:  python company_search.py [--port 9393] [--lang ru] [--q "фильтр"]
                                   [--pick --out card.xml] [--no-server] [--no-tray]
@@ -50,7 +55,7 @@ from selenium.common.exceptions import TimeoutException
 
 import openpyxl
 
-APP_VERSION = "1.3.6"
+APP_VERSION = "1.3.7"
 SEARCH_URL = "https://date.gov.md/open/company-search"
 DETAILS_URL = "https://date.gov.md/open/company-details"
 # Второй источник: data2b.md — публичный поиск сайта (тот же запрос, который
@@ -151,6 +156,14 @@ TR = {
         "status_sources_off": "All online sources are off — showing the local DB.",
         "mi_restart": "Restart",
         "status_restart": "Restarting…",
+        "mi_check_update": "Check for updates",
+        "status_update_checking": "Checking GitHub for updates…",
+        "status_update_none": "You already have the latest version from git.",
+        "status_update_no_git": "Not running from a git checkout — nothing to update here.",
+        "status_update_dirty": "An update is available, but the working copy has local changes — "
+                                "skipped to avoid overwriting them. Update manually with git.",
+        "status_update_applied": "Update downloaded from git — restarting…",
+        "status_update_error": "Could not check for updates: {err}",
         "st_d2b": "Searching data2b.md…",
         "status_d2b": "data2b.md: {n} of {total} for “{q}”.",
         "status_d2b_none": "data2b.md: nothing found for “{q}”.",
@@ -307,6 +320,14 @@ TR = {
         "status_sources_off": "Онлайн-источники отключены — показана локальная БД.",
         "mi_restart": "Перезапустить",
         "status_restart": "Перезапуск…",
+        "mi_check_update": "Проверить обновления",
+        "status_update_checking": "Проверяю обновления на GitHub…",
+        "status_update_none": "У вас уже последняя версия из git.",
+        "status_update_no_git": "Программа запущена не из git-копии — обновлять нечего.",
+        "status_update_dirty": "Есть обновление, но в рабочей копии локальные правки — "
+                                "пропускаю, чтобы их не затереть. Обновите вручную через git.",
+        "status_update_applied": "Обновление скачано из git — перезапуск…",
+        "status_update_error": "Не удалось проверить обновления: {err}",
         "st_d2b": "Ищу на data2b.md…",
         "status_d2b": "data2b.md: {n} из {total} по «{q}».",
         "status_d2b_none": "data2b.md: по «{q}» ничего не найдено.",
@@ -465,6 +486,14 @@ TR = {
         "status_sources_off": "Sursele online sunt oprite — se afișează baza locală.",
         "mi_restart": "Repornește",
         "status_restart": "Repornire…",
+        "mi_check_update": "Verifică actualizări",
+        "status_update_checking": "Se verifică actualizări pe GitHub…",
+        "status_update_none": "Aveți deja ultima versiune din git.",
+        "status_update_no_git": "Programul nu rulează dintr-o copie git — nimic de actualizat.",
+        "status_update_dirty": "Există o actualizare, dar copia de lucru are modificări locale — "
+                                "omisă ca să nu fie suprascrise. Actualizați manual cu git.",
+        "status_update_applied": "Actualizare descărcată din git — se repornește…",
+        "status_update_error": "Actualizarea nu a putut fi verificată: {err}",
         "st_d2b": "Caut pe data2b.md…",
         "status_d2b": "data2b.md: {n} din {total} pentru „{q}”.",
         "status_d2b_none": "data2b.md: nimic găsit pentru „{q}”.",
@@ -887,6 +916,90 @@ class Data2bWorker(threading.Thread):
                                        "query": self.query}))
         except Exception as exc:  # noqa: BLE001
             self.out.put(("d2b_error", f"{type(exc).__name__}: {exc}"))
+
+
+# ─────────────────────── самообновление из git (macOS/Linux) ───────────────────────
+# На Windows программа фризится в exe и обновляется через setup_wizard.py по
+# release.json (проверка sha256, MSI/zip). На macOS и Linux её обычно запускают
+# прямо из git-клона — там куда естественнее обновляться самим git'ом: узнать,
+# что origin ушёл вперёд, и подтянуть изменения (--ff-only, чтобы никогда не
+# трогать чужие незакоммиченные правки).
+
+def _git_repo_dir():
+    """Каталог git-репозитория рядом со скриптом, либо None.
+
+    Возвращает None для замороженного exe (там self-update не применим — это
+    епархия setup_wizard.py) и для запуска не из git-клона (например, если
+    файл скопировали отдельно)."""
+    if getattr(sys, "frozen", False):
+        return None
+    d = os.path.dirname(os.path.abspath(__file__))
+    return d if os.path.isdir(os.path.join(d, ".git")) else None
+
+
+def git_update_check(repo_dir, timeout=20):
+    """git fetch + сравнение HEAD с апстримом.
+
+    Возвращает {'available', 'dirty', 'local', 'remote'}; бросает исключение
+    при отсутствии git, сети или настроенного upstream — вызывающая сторона
+    решает, что делать (тихо промолчать на автозапуске, показать ошибку по
+    кнопке в меню).
+    """
+    import subprocess
+
+    def run(*args):
+        return subprocess.run(["git", *args], cwd=repo_dir, capture_output=True,
+                              text=True, timeout=timeout, check=True)
+    run("fetch", "--quiet", "origin")
+    local = run("rev-parse", "HEAD").stdout.strip()
+    remote = run("rev-parse", "@{u}").stdout.strip()
+    dirty = bool(run("status", "--porcelain").stdout.strip())
+    return {"available": local != remote, "dirty": dirty,
+            "local": local[:8], "remote": remote[:8]}
+
+
+def git_update_apply(repo_dir, timeout=60):
+    """git pull --ff-only — подтягивает изменения, не трогая рабочую копию,
+    если её нельзя перемотать вперёд без слияния (тогда бросает исключение —
+    обновление вручную, автоматика тут не лезет)."""
+    import subprocess
+    subprocess.run(["git", "pull", "--ff-only", "--quiet"], cwd=repo_dir,
+                   capture_output=True, text=True, timeout=timeout, check=True)
+
+
+class GitUpdateWorker(threading.Thread):
+    """Проверка (и, если можно, немедленное применение) обновления из git —
+    сеть и субпроцессы, поэтому не в главном потоке Tk. manual=True — запрос
+    пришёл из меню (кнопки), тогда даже «нет обновлений»/ошибка попадают в
+    очередь с меткой manual для показа сообщения; на автозапуске (manual=False)
+    вызывающая сторона такие случаи показывает только в статус-баре или молчит."""
+
+    def __init__(self, repo_dir, out_queue, manual=False):
+        super().__init__(daemon=True)
+        self.repo_dir = repo_dir
+        self.out = out_queue
+        self.manual = manual
+
+    def run(self):
+        try:
+            info = git_update_check(self.repo_dir)
+        except Exception as exc:  # noqa: BLE001
+            self.out.put(("git_update_error", {"error": str(exc), "manual": self.manual}))
+            return
+        info["manual"] = self.manual
+        if not info["available"]:
+            self.out.put(("git_update_none", info))
+            return
+        if info["dirty"]:
+            self.out.put(("git_update_dirty", info))
+            return
+        try:
+            git_update_apply(self.repo_dir)
+        except Exception as exc:  # noqa: BLE001
+            info["error"] = str(exc)
+            self.out.put(("git_update_error", info))
+            return
+        self.out.put(("git_update_applied", info))
 
 
 # ────────────────────────────── Слой SQLite ──────────────────────────────
@@ -1703,6 +1816,8 @@ class App(tk.Tk):
         if not self.args.no_tray:
             self._start_tray()
         self._start_hub_uploader()
+        if not getattr(self.args, "no_update_check", False):
+            self.after(1500, self._check_updates_startup)
         # стартовый запрос из командной строки
         if self.args.q:
             if self.args.pick:
@@ -1722,6 +1837,7 @@ class App(tk.Tk):
         self.file_menu = tk.Menu(self.menubar, tearoff=0)
         self.file_menu.add_command(label="", command=self._hide_window)
         self.file_menu.add_command(label="", command=self._restart_app)
+        self.file_menu.add_command(label="", command=self._check_updates_menu)
         self.file_menu.add_separator()
         self.file_menu.add_command(label="", command=self.do_quit)
         self.menubar.add_cascade(menu=self.file_menu, label="")
@@ -1944,7 +2060,8 @@ class App(tk.Tk):
         self.menubar.entryconfig(4, label=self.t("menu_help"))
         self.file_menu.entryconfig(0, label=self.t("mi_hide"))
         self.file_menu.entryconfig(1, label=self.t("mi_restart"))
-        self.file_menu.entryconfig(3, label=self.t("mi_quit"))
+        self.file_menu.entryconfig(2, label=self.t("mi_check_update"))
+        self.file_menu.entryconfig(4, label=self.t("mi_quit"))
         self.help_menu.entryconfig(0, label=self.t("mi_about"))
         self.help_menu.entryconfig(1, label=self.t("mi_selftest"))
         self.help_menu.entryconfig(3, label=self.t("mi_una"))
@@ -2298,6 +2415,48 @@ class App(tk.Tk):
             return
         self.destroy()
 
+    def _check_updates_startup(self):
+        """Автопроверка при запуске: тихая — на «нет обновлений» и на ошибках
+        (нет сети, git не установлен) ничего не показываем, чтобы не мешать
+        обычной работе. Найдено и применимо — обновляем и перезапускаемся."""
+        repo_dir = _git_repo_dir()
+        if repo_dir:
+            GitUpdateWorker(repo_dir, self.queue, manual=False).start()
+
+    def _check_updates_menu(self):
+        """«Файл → Проверить обновления»: тот же git pull --ff-only, но с
+        сообщением о результате — это явное действие пользователя."""
+        repo_dir = _git_repo_dir()
+        if not repo_dir:
+            messagebox.showinfo(self.t("mi_check_update"), self.t("status_update_no_git"))
+            return
+        self.status.set(self.t("status_update_checking"))
+        GitUpdateWorker(repo_dir, self.queue, manual=True).start()
+
+    def _on_git_update_none(self, payload):
+        if payload.get("manual"):
+            messagebox.showinfo(self.t("mi_check_update"), self.t("status_update_none"))
+        else:
+            self.status.set(self.t("status_update_none"))
+
+    def _on_git_update_dirty(self, payload):
+        msg = self.t("status_update_dirty")
+        if payload.get("manual"):
+            messagebox.showwarning(self.t("mi_check_update"), msg)
+        else:
+            self.status.set(msg)
+
+    def _on_git_update_error(self, payload):
+        if payload.get("manual"):
+            messagebox.showerror(self.t("mi_check_update"),
+                                 self.t("status_update_error", err=payload.get("error", "")))
+        # автозапуск молчит: типичная причина — офлайн или git не установлен
+
+    def _on_git_update_applied(self, payload):
+        self.status.set(self.t("status_update_applied"))
+        self.update_idletasks()
+        self.after(700, self._restart_app)
+
     def _busy(self, busy):
         state = "disabled" if busy else "normal"
         self.online_search_btn.config(state=state)
@@ -2447,6 +2606,14 @@ class App(tk.Tk):
                     self.status.set(self.t("hub_sent", id=payload.get("batch_id", "?")))
                 elif kind == "hub_error":
                     self.status.set(self.t("hub_error", err=str(payload)[:80]))
+                elif kind == "git_update_none":
+                    self._on_git_update_none(payload)
+                elif kind == "git_update_dirty":
+                    self._on_git_update_dirty(payload)
+                elif kind == "git_update_error":
+                    self._on_git_update_error(payload)
+                elif kind == "git_update_applied":
+                    self._on_git_update_applied(payload)
                 elif kind == "pick":
                     self._begin_pick(payload)
                 elif kind == "open":
@@ -3244,6 +3411,9 @@ def parse_args(argv=None):
                     help="do not search data2b.md in parallel with date.gov.md")
     ap.add_argument("--no-server", action="store_true", help="do not start HTTP API")
     ap.add_argument("--no-tray", action="store_true", help="do not create tray icon")
+    ap.add_argument("--no-update-check", action="store_true",
+                    help="do not check for git updates on startup (macOS/Linux "
+                         "git checkouts only; ignored for a frozen build)")
     ap.add_argument("--selftest", action="store_true",
                     help="run internal self-test (db/i18n/xml/network) and exit")
     ap.add_argument("--demo", action="store_true",
