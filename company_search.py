@@ -50,7 +50,7 @@ from selenium.common.exceptions import TimeoutException
 
 import openpyxl
 
-APP_VERSION = "1.3.5"
+APP_VERSION = "1.3.6"
 SEARCH_URL = "https://date.gov.md/open/company-search"
 DETAILS_URL = "https://date.gov.md/open/company-details"
 # Второй источник: data2b.md — публичный поиск сайта (тот же запрос, который
@@ -2735,12 +2735,21 @@ class App(tk.Tk):
         self.status.set(self.t("status_pick", q=payload.get("q", "")))
 
     def resolve_pick(self, idno):
-        """Готовит карточку для возврата: при отсутствии деталей — дозагружает,
-        затем завершает /pick или one-shot."""
+        """Готовит карточку для возврата: при отсутствии деталей — дозагружает
+        с портала date.gov.md, затем завершает /pick или one-shot.
+
+        Источник data2b.md деталей (администратор, форма, долги) не отдаёт,
+        поэтому карточка, найденная только через него, всегда без
+        details_text. Раньше это заставляло resolve_pick лезть на портал
+        за деталями, даже если чекбокс «date.gov.md» в «Источниках» выключен
+        — источник считался отключённым только для самого поиска. Теперь
+        отключённый источник не трогается вообще: карточка возвращается с
+        тем, что уже есть (data2b.md/БД), без обращения к порталу."""
         rec = db_get(idno)
         if rec and rec.get("details_text"):
             self._finish_pick(idno)
-        elif idno.isdigit() and len(idno) == 13 and not self._worker_active():
+        elif (self.src_gov_var.get() and idno.isdigit() and len(idno) == 13
+              and not self._worker_active()):
             self.pick_after_details = idno
             self._busy(True)
             self.worker = BrowserWorker("details", idno, self.queue, TR[self.lang],
