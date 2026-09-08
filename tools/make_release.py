@@ -5,6 +5,9 @@
     python tools/make_release.py --zip-only только zip и release.json (вызов из build.bat
                                             и pre-commit: после каждой перекомпиляции
                                             и любого коммита пакет актуален)
+    python tools/make_release.py --macos    только артефакты macOS из dist/macos/
+                                            (tools/build_macos.sh) и их поля в release.json;
+                                            Windows-поля не трогаются
 
 Zip-пакет `release/Contragenti-update-<версия>.zip` — то, что мастер настройки
 («ContragentiSetup.exe») скачивает и раскладывает поверх установки без
@@ -52,7 +55,15 @@ FILES = [
     ("sdk/cpp/example.cpp", "sdk/cpp/example.cpp"),
     ("data/companies_seed.zip", "data/companies_seed.zip"),
     ("setup_wizard.py", "setup_wizard.py"),
+    ("setup_common.py", "setup_common.py"),
     ("VERSION", "VERSION"),
+]
+
+# артефакты macOS (tools/build_macos.sh): (шаблон имени в dist/macos, суффикс для очистки, ключ release.json)
+MACOS_ARTIFACTS = [
+    ("Contragenti-%s-macos.pkg", "-macos.pkg", "macos_pkg"),
+    ("Contragenti-%s-macos-app.zip", "-macos-app.zip", "macos_app_zip"),
+    ("Contragenti-%s-macos-democrm.zip", "-macos-democrm.zip", "macos_democrm_zip"),
 ]
 
 
@@ -101,9 +112,9 @@ def build_zip(ver):
     return out
 
 
-def copy_artifact(ver, pattern, ext):
-    """Копирует dist/<pattern> в release/, старые версии того же типа удаляет."""
-    src = os.path.join(ROOT, "dist", pattern % ver)
+def copy_artifact(ver, pattern, ext, sub=""):
+    """Копирует dist/<sub>/<pattern> в release/, старые версии того же типа удаляет."""
+    src = os.path.join(ROOT, "dist", sub, pattern % ver)
     dst = os.path.join(REL_DIR, pattern % ver)
     if os.path.exists(src) and (not os.path.exists(dst) or sha256(src) != sha256(dst)):
         shutil.copy2(src, dst)
@@ -124,6 +135,46 @@ def copy_exe(ver):
 
 def copy_app_zip(ver):
     return copy_artifact(ver, "Contragenti-%s-app.zip", "-app.zip")
+
+
+def copy_macos_artifacts(ver):
+    """dist/macos/* → release/; возвращает {ключ: путь} для update_manifest_macos."""
+    out = {}
+    for pattern, ext, key in MACOS_ARTIFACTS:
+        path = copy_artifact(ver, pattern, ext, sub="macos")
+        if path:
+            out[key] = path
+    return out
+
+
+def update_manifest_macos(ver, paths):
+    """Только macos_*-поля; msi_*/exe_*/app_zip_* и components не трогаются —
+    сборка на Windows про эти поля не знает и тоже их не затирает."""
+    path = os.path.join(ROOT, "release.json")
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    rel = json.loads(text)
+    rel["version"] = ver
+    for key, fpath in paths.items():
+        rel[key + "_url"] = RAW + "release/" + os.path.basename(fpath)
+        rel[key + "_size"] = os.path.getsize(fpath)
+        rel[key + "_sha256"] = sha256(fpath)
+    rel["macos_install_sh"] = RAW + "release/contragenti-macos-install.sh"
+    rel["macos_arch"] = os.uname().machine if hasattr(os, "uname") else "arm64"
+    # файлы, которые мастер macOS кладёт поверх установки без переустановки;
+    # Demo CRM.app обновляется целиком через macos_democrm_zip_url
+    rel["macos_components"] = [
+        {"src": "setup_wizard_macos.py", "dst": "setup_wizard_macos.py"},
+        {"src": "setup_common.py", "dst": "setup_common.py"},
+        {"src": "INSTALL_MACOS_ru.md", "dst": "INSTALL_MACOS_ru.md"},
+        {"src": "INSTALL_MACOS_RO.md", "dst": "INSTALL_MACOS_RO.md"},
+        {"src": "crm_macos/README_ru.md", "dst": "DemoCRM/README_macos_ru.md"},
+    ]
+    new_text = json.dumps(rel, ensure_ascii=False, indent=2) + "\n"
+    if new_text != text:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new_text)
+        print("  release.json обновлён (macos_*)")
 
 
 def update_manifest(ver, zip_path, msi_path, exe_path="", app_zip_path=""):
@@ -158,6 +209,12 @@ def update_manifest(ver, zip_path, msi_path, exe_path="", app_zip_path=""):
 
 def main(argv):
     ver = version()
+    if "--macos" in argv:
+        paths = copy_macos_artifacts(ver)
+        for k, p in paths.items():
+            print("  %s: %s %d байт" % (k, os.path.basename(p), os.path.getsize(p)))
+        update_manifest_macos(ver, paths)
+        return 0
     zip_path = build_zip(ver)
     print("  zip:", zip_path, os.path.getsize(zip_path), "байт")
     msi_path, exe_path, app_zip_path = "", "", ""

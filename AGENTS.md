@@ -235,6 +235,31 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   и в отчёт не должны попадать пароли/ключи (`crm.ini` с ключом ERP не
   включать целиком).
 
+## 4.2. macOS: два мастера — один `setup_common.py`
+
+- Общий код мастеров (сеть с certifi-фолбэком, `release.json`, sha256,
+  слияние `companies_seed.zip` по IDNO, `ver_tuple`, `dir_writable`) живёт в
+  `setup_common.py`; `setup_wizard.py` (Windows) и `setup_wizard_macos.py`
+  (macOS) его импортируют. Дублировать эти функции в мастерах нельзя —
+  правка делается один раз в `setup_common.py`. Файл входит в
+  `Contragenti-update-<версия>.zip` и в macOS-сборку.
+- Ключи шагов `st_*`, формат `install.log` и `install_report_*.txt` у обоих
+  мастеров одинаковые; платформенные ветки (winreg/UAC/msiexec против
+  `defaults`/`installer`/`pkgutil`) — только внутри своего мастера.
+- Demo CRM для macOS — `crm_macos/` (Swift/AppKit, Xcode). Правило §1
+  действует и здесь: новая сущность/поле → `TestData.swift` (seed + DML) и
+  `GuiSelfTest.swift`; счётчики `--seed-demo` обязаны совпадать с
+  `crm_delphi/seed.log` (17/20/12/22/21/23/41/124/10).
+- Порядок выпуска для Mac (на Mac с Xcode и `.venv` + pyinstaller):
+  `tools/build_macos.sh` → `release/Contragenti-<v>-macos-app.zip`,
+  `-macos-democrm.zip`, `-macos.pkg`, `contragenti-macos-install.sh` и поля
+  `macos_*` в `release.json` (`tools/make_release.py --macos` меняет только
+  свои ключи, Windows-поля не трогает; сборка на Windows не трогает
+  `macos_*`). Артефакты пока только arm64 (`macos_arch`).
+- `company_search.py` на macOS: данные в
+  `~/Library/Application Support/Contragenti` при запуске из `/Applications`
+  или `.app`; иконка в строке меню — только по флагу `--tray`.
+
 ## 5. Секреты и Git
 
 - Пароли только из переменных окружения или gitignored-конфигов

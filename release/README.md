@@ -10,6 +10,11 @@
 | `Contragenti-<версия>-win64.msi` | Установщик MSI: Contragenti.exe, Demo CRM, SDK, мастер настройки — всё внутри, интернет во время установки не нужен. Для сред без сети при установке или где ставят только MSI | `python setup.py bdist_msi`, затем `python tools/make_release.py` |
 | `Contragenti-update-<версия>.zip` | Пакет обновления поверх установки: Demo CRM (exe, `lang.json`, `processes.json`), инструкции, SDK, стартовая база компаний, `setup_wizard.py`. Пути внутри = пути в каталоге установки | автоматически: `crm_delphi\build.bat` после каждой компиляции и pre-commit хук перед каждым коммитом (`tools/make_release.py --zip-only`) |
 
+| `Contragenti-<версия>-macos.pkg` | **macOS (arm64)**: аналог MSI — всё внутри, ставит в `/Applications/Contragenti`, postinstall запускает мастер | `tools/build_macos.sh` на Mac с Xcode и `.venv` (pyinstaller), затем `tools/make_release.py --macos` (вызывается скриптом) |
+| `Contragenti-<версия>-macos-app.zip` | **macOS**: полная сборка (`Contragenti.app`, `Contragenti Setup.app`, `Demo CRM.app`, базы, SDK), которую качает тонкий `contragenti-macos-install.sh` и мастер при обновлении на месте | `tools/build_macos.sh` |
+| `Contragenti-<версия>-macos-democrm.zip` | **macOS**: только `Demo CRM.app` — мастер заменяет бандл целиком при обновлении компонентов | `tools/build_macos.sh` |
+| `contragenti-macos-install.sh` | **macOS**: тонкий установщик (аналог setup.exe): `curl -fsSL …/release/contragenti-macos-install.sh \| bash` | копия `tools/macos/contragenti-macos-install.sh` |
+
 `release.json` в корне репозитория содержит версию, ссылки, размеры и
 sha256 всех файлов — по нему мастер настройки («ContragentiSetup.exe»,
 меню «Пуск» → «Contragenti — настройка и обновление») находит новую версию

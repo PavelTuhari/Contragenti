@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Шаблон productbuild для Contragenti-<версия>-macos.pkg; @VERSION@ подставляет tools/build_macos.sh -->
+<installer-gui-script minSpecVersion="1">
+    <title>Contragenti @VERSION@</title>
+    <organization>md.una.contragenti</organization>
+    <options customize="never" require-scripts="true" rootVolumeOnly="true"/>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="md.una.contragenti.pkg"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="md.una.contragenti.pkg" visible="false">
+        <pkg-ref id="md.una.contragenti.pkg"/>
+    </choice>
+    <pkg-ref id="md.una.contragenti.pkg" version="@VERSION@" onConclusion="none">Contragenti-component.pkg</pkg-ref>
+</installer-gui-script>

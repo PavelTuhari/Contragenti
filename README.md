@@ -128,11 +128,15 @@ python3.12 -m venv .venv
 > Если при запуске появляется `ModuleNotFoundError: No module named '_tkinter'`,
 > выполните `brew install python-tk@3.12`.
 
-> **macOS — полный аналог Windows-установки и нативная Demo CRM в Xcode:**
-> постановка для ИИ-модели, запущенной на Mac с этим репозиторием, —
-> [PORT_MACOS_ru.md](PORT_MACOS_ru.md) (`.pkg`/тонкий установщик, мастер
-> настройки, Demo CRM на Swift по исходникам `crm_delphi/`, та же схема
-> `clients.db`, тот же контракт с Contragenti, приёмка по фазам).
+> **macOS — готовая установка (Apple Silicon):** одной строкой
+> `curl -fsSL https://raw.githubusercontent.com/PavelTuhari/Contragenti/main/release/contragenti-macos-install.sh | bash`
+> или пакет `Contragenti-<версия>-macos.pkg` из `release/`. Ставятся
+> `Contragenti.app` (Python встроен), нативная `Demo CRM.app` (Swift/AppKit,
+> исходники в [crm_macos/](crm_macos/README_ru.md)) и мастер настройки
+> `Contragenti Setup.app`. Инструкция — [INSTALL_MACOS_ru.md](INSTALL_MACOS_ru.md)
+> (по-румынски: [INSTALL_MACOS_RO.md](INSTALL_MACOS_RO.md)); сборка артефактов —
+> `tools/build_macos.sh`; постановка, по которой всё сделано, —
+> [PORT_MACOS_ru.md](PORT_MACOS_ru.md).
 
 Драйвер Chrome загружается автоматически (Selenium Manager) — вручную ставить
 `chromedriver` не нужно.

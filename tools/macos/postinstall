@@ -1,0 +1,17 @@
+#!/bin/bash
+# postinstall для Contragenti-<версия>-macos.pkg: снять карантин с бандлов
+# (подписи Developer ID нет) и запустить мастер настройки от имени
+# пользователя, который ставит пакет (installer работает от root).
+set -u
+DIR="/Applications/Contragenti"
+xattr -dr com.apple.quarantine "$DIR" 2>/dev/null || true
+chmod -R a+rX "$DIR" 2>/dev/null || true
+USER_NAME="$(stat -f %Su /dev/console 2>/dev/null || echo "")"
+LANG_CODE="ro"
+if [ -n "$USER_NAME" ] && [ "$USER_NAME" != "root" ]; then
+  case "$(sudo -u "$USER_NAME" defaults read -g AppleLocale 2>/dev/null || echo ro)" in
+    ru*) LANG_CODE=ru ;; en*) LANG_CODE=en ;;
+  esac
+  sudo -u "$USER_NAME" open -a "$DIR/Contragenti Setup.app" --args --lang "$LANG_CODE" || true
+fi
+exit 0

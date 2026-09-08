@@ -67,10 +67,26 @@ SOURCE_GOV = "date.gov.md"
 SOURCE_D2B = "data2b.md"
 def _app_dir():
     """Каталог рядом с исполняемым файлом — и для скрипта, и для frozen exe
-    (cx_Freeze/PyInstaller кладут __file__ внутрь library.zip, а не рядом с exe)."""
+    (cx_Freeze/PyInstaller кладут __file__ внутрь library.zip, а не рядом с exe).
+    Для .app-бандла macOS (sys.executable в Contents/MacOS/) «каталог программы» —
+    родитель самого .app: там лежат companies.db, DemoCRM/, sdk/."""
     if getattr(sys, "frozen", False):
-        return os.path.dirname(os.path.abspath(sys.executable))
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+        if sys.platform == "darwin" and exe_dir.endswith(os.sep + "Contents" + os.sep + "MacOS"):
+            app_bundle = os.path.dirname(os.path.dirname(exe_dir))
+            return os.path.dirname(app_bundle)
+        return exe_dir
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def _in_applications(path):
+    """macOS: программа лежит в /Applications или ~/Applications — данные в профиле."""
+    if sys.platform != "darwin":
+        return False
+    p = os.path.abspath(path)
+    home_apps = os.path.join(os.path.expanduser("~"), "Applications")
+    return p == "/Applications" or p.startswith("/Applications/") or \
+        p == home_apps or p.startswith(home_apps + os.sep) or ".app/Contents/" in p
 
 
 def _dir_writable(path):
@@ -96,9 +112,13 @@ def _data_dir():
     in_pf = any(os.environ.get(e) and os.path.normcase(os.path.abspath(app)).startswith(
         os.path.normcase(os.path.abspath(os.environ[e])) + os.sep)
         for e in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"))
-    if _dir_writable(app) and not in_pf:
+    if _dir_writable(app) and not in_pf and not _in_applications(app):
         return app
-    data = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Contragenti")
+    if sys.platform == "darwin":
+        # macOS: LOCALAPPDATA нет — данные в ~/Library/Application Support/Contragenti
+        data = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "Contragenti")
+    else:
+        data = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Contragenti")
     os.makedirs(data, exist_ok=True)
     seed = os.path.join(app, "companies.db")
     if os.path.exists(seed) and not os.path.exists(os.path.join(data, "companies.db")):
@@ -1813,7 +1833,9 @@ class App(tk.Tk):
 
         if not self.args.no_server:
             self._start_server()
-        if not self.args.no_tray:
+        # macOS: иконка в строке меню (pystray/AppKit) конфликтует с главным
+        # потоком Tk — включается только явно, флагом --tray
+        if not self.args.no_tray and (sys.platform != "darwin" or getattr(self.args, "tray", False)):
             self._start_tray()
         self._start_hub_uploader()
         if not getattr(self.args, "no_update_check", False):
@@ -3411,6 +3433,8 @@ def parse_args(argv=None):
                     help="do not search data2b.md in parallel with date.gov.md")
     ap.add_argument("--no-server", action="store_true", help="do not start HTTP API")
     ap.add_argument("--no-tray", action="store_true", help="do not create tray icon")
+    ap.add_argument("--tray", action="store_true",
+                    help="macOS: show the menu-bar icon (off by default there)")
     ap.add_argument("--no-update-check", action="store_true",
                     help="do not check for git updates on startup (macOS/Linux "
                          "git checkouts only; ignored for a frozen build)")

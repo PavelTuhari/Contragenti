@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ТЗ: CRM/ERP-контур для промышленного предприятия на базе Contragenti + Demo CRM</title>
+<style>
+  :root{--ink:#12222f;--muted:#5b6b78;--line:#d7dde0;--bg:#f6f7f5;--card:#fff;--acc:#1f6f8b;--ok:#0b6e5f;--warn:#9a6700;--bad:#a63a2b;--soft:#ecf4f8}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,"Segoe UI",system-ui,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:36px 28px 90px}
+  h1{font-size:30px;line-height:1.2;margin:0 0 8px}
+  h2{font-size:22px;margin:44px 0 12px;padding-top:12px;border-top:3px solid var(--acc)}
+  h3{font-size:17px;margin:26px 0 8px}
+  h4{font-size:15px;margin:18px 0 6px;color:var(--acc)}
+  p{margin:8px 0}
+  .sub{color:var(--muted);margin:0 0 18px}
+  .meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:18px 0 26px}
+  .meta div{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:13px}
+  .meta b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+  table{border-collapse:collapse;width:100%;background:var(--card);font-size:14px;margin:10px 0 18px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--soft)}
+  td.k{font-family:Menlo,Consolas,monospace;font-size:12.5px;white-space:nowrap;color:var(--ok)}
+  code{font-family:Menlo,Consolas,monospace;font-size:12.5px;background:#eef1f3;padding:1px 5px;border-radius:3px}
+  pre{background:#0f1a22;color:#e6edf3;padding:12px 14px;border-radius:4px;overflow:auto;font-size:12.5px;line-height:1.5}
+  .box{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:4px;padding:12px 16px;margin:14px 0}
+  .box.must{border-left-color:var(--bad)}
+  .box.ok{border-left-color:var(--ok)}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;padding:1px 7px;border-radius:3px;margin-right:6px;vertical-align:middle}
+  .must .tag,.tag.must{background:#f6e7e4;color:var(--bad)}
+  .tag.should{background:#fdf3d7;color:var(--warn)}
+  .tag.nice{background:#e3efec;color:var(--ok)}
+  ul,ol{margin:6px 0 10px;padding-left:22px}
+  li{margin:3px 0}
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:14px 18px;columns:2;column-gap:28px;font-size:14px}
+  .toc a{color:var(--acc);text-decoration:none}
+  .toc li{break-inside:avoid}
+  .req{margin:0 0 6px}
+  .req .id{font-family:Menlo,monospace;font-size:12px;color:var(--muted);margin-right:6px}
+  .role{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:14px 18px;margin:12px 0}
+  .role h3{margin-top:0}
+  .small{font-size:13px;color:var(--muted)}
+  @media print{body{background:#fff}.wrap{padding:0}h2{break-before:page}.toc{columns:1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Техническое задание<br>CRM/ERP-контур промышленного предприятия «под ключ»<br><span style="font-weight:400;font-size:20px">на базе проекта Contragenti + Demo CRM</span></h1>
+<p class="sub">Заказчик — производственное предприятие (условно «Завод»): изготовление изделий под заказ и серийная продукция, торговля и услуги. Исполнитель — команда технического отдела Завода с использованием ИИ-агентов (Claude Code и аналоги), работающих по этому документу. Прототип и стартовая кодовая база — репозиторий <a href="https://github.com/PavelTuhari/Contragenti">github.com/PavelTuhari/Contragenti</a>: утилита Contragenti (реестр date.gov.md, локальный API), Demo CRM (Delphi для Windows, Swift для macOS), SDK, мастера установки, схема <code>clients.db</code>, генератор демо-данных и самотесты.</p>
+
+<div class="meta">
+  <div><b>Документ</b>ТЗ-CRM-2026-09, редакция 1.0</div>
+  <div><b>Дата</b>08.09.2026</div>
+  <div><b>Основа</b>Contragenti 1.3.7, Demo CRM (crm_delphi/, crm_macos/)</div>
+  <div><b>Языки интерфейса</b>ro (основной), en, ru — lang.json</div>
+  <div><b>Платформы</b>Windows 10/11, macOS 13+, веб-кабинет (фаза 3)</div>
+  <div><b>Приёмка</b>исполняемые критерии в каждом блоке + §7</div>
+</div>
+
+<div class="box must"><span class="tag">ОБЯЗАТЕЛЬНО</span>Приоритеты требований: <span class="tag must">MUST</span> — без этого приёмка не проходит; <span class="tag should">SHOULD</span> — входит в объём, допускается перенос на следующую фазу по решению Заказчика; <span class="tag nice">NICE</span> — при наличии ресурса. Каждое требование имеет идентификатор (например, <code>OWN-03</code>) — на него ссылаются задачи, коммиты и акты приёмки.</div>
+
+<h2 id="toc">Содержание</h2>
+<div class="toc"><ol>
+<li><a href="#s1">Общие положения: цель, границы, что берём из прототипа</a></li>
+<li><a href="#s2">Блок 1. Требования владельцев бизнеса</a></li>
+<li><a href="#s3">Блок 2. Требования бухгалтерии</a></li>
+<li><a href="#s4">Блок 3. Требования коммерческого отдела</a></li>
+<li><a href="#s5">Блок 4. Требования производства</a></li>
+<li><a href="#s6">Блок 5. Склад готовой продукции и доставка</a></li>
+<li><a href="#s7">Блок 6. Требования технического отдела (для ИИ-агента)</a></li>
+<li><a href="#s8">Этапы, сроки, приёмка</a></li>
+<li><a href="#s9">Приложения: модель данных, API, глоссарий</a></li>
+</ol></div>
+
+<!-- ───────────────────────────── 1 ───────────────────────────── -->
+<h2 id="s1">1. Общие положения</h2>
+
+<h3>1.1. Цель</h3>
+<p>Получить единый контур «от обращения клиента до денег и отгрузки»: лиды и сделки → договор и спецификация → производственный заказ → операции и загрузка участков → склад готовой продукции → отгрузка и доставка → счёт, оплата, закрытие. Все службы работают в одной базе, каждый видит свой раздел, руководство — сводку в реальном времени. Контрагенты заводятся из государственного реестра date.gov.md без ручного ввода реквизитов.</p>
+
+<h3>1.2. Что уже есть в прототипе и берётся как основа</h3>
+<table>
+<tr><th>Компонент</th><th>Где</th><th>Что даёт Заводу</th></tr>
+<tr><td>Contragenti — утилита поиска по реестру, локальный HTTP-API <code>127.0.0.1:9393</code> (<code>/health</code>, <code>/search</code>, <code>/card</code>, <code>/pick</code>, <code>/open</code>), XML-карточка контрагента, два источника (date.gov.md, data2b.md), кэш в <code>companies.db</code></td><td class="k">company_search.py, API_ru.md, INTEGRATION.md</td><td>реквизиты контрагентов из реестра, дедупликация по IDNO, готовый SDK (Python, C++, Delphi, Swift)</td></tr>
+<tr><td>Demo CRM (Windows, Delphi): клиенты, контакты, лиды, сделки, номенклатура, заказы со строками и проводкой остатков, проекты с тендерами и авансами, задачи, канбан, бизнес-процесс, Гант, календарь, 6 отчётов (xlsx/pdf), три языка, вход по паролю</td><td class="k">crm_delphi/</td><td>эталон экранов, схема данных, правила процесса «от контракта до денег»</td></tr>
+<tr><td>Demo CRM (macOS, Swift/AppKit) — функциональный аналог с той же базой и контрактом</td><td class="k">crm_macos/</td><td>рабочие места на Mac; доказано, что схема и правила переносимы</td></tr>
+<tr><td>Схема <code>clients.db</code> (SQLite): clients, contacts, leads, deals, items, orders, order_lines, users, tasks, projects; миграции по <code>PRAGMA table_info</code></td><td class="k">crm_delphi/uCrmData.pas, crm_macos/Sources/DemoCRM/CrmData.swift, PORT_MACOS_ru.md §5</td><td>стартовая модель данных (§9.1) — расширяется, не переписывается</td></tr>
+<tr><td>Хаб сбора баз и ERP-мост una.md (<code>hub/</code>, <code>tms_export.py</code>, <code>goods_export.py</code>): приём gzip(SQLite), перенос в Oracle-схемы</td><td class="k">hub/, HUB_ru.md</td><td>образец серверной части и интеграции с учётной системой</td></tr>
+<tr><td>Генератор демо-данных, DML-тест, GUI-самотест с актом (report.html), мастера установки (MSI/exe/pkg), release.json и самообновление</td><td class="k">uTestData.pas, TestData.swift, setup_wizard*.py, tools/</td><td>дисциплина тестирования и выпуска, которую надо сохранить</td></tr>
+</table>
+
+<h3>1.3. Границы</h3>
+<ul>
+<li>Бухгалтерский учёт (проводки, баланс, налоговая отчётность) остаётся в учётной системе Заказчика (1С / una.md); CRM-контур поставляет ей первичные документы и получает статусы оплат (§3).</li>
+<li>Расчёт зарплаты, кадры, охрана труда — вне объёма.</li>
+<li>Конструкторская документация (CAD) — вне объёма; в системе хранятся ссылки на файлы и версии.</li>
+</ul>
+
+<h3>1.4. Пользователи и роли</h3>
+<table>
+<tr><th>Роль</th><th>Кто</th><th>Разделы</th></tr>
+<tr><td>Владелец / директор</td><td>2–3 чел.</td><td>рабочий стол, все отчёты, только чтение по документам, утверждение скидок выше порога</td></tr>
+<tr><td>Бухгалтер</td><td>3–5 чел.</td><td>счета, платежи, акты, накладные, дебиторка, обмен с учётной системой</td></tr>
+<tr><td>Менеджер продаж / тендерный специалист</td><td>8–15 чел.</td><td>клиенты, лиды, сделки, КП, договоры, заказы, проекты, задачи</td></tr>
+<tr><td>Начальник производства, мастер участка</td><td>5–10 чел.</td><td>производственные заказы, операции, Гант, загрузка, брак, ОТК</td></tr>
+<tr><td>Кладовщик, логист, водитель-экспедитор</td><td>5–8 чел.</td><td>приход, остатки, резервы, отгрузки, маршруты, доставка (мобильный веб)</td></tr>
+<tr><td>Администратор системы</td><td>1–2 чел.</td><td>пользователи, роли, справочники, интеграции, резервные копии, журнал аудита</td></tr>
+</table>
+
+<!-- ───────────────────────────── 2 ───────────────────────────── -->
+<h2 id="s2">2. Блок 1 — требования владельцев бизнеса</h2>
+<div class="role">
+<h3>Что хочет владелец</h3>
+<p>Видеть предприятие «одним экраном» и понимать, где теряются деньги и время: сколько денег в работе, кто должен, что запаздывает, какая маржа у заказов и проектов, загружено ли производство на месяц вперёд. Управлять не по звонкам мастерам, а по цифрам, которые обновляются сами.</p>
+
+<h4>Требования</h4>
+<p class="req"><span class="id">OWN-01</span><span class="tag must">MUST</span><b>Рабочий стол руководителя</b> — плитки этапов «от контракта до денег» из прототипа (Предложение → Переговоры → Готово к заказу → Ожидает аванс → В работе → Готово к отгрузке → Отгружено/ждём оплату → Закрыто) с количеством, суммой и просрочкой; клик открывает раздел с тем же фильтром. Добавить плитки: <i>Просроченная дебиторка</i>, <i>Загрузка производства на 30 дней (%)</i>, <i>Маржа месяца</i>, <i>Готовая продукция на складе (сумма)</i>.</p>
+<p class="req"><span class="id">OWN-02</span><span class="tag must">MUST</span><b>План-факт</b> по месяцу и кварталу: выручка, отгрузки, поступления, новые сделки, конверсия воронки; план вводится по отделам, факт считается из документов.</p>
+<p class="req"><span class="id">OWN-03</span><span class="tag must">MUST</span><b>Маржинальность</b> заказа и проекта: цена продажи − материалы (BOM, §5) − нормо-часы по ставкам участков − доставка; красная подсветка при марже ниже порога; порог — настройка.</p>
+<p class="req"><span class="id">OWN-04</span><span class="tag must">MUST</span><b>Утверждения</b>: скидка выше порога, отгрузка при долге клиента выше лимита, изменение цены после подписания спецификации — требуют одобрения руководителя (кнопка «Утвердить» в списке ожиданий, уведомление в Telegram/e-mail).</p>
+<p class="req"><span class="id">OWN-05</span><span class="tag must">MUST</span><b>Ролевая модель и аудит</b>: каждый пользователь видит только свои разделы; любое изменение документа пишется в журнал (кто, когда, что было / стало); журнал нельзя редактировать.</p>
+<p class="req"><span class="id">OWN-06</span><span class="tag should">SHOULD</span><b>Мобильный просмотр</b> рабочего стола и отчётов (веб-кабинет, телефон), без установки приложений.</p>
+<p class="req"><span class="id">OWN-07</span><span class="tag should">SHOULD</span><b>Ежедневная сводка</b> в 8:00 на e-mail/Telegram: просрочки, деньги за вчера, заказы к отгрузке сегодня, задачи без исполнителя.</p>
+<p class="req"><span class="id">OWN-08</span><span class="tag nice">NICE</span>Прогноз денежного потока на 8 недель по срокам оплат в договорах и спецификациях.</p>
+
+<h4>Критерии приёмки</h4>
+<ul>
+<li>На демо-данных все плитки рабочего стола непустые (правило AGENTS.md §1 п.5 прототипа), суммы плиток совпадают с отчётом «Процесс исполнения заказов» с точностью до копейки.</li>
+<li>Маржа заказа из демо-набора считается и совпадает с ручным расчётом по BOM и операциям (тест-кейс в DML-тесте).</li>
+<li>Попытка отгрузить клиенту с долгом выше лимита без утверждения — отказ с сообщением в строке сообщений (не модальное окно), запись в журнале.</li>
+</ul>
+</div>
+
+<!-- ───────────────────────────── 3 ───────────────────────────── -->
+<h2 id="s3">3. Блок 2 — требования бухгалтерии</h2>
+<div class="role">
+<h3>Что хочет бухгалтерия</h3>
+<p>Ни один документ не вводится дважды: реквизиты контрагента — из реестра, счета и накладные — из заказов, оплаты — из выписки банка, а в учётную систему всё уходит пакетом с контрольными суммами. Дебиторка видна по срокам, закрытие месяца — за один день.</p>
+
+<h4>Требования</h4>
+<p class="req"><span class="id">ACC-01</span><span class="tag must">MUST</span><b>Карточка контрагента из реестра</b>: IDNO, полное наименование, форма, юридический адрес, руководитель, дата регистрации, статус ликвидации, учредители, задолженности перед бюджетом — через Contragenti (контракт XML <code>&lt;counterparty&gt;</code>, INTEGRATION.md §2). Дедупликация строго по IDNO. Дополнительно вручную: банк, IBAN, код НДС, e-mail для документов, договорные условия оплаты (дни, аванс %).</p>
+<p class="req"><span class="id">ACC-02</span><span class="tag must">MUST</span><b>Документы</b> с нумерацией по типу и году: счёт на аванс, счёт на оплату, накладная (factura fiscală / TTN), акт выполненных работ, счёт-фактура; формируются из заказа/спецификации одной кнопкой, печать в PDF по шаблону Заказчика (ro/ru), выгрузка xlsx. Статусы: черновик → выставлен → оплачен частично → оплачен → аннулирован.</p>
+<p class="req"><span class="id">ACC-03</span><span class="tag must">MUST</span><b>Оплаты</b>: загрузка банковской выписки (CSV/XML банков РМ: maib, moldindconbank, Victoriabank), автосопоставление по IDNO и номеру счёта в назначении платежа, ручная привязка остатка; аванс и остаток по заказу/проекту обновляются автоматически (поля <code>advance</code>, <code>paid</code> прототипа — источник истины).</p>
+<p class="req"><span class="id">ACC-04</span><span class="tag must">MUST</span><b>Дебиторская и кредиторская задолженность</b> по клиентам и срокам (0–30, 31–60, 61–90, &gt;90 дней), акт сверки за период по контрагенту (PDF/xlsx), напоминания клиентам по шаблону.</p>
+<p class="req"><span class="id">ACC-05</span><span class="tag must">MUST</span><b>НДС и валюты</b>: ставки НДС по номенклатуре (20 %, 8 %, 0 %, освобождено), суммы с НДС/без, курс НБМ на дату документа для валютных договоров (EUR/USD), пересчёт разниц при оплате.</p>
+<p class="req"><span class="id">ACC-06</span><span class="tag must">MUST</span><b>Обмен с учётной системой</b> (1С / una.md): пакетная выгрузка документов и справочников за период (JSON/XML + gzip(SQLite) по образцу хаба <code>hub/</code>), приём статусов проведения и оплат обратно; журнал обмена с ошибками по документу; повторная отправка без дублей (идемпотентность по номеру документа и хешу).</p>
+<p class="req"><span class="id">ACC-07</span><span class="tag should">SHOULD</span><b>e-Factura</b> (СФС РМ): подготовка электронной накладной в формате портала и выгрузка файла; подпись — на стороне бухгалтера.</p>
+<p class="req"><span class="id">ACC-08</span><span class="tag should">SHOULD</span><b>Закрытие периода</b>: блокировка изменения документов до даты; изменения после — только через сторно с записью в аудит.</p>
+<p class="req"><span class="id">ACC-09</span><span class="tag nice">NICE</span>Распознавание входящих счетов поставщиков (PDF) с проверкой контрагента по реестру.</p>
+
+<h4>Критерии приёмки</h4>
+<ul>
+<li>Клиент, добавленный через «Создать из реестра», содержит все поля карточки; повторное добавление того же IDNO — «дубликат», второй записи нет (тест-кейс из <code>--selftest</code> прототипа переносится как есть).</li>
+<li>Выписка из 100 строк демо-банка сопоставляется автоматически не менее чем на 90 %; остаток привязывается вручную не более чем за 2 клика на строку.</li>
+<li>Отчёт «Дебиторская задолженность» совпадает с суммой неоплаченных документов; акт сверки печатается на ro и ru.</li>
+<li>Пакет обмена принимается тестовым приёмником (`hub/` прототипа) с кодом 200, повторная отправка того же пакета даёт статус <code>duplicate</code>.</li>
+</ul>
+</div>
+
+<!-- ───────────────────────────── 4 ───────────────────────────── -->
+<h2 id="s4">4. Блок 3 — требования коммерческого отдела</h2>
+<div class="role">
+<h3>Что хочет коммерческий отдел</h3>
+<p>Не терять обращения, видеть воронку и сроки, делать КП и спецификации за минуты по прайсу и BOM, участвовать в тендерах с контролем дедлайнов, а после подписания — одной кнопкой превращать сделку в заказ и проект, дальше только следить по канбану.</p>
+
+<h4>Требования</h4>
+<p class="req"><span class="id">COM-01</span><span class="tag must">MUST</span><b>Лиды и источники</b> (сайт, звонок, рекомендация, выставка, реклама, тендерная площадка): форма с сайта и почта в лиды автоматически; конверсия «В клиенты» с созданием клиента из реестра (ACC-01) и переносом контактов; причина отказа обязательна при статусе «Отказ».</p>
+<p class="req"><span class="id">COM-02</span><span class="tag must">MUST</span><b>Сделки и воронка</b>: этапы Новая → Предложение → Переговоры → Выиграна/Проиграна (канонические значения прототипа сохраняются), сумма, вероятность, ожидаемая дата, ответственный; канбан с перетаскиванием (как в прототипе); отчёт воронки по менеджерам и источникам за период; сделка без активности 7 дней — подсветка и задача.</p>
+<p class="req"><span class="id">COM-03</span><span class="tag must">MUST</span><b>Коммерческое предложение и спецификация</b>: из номенклатуры и BOM изделия (§5), цена по прайс-листу с уровнями (розница, опт, дилер), скидка с лимитом по роли (OWN-04), срок изготовления из норм производства, PDF по шаблону на ro/ru/en, версии КП; подписанная спецификация «замораживает» цены и сроки.</p>
+<p class="req"><span class="id">COM-04</span><span class="tag must">MUST</span><b>Договоры</b>: шаблон (поставка, подряд, рамочный), реквизиты сторон из карточек, условия оплаты (аванс %, дни постоплаты), срок, ответственный; статусы «на согласовании → подписан → исполнен»; напоминание об окончании рамочного договора за 30 дней.</p>
+<p class="req"><span class="id">COM-05</span><span class="tag must">MUST</span><b>Тендеры</b>: реестр тендеров (номер, площадка, дедлайн подачи, обеспечение, документы), задачи по чек-листу подачи, результат; выигранный тендер → проект со статусом «Договор» (модель проектов прототипа: Тендер → Договор → Аванс → Дизайн → Производство → Сдача → Оплата → Закрыт | Проигран).</p>
+<p class="req"><span class="id">COM-06</span><span class="tag must">MUST</span><b>Заказ клиента</b> создаётся из выигранной сделки/спецификации одной кнопкой; вид продажа/услуга/производство; для производства автоматически создаётся производственный заказ (§5) и задачи проекта по шаблону шагов (11 шагов прототипа как базовый шаблон, редактируемый по видам изделий).</p>
+<p class="req"><span class="id">COM-07</span><span class="tag must">MUST</span><b>Календарь и задачи</b>: звонки, встречи, задачи с напоминаниями, сетка месяца с перетаскиванием (прототип), синхронизация с Google/Outlook-календарём (ICS-подписка минимум).</p>
+<p class="req"><span class="id">COM-08</span><span class="tag should">SHOULD</span><b>Коммуникации</b>: e-mail из карточки клиента с шаблонами и историей, звонки через IP-телефонию (журнал, запись по ссылке), рассылки по сегментам с отпиской.</p>
+<p class="req"><span class="id">COM-09</span><span class="tag should">SHOULD</span><b>Клиентский портал</b>: статус заказа, документы к оплате, акт приёмки с подписью-подтверждением.</p>
+<p class="req"><span class="id">COM-10</span><span class="tag nice">NICE</span>Подсказки ИИ: черновик КП по описанию запроса, рекомендация цены по истории сделок клиента.</p>
+
+<h4>Критерии приёмки</h4>
+<ul>
+<li>Сценарий GUI-самотеста прототипа (лид → клиент → сделка «Выиграна» → заказ со строками → проводка → задачи) проходит без модальных окон и расширен шагами: КП → спецификация → договор → тендер → проект.</li>
+<li>КП с 20 позициями формируется в PDF за ≤ 5 с; цены после подписания спецификации в заказе изменить нельзя без утверждения.</li>
+<li>Отчёт воронки за месяц совпадает с количеством сделок по этапам в канбане.</li>
+</ul>
+</div>
+
+<!-- ───────────────────────────── 5 ───────────────────────────── -->
+<h2 id="s5">5. Блок 4 — требования производства</h2>
+<div class="role">
+<h3>Что хочет производство</h3>
+<p>Получать заказ уже разложенным на операции и материалы, видеть очередь по участкам и реальную загрузку, отмечать выполнение с телефона или терминала в цехе, фиксировать брак и простои, и чтобы план (Гант) сам сдвигался при изменении сроков.</p>
+
+<h4>Требования</h4>
+<p class="req"><span class="id">PRD-01</span><span class="tag must">MUST</span><b>Спецификация изделия (BOM)</b>: состав из номенклатуры (материалы, полуфабрикаты, покупные) с нормами расхода на единицу, версии BOM, замена материала с пересчётом стоимости; для изделий под заказ — BOM создаётся из шаблона по виду изделия и уточняется конструктором.</p>
+<p class="req"><span class="id">PRD-02</span><span class="tag must">MUST</span><b>Маршрутная карта</b>: последовательность операций (резка, фрезеровка, гравировка, сборка, покраска, ОТК, упаковка…) с участком, нормо-часами, оборудованием; задачи проекта прототипа становятся операциями с полями <code>plan_start/due_at/hours_plan/hours_fact/depends_on/seq</code> (уже есть в схеме).</p>
+<p class="req"><span class="id">PRD-03</span><span class="tag must">MUST</span><b>Производственный заказ</b> (<code>orders.kind = Производство</code> + <code>project_id</code>): статусы Черновик → Подтверждён → В работе → Выполнен → Оплачен/Отменён; при подтверждении резервируются материалы (§6), при выполнении — проводка приходует изделия на склад ГП (правило прототипа <code>PostOrder</code>: производство +stock).</p>
+<p class="req"><span class="id">PRD-04</span><span class="tag must">MUST</span><b>Планирование и Гант</b>: очередь по участкам, загрузка участка в часах на день/неделю, автоматический расчёт дат операций с учётом зависимостей и сменности (5/2, 8 ч; настраивается), перетаскивание в Ганте меняет план (прототип) с проверкой перегрузки участка — предупреждение в строке сообщений.</p>
+<p class="req"><span class="id">PRD-05</span><span class="tag must">MUST</span><b>Терминал участка</b> (веб на планшете/телефоне): список операций на сегодня, «Начал / Завершил», количество годных и брак с причиной, факт часов; без клавиатуры — крупные кнопки, сканер QR с наряда.</p>
+<p class="req"><span class="id">PRD-06</span><span class="tag must">MUST</span><b>Брак и простои</b>: справочник причин, регистрация на операции, отчёт по причинам и участкам за период, стоимость брака по BOM.</p>
+<p class="req"><span class="id">PRD-07</span><span class="tag must">MUST</span><b>ОТК</b>: операция контроля обязательна перед сдачей на склад ГП; результат «принято / на доработку» с фото (файл) и подписью контролёра.</p>
+<p class="req"><span class="id">PRD-08</span><span class="tag should">SHOULD</span><b>Потребность в материалах</b>: по подтверждённым заказам на горизонт — дефицит с учётом остатков и резервов, заявка на закупку поставщику (контрагент из реестра, тип «Поставщик»).</p>
+<p class="req"><span class="id">PRD-09</span><span class="tag should">SHOULD</span>Печать наряда/маршрутного листа с QR на каждую операцию; этикетка изделия с QR (серийный номер) для склада и доставки.</p>
+<p class="req"><span class="id">PRD-10</span><span class="tag nice">NICE</span>Учёт машинного времени оборудования (ЧПУ, лазер) через опрос по OPC UA/CSV-лог станка.</p>
+
+<h4>Критерии приёмки</h4>
+<ul>
+<li>Демо-набор содержит не менее 10 производственных заказов с BOM и маршрутами; после «Завершил» по всем операциям проводка приходует изделия, остаток на складе ГП растёт ровно на количество годных.</li>
+<li>Перегрузка участка (сумма нормо-часов дня &gt; фонда) видна в Ганте и в отчёте загрузки; перенос операции в Ганте пересчитывает зависимые (стрелки «после задачи» прототипа).</li>
+<li>Терминал участка работает на планшете 10" без горизонтальной прокрутки; операция закрывается за ≤ 3 нажатия.</li>
+</ul>
+</div>
+
+<!-- ───────────────────────────── 6 ───────────────────────────── -->
+<h2 id="s6">6. Блок 5 — склад готовой продукции и доставка</h2>
+<div class="role">
+<h3>Что хотят склад и доставка</h3>
+<p>Точные остатки в реальном времени по местам хранения, резервы под заказы, отгрузка по документам без бумажных журналов, маршруты на день для водителей и статус доставки, который видит менеджер и клиент.</p>
+
+<h4>Требования</h4>
+<p class="req"><span class="id">WHS-01</span><span class="tag must">MUST</span><b>Склады и места хранения</b>: несколько складов (материалы, полуфабрикаты, ГП, брак), ячейки/зоны; остатки по складу и ячейке; все движения — документы (приход из производства, перемещение, отгрузка, инвентаризация, списание) с проводкой; поле <code>items.stock</code> прототипа становится агрегатом по складу ГП.</p>
+<p class="req"><span class="id">WHS-02</span><span class="tag must">MUST</span><b>Резервирование</b> под подтверждённые заказы; доступный остаток = остаток − резерв; отгрузка сверх доступного невозможна.</p>
+<p class="req"><span class="id">WHS-03</span><span class="tag must">MUST</span><b>Отгрузка</b>: из заказа — задание на комплектацию (чек-лист с QR), накладная/TTN (ACC-02), фиксация даты отгрузки (<code>orders.ship_date</code> — источник этапа «Отгружено» на рабочем столе), контроль долга клиента (OWN-04).</p>
+<p class="req"><span class="id">WHS-04</span><span class="tag must">MUST</span><b>Доставка</b>: рейс на день (транспорт, водитель, порядок точек), маршрутный лист, статусы «в пути → доставлено → отказ/возврат» с фото и подписью получателя в мобильном веб-приложении водителя; клиенту — SMS/e-mail со статусом и ссылкой.</p>
+<p class="req"><span class="id">WHS-05</span><span class="tag must">MUST</span><b>Инвентаризация</b>: ведомость по складу/ячейке, ввод факта со сканера, акт расхождений, корректирующие движения через утверждение.</p>
+<p class="req"><span class="id">WHS-06</span><span class="tag should">SHOULD</span><b>Упаковка и весогабариты</b> номенклатуры для расчёта загрузки транспорта и стоимости доставки; перевозчики (внешние) как контрагенты типа «Партнёр».</p>
+<p class="req"><span class="id">WHS-07</span><span class="tag should">SHOULD</span><b>Возвраты и рекламации</b>: документ возврата, причина, связь с заказом и ОТК, отчёт по рекламациям.</p>
+<p class="req"><span class="id">WHS-08</span><span class="tag nice">NICE</span>Оптимизация маршрута рейса (порядок точек) и трекинг по геопозиции водителя.</p>
+
+<h4>Критерии приёмки</h4>
+<ul>
+<li>Отчёт «Остатки номенклатуры» прототипа расширен складами и резервами; сумма остатков по складам равна агрегату; попытка отгрузить больше доступного — отказ.</li>
+<li>Сквозной сценарий на демо-данных: производственный заказ → приход на склад ГП → резерв → комплектация → TTN → рейс → «доставлено» с фото; на рабочем столе заказ проходит этапы «Готово к отгрузке» → «Отгружено» → «Закрыто» после оплаты.</li>
+<li>Мобильный экран водителя открывается по ссылке без установки, работает офлайн на время отсутствия сети (очередь статусов).</li>
+</ul>
+</div>
+
+<!-- ───────────────────────────── 7 ───────────────────────────── -->
+<h2 id="s7">7. Блок 6 — требования технического отдела (главный блок; для ИИ-агента)</h2>
+<div class="box must"><span class="tag">ДЛЯ ИИ-АГЕНТА</span>Этот блок написан так, чтобы его можно было целиком передать ИИ-агенту (Claude Code, Codex и т. п.) вместе с клоном репозитория. Все факты о прототипе проверяемы по указанным файлам; ничего не додумывать — открыть файл. Правила репозитория <code>AGENTS.md</code> обязательны и имеют приоритет над общими привычками агента. Работать фазами (§8), после каждой — коммит с осмысленным сообщением по-русски и пуш; перед пушем — проверка диффа на секреты.</div>
+
+<h3>7.1. Архитектура целевой системы</h3>
+<table>
+<tr><th>Слой</th><th>Решение</th><th>Обоснование / связь с прототипом</th></tr>
+<tr><td>База данных</td><td><b>PostgreSQL 16</b> на сервере Завода; SQLite остаётся для автономных рабочих мест (офлайн-режим) и для тестов</td><td>схема прототипа переносится 1:1 (§9.1), миграции — Alembic; правило «значения перечислений хранятся канонически по-русски, переводы позиционные в lang.json» сохраняется (uCrmData.pas:146-161, CrmData.swift ENUM_*)</td></tr>
+<tr><td>Сервер приложений</td><td><b>Python 3.12, FastAPI</b> (как <code>hub/app.py</code>), REST + WebSocket для уведомлений; OpenAPI генерируется</td><td>единая точка бизнес-правил: этапы (<code>StageWhere</code>), проводка (<code>PostOrder</code>), конверсия лида, резервы — только на сервере, клиенты правил не дублируют</td></tr>
+<tr><td>Клиенты</td><td>1) Windows — Delphi (crm_delphi/), 2) macOS — Swift/AppKit (crm_macos/), 3) веб-кабинет (React/TypeScript) для руководства, портала клиента, терминала участка и водителя</td><td>оба нативных клиента переводятся с прямой работы с SQLite на API сервера через тонкий слой (интерфейс <code>TCrmData</code>/<code>CrmData</code> сохраняется, меняется реализация); офлайн-очередь для SQLite</td></tr>
+<tr><td>Контрагенты</td><td>Contragenti как сервис: на сервере — headless-режим и API <code>/search</code>, <code>/card</code>; на рабочих местах — <code>--pick</code> через SDK (INTEGRATION.md)</td><td>контракт XML <code>&lt;counterparty&gt;</code> не меняется; дедупликация по IDNO — на сервере</td></tr>
+<tr><td>Интеграции</td><td>учётная система (1С/una.md) — пакеты по образцу <code>hub/</code>; банки — импорт выписок; e-mail (IMAP/SMTP); Telegram-бот; ICS-календари</td><td>журнал обмена, идемпотентность, повторная отправка</td></tr>
+<tr><td>Развёртывание</td><td>Docker Compose (postgres, api, web, nginx, backup); установка рабочих мест — существующие мастера (MSI/exe для Windows, .pkg/скрипт для macOS) с добавлением адреса сервера в <code>crm.ini [server]</code></td><td><code>deploy/</code>, <code>setup_wizard*.py</code>, <code>release.json</code></td></tr>
+<tr><td>Наблюдаемость</td><td>структурные логи (JSON), метрики Prometheus, health-эндпоинты, ежедневный бэкап БД с проверкой восстановления</td><td>расширение <code>/api/v1/health</code> хаба</td></tr>
+</table>
+
+<h3>7.2. Нефункциональные требования</h3>
+<p class="req"><span class="id">TEC-01</span><span class="tag must">MUST</span><b>Без модальных окон</b> во всех клиентах: сообщения — в цветной строке состояния (info/ok/warn/err), подтверждение удаления — повторным нажатием, редакторы — панели внутри страницы. Это условие headless-тестирования (INTEGRATION.md §5, AGENTS.md §2). Проверка: <code>grep -r "NSAlert\|MessageDlg\|ShowMessage\|window.alert" src</code> пуст.</p>
+<p class="req"><span class="id">TEC-02</span><span class="tag must">MUST</span><b>Три языка</b> ro/en/ru из внешнего <code>lang.json</code> (префиксы ключей app, btn, calendar, card, col, erp, gantt, kanban, login, msg, nav, preset, process, report, reports, settings, workspace; 15 позиционных списков enums). Новые ключи добавляются во все три языка одним коммитом; отсутствующий ключ показывается как есть, не падает.</p>
+<p class="req"><span class="id">TEC-03</span><span class="tag must">MUST</span><b>Тестовые данные и самотесты</b> — правило AGENTS.md §1 распространяется на сервер и веб: любая новая сущность/поле → генератор демо-данных (десятки реалистичных записей, все статусы), DML-тест (INSERT→SELECT→UPDATE→SELECT→DELETE→COUNT + специфика), GUI/E2E-самотест со снимками и <code>report.html</code>. Счётчики демо-набора фиксируются в <code>seed.log</code> и обязаны совпадать между Delphi, Swift и сервером (сейчас: 17/20/12/22/21/23/41/124/10 — <code>crm_delphi/seed.log</code>).</p>
+<p class="req"><span class="id">TEC-04</span><span class="tag must">MUST</span><b>Производительность</b>: 50 одновременных пользователей; список из 100 000 заказов с фильтром — ≤ 1 с; рабочий стол — ≤ 2 с; отчёт за год — ≤ 10 с; API p95 ≤ 300 мс.</p>
+<p class="req"><span class="id">TEC-05</span><span class="tag must">MUST</span><b>Безопасность</b>: пароли — только хеш (сейчас SHA-256 с солью логина, uCrmData.pas PassHash; на сервере перейти на argon2id с миграцией при первом входе), JWT с ротацией, роли и права на уровне API, TLS, аудит изменений (OWN-05), секреты только в переменных окружения / gitignored-конфигах (AGENTS.md §5), rate-limit на вход.</p>
+<p class="req"><span class="id">TEC-06</span><span class="tag must">MUST</span><b>Резервное копирование и восстановление</b>: pg_dump ежедневно + WAL, хранение 30 дней, еженедельная проверка восстановления в тестовую БД скриптом; RPO ≤ 1 ч, RTO ≤ 4 ч.</p>
+<p class="req"><span class="id">TEC-07</span><span class="tag must">MUST</span><b>Офлайн рабочих мест</b>: нативные клиенты работают с локальной SQLite при недоступности сервера (просмотр, создание лидов/задач/операций), синхронизация с разрешением конфликтов «сервер прав, локальные изменения — в очередь на утверждение».</p>
+<p class="req"><span class="id">TEC-08</span><span class="tag must">MUST</span><b>Совместимость</b>: Windows 10/11 (x64), macOS 13+ (arm64; x86_64 — сборка на Intel-машине), браузеры Chrome/Safari/Edge последних двух версий, планшеты Android/iPad для терминалов.</p>
+<p class="req"><span class="id">TEC-09</span><span class="tag should">SHOULD</span>Документация в репозитории: <code>API_ru.md</code> (генерируется из OpenAPI + ручные примеры), инструкции установки (INSTALL_*), <code>HUB_ru.md</code>, акт тестирования (<code>act_testirovaniya.html</code>) — обновляются в том же коммите, что и код.</p>
+
+<h3>7.3. Модель данных: что расширить</h3>
+<p>Базовые таблицы прототипа (§9.1) сохраняются с теми же именами колонок — это условие совместимости с существующими клиентами и демо-данными. Новые таблицы (минимальный набор):</p>
+<table>
+<tr><th>Таблица</th><th>Назначение</th><th>Ключевые поля</th><th>Блок</th></tr>
+<tr><td class="k">roles, user_roles, permissions</td><td>ролевая модель</td><td>role, section, can_read/write/approve</td><td>OWN-05</td></tr>
+<tr><td class="k">audit_log</td><td>журнал изменений</td><td>ts, user_id, table_, row_id, field, old, new, ip</td><td>OWN-05</td></tr>
+<tr><td class="k">approvals</td><td>утверждения</td><td>kind, ref_table, ref_id, requested_by, approved_by, status, reason</td><td>OWN-04</td></tr>
+<tr><td class="k">contracts, specifications, spec_lines</td><td>договоры и спецификации</td><td>client_id, number, date, terms (prepay_pct, pay_days), status, frozen_at</td><td>COM-03/04</td></tr>
+<tr><td class="k">quotes, quote_lines</td><td>КП с версиями</td><td>deal_id, version, valid_until, total, pdf_path</td><td>COM-03</td></tr>
+<tr><td class="k">tenders</td><td>реестр тендеров</td><td>number, platform, deadline, guarantee, result, project_id</td><td>COM-05</td></tr>
+<tr><td class="k">documents, document_lines</td><td>счета, накладные, акты</td><td>kind, number, date, order_id, client_id, total, vat, status, currency, rate</td><td>ACC-02/05</td></tr>
+<tr><td class="k">payments</td><td>оплаты</td><td>date, amount, currency, client_id, document_id, bank_ref, matched_by</td><td>ACC-03</td></tr>
+<tr><td class="k">bom, bom_lines</td><td>состав изделия</td><td>item_id, version, component_item_id, qty_per_unit, unit</td><td>PRD-01</td></tr>
+<tr><td class="k">routes, route_ops</td><td>маршрутные карты</td><td>item_id, seq, workcenter_id, hours_norm</td><td>PRD-02</td></tr>
+<tr><td class="k">workcenters, shifts</td><td>участки и сменность</td><td>name, capacity_hours_day, calendar</td><td>PRD-04</td></tr>
+<tr><td class="k">defects</td><td>брак и простои</td><td>task_id, reason_id, qty, cost</td><td>PRD-06</td></tr>
+<tr><td class="k">warehouses, locations, stock, stock_moves, reservations</td><td>склады, остатки, движения, резервы</td><td>warehouse_id, location_id, item_id, qty, doc_kind, doc_id</td><td>WHS-01/02</td></tr>
+<tr><td class="k">shipments, shipment_lines, trips, trip_stops</td><td>отгрузки и рейсы</td><td>order_id, ttn_document_id, trip_id, status, delivered_at, photo, signature</td><td>WHS-03/04</td></tr>
+<tr><td class="k">exchange_log</td><td>журнал обмена с учётной системой</td><td>batch_id, direction, payload_hash, status, error</td><td>ACC-06</td></tr>
+</table>
+<p class="small">Расширение существующих: <code>clients</code> + iban, bank, vat_code, credit_limit, pay_days, prepay_pct; <code>items</code> + vat_rate, weight, volume, kind «Материал», «Полуфабрикат»; <code>orders</code> + contract_id, specification_id, warehouse_id, currency, rate; <code>tasks</code> + workcenter_id, qty_good, qty_defect, op_started_at, op_finished_at.</p>
+
+<h3>7.4. API (контракт для клиентов)</h3>
+<pre>GET  /api/v2/health                          состояние, версия, БД
+POST /api/v2/auth/login  {login, password}   → JWT; GET /me — роли и права
+GET  /api/v2/{entity}?filter=&preset=&page=  entity ∈ clients|contacts|leads|deals|items|orders|projects|tasks|documents|payments|…
+POST /api/v2/{entity}  PUT /api/v2/{entity}/{id}  DELETE …/{id}
+POST /api/v2/orders/{id}/post                проводка (правило PostOrder: продажа −stock, производство +stock, услуга без изменений)
+POST /api/v2/leads/{id}/convert              лид → клиент (правило ConvertLead)
+POST /api/v2/board/{kind}/move {id, col}     единственная точка смены этапа (MoveBoardCard)
+GET  /api/v2/workspace/stages                8 плиток + новые (OWN-01)
+GET  /api/v2/reports/{slug}?from=&to=&format=json|xlsx|pdf   process|receivables|sales_by_client|funnel|stock|projects|margin|load|defects|deliveries
+POST /api/v2/counterparty/lookup?q=          поиск в реестре через Contragenti (сервер), ответ — та же карточка, что в XML
+POST /api/v2/exchange/batches                пакет для учётной системы; GET …/{id} статус
+WS   /api/v2/events                          уведомления (утверждения, просрочки, статусы доставки)</pre>
+<p>Правила: JSON UTF-8; даты <code>yyyy-mm-dd</code>, суммы — decimal с двумя знаками; ошибки — <code>{error, detail, field}</code> с HTTP 4xx, никогда 200 с текстом ошибки; пагинация ≤ 500 строк; фильтры-пресеты те же выражения, что в клиентах (например, <code>t.status = 'Подтверждён' AND COALESCE(t.advance,0) &lt;= 0</code> — этап «Ожидает аванс»).</p>
+
+<h3>7.5. Правила разработки (обязательны)</h3>
+<ol>
+<li><b>Не переписывать прототип с нуля.</b> Схема, канонические значения, правила этапов, проводки, конверсии, форматы <code>lang.json</code>/<code>processes.json</code>/<code>crm.ini</code>, XML-контракт Contragenti — фиксированы. Изменение любого из них — отдельное решение Заказчика с миграцией и обновлением всех трёх клиентов.</li>
+<li><b>Три похожие строки лучше преждевременного обобщения</b> (PORT_MACOS_ru.md §0.4). Никаких абстракций «на будущее».</li>
+<li><b>Каждая фаза заканчивается исполняемой приёмкой</b>: команды из §8 должны отрабатывать с кодом 0; «примерно работает» не принимается.</li>
+<li><b>Один коммит — одна законченная вещь</b>, сообщение по-русски, что и зачем; pre-commit пересобирает пакет обновления (<code>tools/make_release.py --zip-only</code>).</li>
+<li><b>Кодировки:</b> Delphi — UTF-8 с BOM (AGENTS.md §4), Python/Swift/JSON — UTF-8 без BOM, переводы — только в lang.json.</li>
+<li><b>Секреты</b> — только переменные окружения / gitignored-конфиги; проверка диффа перед пушем на <code>password=</code>, <code>api_key</code>, <code>Bearer</code>.</li>
+<li><b>Документы обновляются в том же коммите</b>, что и функция (API_ru.md, INSTALL_*, акт тестирования).</li>
+<li><b>Демо-данные обязательны</b> для каждой новой сущности (AGENTS.md §1): реалистичные, десятки записей, все статусы, все плитки непустые; счётчики — в seed.log.</li>
+</ol>
+
+<h3>7.6. Как ИИ-агент должен работать по этому ТЗ</h3>
+<div class="box ok">
+<p><b>Стартовый промпт для агента</b> (копировать вместе с клоном репозитория):</p>
+<pre>Ты работаешь в клоне github.com/PavelTuhari/Contragenti. Прочитай AGENTS.md, PORT_MACOS_ru.md,
+INTEGRATION.md, API_ru.md, crm_delphi/README_ru.md, crm_macos/README_ru.md и docs/TZ_CRM_ZAVOD.html.
+Задача: фаза N из §8 ТЗ (docs/TZ_CRM_ZAVOD.html). Требования с идентификаторами XXX-NN —
+исполняй в порядке MUST → SHOULD; NICE только если явно попросили.
+Правила: не менять схему/канонические значения/контракты без миграции и обновления трёх
+клиентов; без модальных окон; три языка в lang.json; для каждой новой сущности — генератор
+демо-данных, DML-тест и шаг GUI/E2E-теста; после фазы — команды приёмки из §8 с кодом 0,
+коммит по-русски, пуш, отчёт: что сделано, что проверено (вывод команд), что не удалось и почему.
+Не додумывай поведение прототипа — открой указанный файл и строку.</pre>
+<p><b>Формат отчёта агента после фазы:</b> таблица «требование → статус (сделано/частично/не сделано) → как проверено (команда и результат)», список изменённых файлов, ссылка на коммит, открытые вопросы к Заказчику одним списком.</p>
+<p><b>Что агент делает сам, а что спрашивает:</b> технические решения внутри правил §7.5 — сам; изменение объёма, новые платные сервисы, изменение схемы прототипа, отключение любой проверки — только с вопросом к Заказчику (не блокируя остальную работу).</p>
+</div>
+
+<h3>7.7. Среда и инструменты</h3>
+<table>
+<tr><th>Что</th><th>Требование</th></tr>
+<tr><td>Репозиторий</td><td>тот же (моно-репо); новые каталоги: <code>server/</code> (FastAPI, Alembic, tests), <code>web/</code> (React/TS), <code>deploy/compose/</code>; клиенты остаются в <code>crm_delphi/</code>, <code>crm_macos/</code></td></tr>
+<tr><td>CI</td><td>GitHub Actions: lint (ruff, swiftlint, dcc32 build на self-hosted Windows), unit + DML + E2E (Playwright для web), сборка артефактов и обновление release.json по тегу</td></tr>
+<tr><td>Тестовая среда</td><td>docker compose up с демо-данными; отдельный экземпляр хаба-приёмника для проверки обмена</td></tr>
+<tr><td>Стенд Заказчика</td><td>Ubuntu 24.04 LTS, 8 vCPU / 16 GB / SSD 200 GB, резервирование на NAS; рабочие места по существующим мастерам</td></tr>
+<tr><td>Версионирование</td><td>SemVer в <code>VERSION</code>; release.json — единый манифест для Windows и macOS (поля msi_*/exe_*/app_zip_*/macos_*)</td></tr>
+</table>
+
+<!-- ───────────────────────────── 8 ───────────────────────────── -->
+<h2 id="s8">8. Этапы, сроки, приёмка</h2>
+<table>
+<tr><th>Фаза</th><th>Содержание</th><th>Срок</th><th>Приёмка (исполняемо)</th></tr>
+<tr><td><b>0. Основа</b></td><td>сервер FastAPI + PostgreSQL со схемой прототипа; миграция демо-данных; аутентификация, роли, аудит; оба нативных клиента переведены на API (офлайн-очередь — фаза 4)</td><td>6 нед.</td><td><code>make seed &amp;&amp; make dml-test</code> → 0 FAIL; счётчики seed равны crm_delphi/seed.log; клиенты Windows/macOS проходят свои GUI-самотесты против сервера; audit_log содержит запись на каждое изменение</td></tr>
+<tr><td><b>1. Коммерция и бухгалтерия</b></td><td>COM-01…07, ACC-01…06, OWN-01, OWN-04, OWN-05</td><td>8 нед.</td><td>E2E: лид → клиент из реестра → сделка → КП → спецификация → договор → заказ → счёт → выписка → оплата → «Закрыто»; пакет обмена принят тестовым хабом; акт сверки ro/ru</td></tr>
+<tr><td><b>2. Производство</b></td><td>PRD-01…07, OWN-03, Гант с загрузкой, терминал участка (web)</td><td>8 нед.</td><td>E2E: заказ на производство → BOM/маршрут → операции на терминале → ОТК → приход на склад ГП; маржа совпадает с ручным расчётом; отчёт загрузки</td></tr>
+<tr><td><b>3. Склад и доставка, веб-кабинет</b></td><td>WHS-01…05, OWN-02, OWN-06, COM-09, мобильные экраны водителя и клиента</td><td>6 нед.</td><td>E2E: резерв → комплектация → TTN → рейс → «доставлено» с фото; портал клиента показывает статус; план-факт месяца</td></tr>
+<tr><td><b>4. Эксплуатация</b></td><td>TEC-06/07 (бэкапы, офлайн), уведомления (OWN-07), SHOULD-требования, нагрузочное тестирование (TEC-04), обучение</td><td>4 нед.</td><td>восстановление из бэкапа за ≤ 4 ч на стенде; 50 пользователей в нагрузочном тесте с p95 ≤ 300 мс; акт тестирования со снимками всех сценариев</td></tr>
+</table>
+<p>Общая приёмка: все MUST выполнены и подтверждены исполняемыми проверками; SHOULD — по перечню с отметками «сделано/перенесено»; акт тестирования (<code>report.html</code> по образцу <code>crm_delphi/act_testirovaniya.html</code>) приложен к каждой фазе. Гарантийное сопровождение — 6 месяцев, исправление дефектов MUST — 3 рабочих дня.</p>
+
+<!-- ───────────────────────────── 9 ───────────────────────────── -->
+<h2 id="s9">9. Приложения</h2>
+
+<h3>9.1. Базовая схема прототипа (сохраняется)</h3>
+<table>
+<tr><th>Таблица</th><th>Колонки</th></tr>
+<tr><td class="k">clients</td><td>id, idno UNIQUE, denumire, forma_juridica, inregistrare, lichidata, adresa, administrator, details, source, added_at; client_type, phone, email, notes, contact_person</td></tr>
+<tr><td class="k">contacts</td><td>id, name, client_id, position, phone, email, notes</td></tr>
+<tr><td class="k">leads</td><td>id, name, company, status (Новый;В работе;Конвертирован;Отказ), source, phone, email, notes, client_id, created_at</td></tr>
+<tr><td class="k">deals</td><td>id, title, client_id, stage (Новая;Предложение;Переговоры;Выиграна;Проиграна), amount, close_date, notes, created_at</td></tr>
+<tr><td class="k">items</td><td>id, code, name, kind (Товар;Услуга;Изделие), unit_, price, vat, stock, notes</td></tr>
+<tr><td class="k">orders</td><td>id, number, order_date, client_id, kind (Продажа;Услуга;Производство), status (Черновик;Подтверждён;В работе;Выполнен;Оплачен;Отменён), total, advance, paid, due_date, ship_date, notes, posted, erp_batch, erp_sent_at, created_at, project_id</td></tr>
+<tr><td class="k">order_lines</td><td>id, order_id, item_id, qty, price, sum</td></tr>
+<tr><td class="k">users</td><td>id, login UNIQUE, pass_hash, full_name, created_at</td></tr>
+<tr><td class="k">tasks</td><td>id, subject, kind, due_at, client_id, deal_id, done, notes, created_at, project_id, stage (Новая;В работе;Ожидание;Проверка;Готово), priority, assignee, plan_start, hours_plan, hours_fact, depends_on, seq</td></tr>
+<tr><td class="k">projects</td><td>id, name, client_id, kind, status (Тендер;Договор;Аванс;Дизайн;Производство;Сдача;Оплата;Закрыт;Проигран), tender_no, tender_deadline, budget, prepay_pct, prepaid, paid, start_date, due_date, manager, notes, created_at</td></tr>
+</table>
+<p class="small">Этапы рабочего стола (условия SQL) — <code>uCrmData.pas</code> StageWhere / <code>CrmData.swift</code> stageWhere; смена этапа на досках — MoveBoardCard (единственная точка); «Готово» у задачи ⇔ done=1.</p>
+
+<h3>9.2. Контракт с Contragenti (не меняется)</h3>
+<pre>launcher --pick --out "&lt;tmp.xml&gt;" --lang ru [--q "фильтр"] --no-server --no-tray
+→ файл &lt;counterparty source="date.gov.md" idno="…"&gt;&lt;idno/&gt;&lt;denumire/&gt;&lt;forma_juridica/&gt;&lt;inregistrare/&gt;
+  &lt;lichidata/&gt;&lt;adresa/&gt;&lt;administratori/&gt;&lt;founders&gt;&lt;founder name share/&gt;&lt;/founders&gt;
+  &lt;debts currency&gt;&lt;debt nr type sum/&gt;&lt;/debts&gt;&lt;details_text/&gt;&lt;/counterparty&gt;
+Локальный API: GET /health, /search?q=, /card?idno=, /pick, /open — API_ru.md</pre>
+
+<h3>9.3. Глоссарий</h3>
+<table>
+<tr><th>Термин</th><th>Значение</th></tr>
+<tr><td>IDNO</td><td>идентификационный номер юридического лица РМ (13 цифр) — ключ дедупликации контрагентов</td></tr>
+<tr><td>Этап процесса</td><td>одно из 8 взаимоисключающих состояний «от контракта до денег», вычисляется из полей заказа/сделки, не хранится</td></tr>
+<tr><td>Проводка заказа</td><td>списание/оприходование остатков по строкам; только в статусах Выполнен/Оплачен и один раз</td></tr>
+<tr><td>BOM</td><td>спецификация состава изделия (bill of materials)</td></tr>
+<tr><td>Маршрутная карта</td><td>последовательность операций изготовления с участками и нормо-часами</td></tr>
+<tr><td>TTN / factura fiscală</td><td>товарно-транспортная накладная / налоговая накладная РМ</td></tr>
+<tr><td>Хаб</td><td>серверный приёмник пакетов данных из CRM для учётной системы (прототип — <code>hub/</code>)</td></tr>
+</table>
+
+<p class="small" style="margin-top:36px">Документ подготовлен на основе состояния репозитория Contragenti 1.3.7 (коммиты f61d72d, e70d7fd и последующие); при расхождении с кодом приоритет у кода и у AGENTS.md — ТЗ обновляется в том же коммите.</p>
+</div>
+</body>
+</html>

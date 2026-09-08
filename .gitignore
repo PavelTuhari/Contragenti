@@ -72,6 +72,10 @@ export/
 !release/*.zip
 !release/*.msi
 !release/*.exe
+!release/*.pkg
+# macOS-сборка (tools/build_macos.sh): PyInstaller, каталоги установки — не коммитятся
+build/macos/
+dist/macos/
 # PyInstaller (tools/build_exe_installer.py)
 *.spec
 
