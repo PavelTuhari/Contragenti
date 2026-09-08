@@ -1,0 +1,112 @@
+[OK]   clients: AddFromCard → arAdded
+[OK]   clients: COUNT +1
+[OK]   clients: ExistsByIdno
+[OK]   clients: повторный AddFromCard → arDuplicate (дедупликация по IDNO)
+[OK]   clients: List с фильтром находит 1
+[OK]   clients: UPDATE карточки (тип/телефон/e-mail)
+[OK]   contacts: INSERT → id 21
+[OK]   contacts: COUNT после INSERT = 21
+[OK]   contacts: SELECT по id возвращает вставленные значения
+[OK]   contacts: LIST с фильтром «Тест Контактов» находит запись
+[OK]   contacts: UPDATE → SELECT видит новые значения («Тест Контактов (изм.)»)
+[OK]   contacts: DELETE → SELECT по id пуст
+[OK]   contacts: COUNT после DELETE вернулся к 20
+[OK]   leads: INSERT → id 13
+[OK]   leads: COUNT после INSERT = 13
+[OK]   leads: SELECT по id возвращает вставленные значения
+[OK]   leads: LIST с фильтром «Лид Тестовый» находит запись
+[OK]   leads: UPDATE → SELECT видит новые значения («Лид Тестовый (изм.)»)
+[OK]   leads: DELETE → SELECT по id пуст
+[OK]   leads: COUNT после DELETE вернулся к 12
+[OK]   leads: ConvertLead создаёт клиента: создан клиент «Convert Co SRL»
+[OK]   leads: статус после конвертации = Конвертирован
+[OK]   leads: повторная конвертация отклонена (уже конвертирован)
+[OK]   deals: INSERT → id 23
+[OK]   deals: COUNT после INSERT = 23
+[OK]   deals: SELECT по id возвращает вставленные значения
+[OK]   deals: LIST с фильтром «Тест Сделка» находит запись
+[OK]   deals: UPDATE → SELECT видит новые значения («Тест Сделка (изм.)»)
+[OK]   deals: DELETE → SELECT по id пуст
+[OK]   deals: COUNT после DELETE вернулся к 22
+[OK]   deals: LIST с пресетом (ExtraWhere) выполняется
+[OK]   items: INSERT → id 22
+[OK]   items: COUNT после INSERT = 22
+[OK]   items: SELECT по id возвращает вставленные значения
+[OK]   items: LIST с фильтром «Тест Товар» находит запись
+[OK]   items: UPDATE → SELECT видит новые значения («Тест Товар (изм.)»)
+[OK]   items: DELETE → SELECT по id пуст
+[OK]   items: COUNT после DELETE вернулся к 21
+[OK]   orders: INSERT → id 24
+[OK]   orders: COUNT после INSERT = 24
+[OK]   orders: SELECT по id возвращает вставленные значения
+[OK]   orders: LIST с фильтром «DML-1» находит запись
+[OK]   orders: UPDATE → SELECT видит новые значения («DML-1x»)
+[OK]   orders: DELETE → SELECT по id пуст
+[OK]   orders: COUNT после DELETE вернулся к 23
+[OK]   order_lines: две строки добавлены
+[OK]   orders: итог пересчитан = 400 (3×100 + 2×50)
+[OK]   order_lines: удаление строки → итог 300
+[OK]   orders: проводка черновика отклонена (проводится только со статусом «Выполнен» или «Оплачен»)
+[OK]   orders: продажа проведена — остаток 10 → 7 (списано со склада по 1 строкам)
+[OK]   orders: повторная проводка отклонена
+[OK]   orders: производство проведено — оприходовано 0 → 4
+[OK]   orders: услуга проведена без изменения остатков (услуги — остатки без изменений)
+[OK]   orders: DELETE заказа удаляет его строки
+[OK]   process: подтверждён без аванса → «Ожидает аванс»
+[OK]   process: заказ на месте
+[OK]   process: срок в прошлом попал в просрочку этапа (3)
+[OK]   process: аванс получен → «В работе / производство»
+[OK]   process: исполнен без отгрузки → «Готово к отгрузке»
+[OK]   process: отгружен, оплата не закрыта → «Ждём оплату»
+[OK]   process: оплачен полностью → «Закрыто»
+[OK]   process: закрытый этап не считается просроченным
+[OK]   отчёт «Процесс исполнения заказов»: колонки описаны (6)
+[OK]   отчёт «Процесс исполнения заказов»: xlsx — корректный zip-контейнер
+[OK]   отчёт «Процесс исполнения заказов»: pdf — заголовок %PDF
+[OK]   отчёт «Дебиторская задолженность»: колонки описаны (8)
+[OK]   отчёт «Дебиторская задолженность»: xlsx — корректный zip-контейнер
+[OK]   отчёт «Дебиторская задолженность»: pdf — заголовок %PDF
+[OK]   отчёт «Продажи по клиентам»: колонки описаны (7)
+[OK]   отчёт «Продажи по клиентам»: xlsx — корректный zip-контейнер
+[OK]   отчёт «Продажи по клиентам»: pdf — заголовок %PDF
+[OK]   отчёт «Воронка продаж»: колонки описаны (5)
+[OK]   отчёт «Воронка продаж»: xlsx — корректный zip-контейнер
+[OK]   отчёт «Воронка продаж»: pdf — заголовок %PDF
+[OK]   отчёт «Остатки номенклатуры»: колонки описаны (7)
+[OK]   отчёт «Остатки номенклатуры»: xlsx — корректный zip-контейнер
+[OK]   отчёт «Остатки номенклатуры»: pdf — заголовок %PDF
+[OK]   отчёт «Проекты: тендеры, авансы, задачи»: колонки описаны (13)
+[OK]   отчёт «Проекты: тендеры, авансы, задачи»: xlsx — корректный zip-контейнер
+[OK]   отчёт «Проекты: тендеры, авансы, задачи»: pdf — заголовок %PDF
+[OK]   tasks: INSERT → id 125
+[OK]   tasks: COUNT после INSERT = 125
+[OK]   tasks: SELECT по id возвращает вставленные значения
+[OK]   tasks: LIST с фильтром «Тест Задача» находит запись
+[OK]   tasks: UPDATE → SELECT видит новые значения («Тест Задача (изм.)»)
+[OK]   tasks: DELETE → SELECT по id пуст
+[OK]   tasks: COUNT после DELETE вернулся к 124
+[OK]   tasks: пресет «Просроченные» находит задачу
+[OK]   tasks: после «Выполнено» не попадает в открытые
+[OK]   projects: INSERT → id 11
+[OK]   projects: COUNT после INSERT = 11
+[OK]   projects: SELECT по id возвращает вставленные значения
+[OK]   projects: LIST с фильтром «Тест Проект» находит запись
+[OK]   projects: UPDATE → SELECT видит новые значения («Тест Проект (изм.)»)
+[OK]   projects: DELETE → SELECT по id пуст
+[OK]   projects: COUNT после DELETE вернулся к 10
+[OK]   tasks: новая задача проекта — done = 0
+[OK]   tasks: этап «Готово» выставляет done = 1
+[OK]   tasks: снятие «выполнено» возвращает этап «В работе»
+[OK]   tasks: редактор: этап «Проверка» при done=1 — этап главнее, done сброшен
+[OK]   projects: сводка задач всего 1 / готово 0 / просрочено 1, часы план 4
+[OK]   board: задача проекта перенесена в колонку «Готово»
+[OK]   board: done = 1, готовность проекта 100 %
+[OK]   board: проект перенесён в «Аванс»
+[OK]   projects: аванс 30 % от 10 000 = 3 000 записан при переходе в «Аванс»
+[OK]   board: проект перенесён в «Закрыт»
+[OK]   projects: при закрытии оплачен остаток 7 000
+[OK]   projects: пресет «Закрыт» находит проект
+[OK]   projects: DELETE удаляет задачи проекта
+[OK]   clients: DELETE
+
+DML-тест: 110 проверок, FAIL = 0

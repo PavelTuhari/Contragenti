@@ -1,0 +1,4 @@
+[OK]   разбор XML: SELFTEST SRL / 1234567890123 / учредителей 1 / долгов 1
+[OK]   SQLite: добавление и дедупликация по IDNO
+
+CRM self-test: True

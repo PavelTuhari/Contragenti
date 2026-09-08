@@ -31,7 +31,8 @@ crm_delphi/*.exe
 crm_delphi/*.RES
 crm_delphi/*.res
 crm_delphi/*.dcu
-crm_delphi/clients.db
+# crm_delphi/clients.db НЕ игнорируется: эталонная демо-база (--seed-demo),
+# по ней сверяют счётчики и миграции порты (PORT_MACOS_ru.md §9, фаза 4)
 crm_delphi/crm.ini
 # выгруженные отчёты — результат работы, а не исходник
 crm_delphi/reports/
@@ -60,6 +61,11 @@ export/
 # Архивы и временные файлы
 *.zip
 *.log
+# эталонные выводы Demo CRM — нужны портам для сверки (PORT_MACOS_ru.md §9):
+# seed.log (счётчики --seed-demo), st.log (--selftest), dml_test.log (--dml-test)
+!crm_delphi/seed.log
+!crm_delphi/st.log
+!crm_delphi/dml_test.log
 # стартовая база компаний для мастера настройки — исключение из *.zip
 !data/companies_seed.zip
 # готовые сборки: MSI и zip-пакет обновления (tools/make_release.py)

@@ -162,6 +162,19 @@ N/N, акт `crm_delphi/act_testirovaniya.html` пересобран.
   Xcode по `crm_delphi/`, поля `macos_*` в `release.json`) —
   `PORT_MACOS_ru.md`; выполняется моделью на Mac, Windows-часть при этом
   не трогается;
+- **Эталонные база и логи Demo CRM хранятся в git**: `crm_delphi/clients.db`
+  (вывод `--seed-demo` в пустую базу: клиентов 17, контактов 20, лидов 12,
+  сделок 22, номенклатуры 21, заказов 23/строк 41, задач 124, проектов 10),
+  `crm_delphi/seed.log`, `crm_delphi/st.log`, `crm_delphi/dml_test.log` —
+  по ним порты (macOS) сверяют счётчики, миграции и вывод режимов.
+  Не коммить `clients.db`, в которой работали интерактивно (CRM,
+  запущенная из `crm_delphi/`, пишет прямо в неё): при изменении
+  `uTestData.pas` пересей в новый файл — `ContragentiCRM.exe --seed-demo
+  <новый путь>` (так делает `setup.py` в `build/seed/`), скопируй его и
+  `seed.log` в `crm_delphi/`, обнови счётчики здесь и в
+  `PORT_MACOS_ru.md` §6.6. Грязная рабочая копия блокирует и
+  самообновление из git (`git pull --ff-only`), поэтому после ручных
+  прогонов делай `git checkout -- crm_delphi/clients.db`.
   при смене версии обновляй ссылки и в ней (скрипт bump правит `1.x.y`). Новый файл, который программа пишет, — только через эти
   функции, не рядом с exe напрямую.
 - В установку входят базы с данными: `build/seed/companies.db` (из
