@@ -10,6 +10,8 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
     private(set) var rows: [EntityRow] = []
     private let say: SayProc
     var onChanged: (() -> Void)?
+    /// Проверка перед удалением: вернуть текст запрета или nil, если можно.
+    var beforeDelete: ((Int) -> String?)?
 
     private let header = FlippedView(bg: ESPO_BODY)
     private let titleLabel: NSTextField
@@ -33,6 +35,9 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
     private var editingId = -1
     private var pendingDeleteId = 0
     private var editorHeight: CGFloat = 200
+    private(set) var readOnly = false
+    private let calendar = CalendarPopup()
+    private weak var calendarOwner: DateEdit?
 
     // строки заказа
     private var linesBox: PanelBox?
@@ -99,6 +104,15 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
         }
     }
 
+    /// Раздел только для чтения: кнопки записи гаснут (сотрудников заводит
+    /// администратор, остальные видят список).
+    func setReadOnly(_ ro: Bool) {
+        readOnly = ro
+        btnNew.isEnabled = !ro
+        btnDelete.isEnabled = !ro
+        for b in extraBtns { b.isEnabled = !ro }
+    }
+
     @discardableResult
     func addExtraButton(_ caption: String, primary: Bool = false, width: CGFloat = 130, action: @escaping () -> Void) -> EspoButton {
         let b = EspoButton(caption, primary: primary, width: width, action: action)
@@ -162,15 +176,24 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
                 let cb = makeCombo(editor, x: x, y: y + 18, w: w)
                 if f.kind == .enum { cb.addItems(withTitles: enumDisplayList(f.enumName, f.enumValues)) }
                 ctrls[i] = cb
+            case .user:
+                // стрелка выбора из списка сотрудников; своё имя тоже можно вписать
+                ctrls[i] = makeComboBox(editor, x: x, y: y + 18, w: w)
             case .bool:
                 let ck = NSButton(checkboxWithTitle: "Да", target: nil, action: nil)
                 ck.frame = NSRect(x: x, y: y + 20, width: w, height: 22)
                 ck.font = espoFont(10)
                 editor.addSubview(ck)
                 ctrls[i] = ck
+            case .date:
+                let de = DateEdit(x: x, y: y + 18, w: w)
+                de.onPick = { [weak self] d in self?.openCalendar(d) }
+                editor.addSubview(de)
+                ctrls[i] = de
             default:
-                let e = makeEdit(editor, x: x, y: y + 18, w: w, placeholder: f.kind == .date ? "ГГГГ-ММ-ДД" : "")
-                e.isEditable = f.kind != .readOnly
+                let e = makeEdit(editor, x: x, y: y + 18, w: w)
+                e.isEditable = !f.kind.isCalculated
+                if f.kind.isCalculated { e.textColor = ESPO_MUTED }
                 ctrls[i] = e
             }
             col += 1
@@ -199,6 +222,42 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
         cancel.frame = NSRect(x: 142, y: y, width: 100, height: 36)
         editor.addSubview(cancel)
         editorHeight = y + 36 + 14
+        editor.addSubview(calendar)
+    }
+
+    /// Календарь один на редактор: открывается под тем полем, где нажали
+    /// кнопку, повторное нажатие закрывает. Окон не создаёт.
+    private func openCalendar(_ de: DateEdit) {
+        if !calendar.isHidden && calendarOwner === de { calendar.close(); return }
+        calendarOwner = de
+        calendar.open(for: de, in: editor)
+    }
+
+    /// Хук самотеста: нажать кнопку календаря у поля (не выбирая дату).
+    @discardableResult
+    func showCalendar(_ fieldName: String) -> Bool {
+        guard let i = def.index(of: fieldName), let de = ctrls[i] as? DateEdit else { return false }
+        openCalendar(de)
+        return !calendar.isHidden
+    }
+
+    /// Хук самотеста: выбрать дату в календаре поля, как мышью.
+    @discardableResult
+    func pickDate(_ fieldName: String, _ date: Date) -> Bool {
+        guard let i = def.index(of: fieldName), let de = ctrls[i] as? DateEdit else { return false }
+        // календарь мог быть уже раскрыт кнопкой — повторное нажатие его закроет
+        if calendar.isHidden || calendarOwner !== de { openCalendar(de) }
+        if calendar.isHidden { return false }
+        calendar.testPick(date)
+        return true
+    }
+
+    var calendarVisible: Bool { !calendar.isHidden }
+
+    /// Хук самотеста: что предлагает стрелка выбора у поля-сотрудника.
+    func userChoices(_ fieldName: String) -> [String] {
+        guard let i = def.index(of: fieldName), let cb = ctrls[i] as? NSComboBox else { return [] }
+        return (0..<cb.numberOfItems).map { cb.itemObjectValue(at: $0) as? String ?? "" }
     }
 
     private func buildLines() {
@@ -264,6 +323,14 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
             }
             lookupIds[i] = ids
         }
+        let staff = data.staffNames()
+        for (i, f) in def.fields.enumerated() where f.kind == .user {
+            guard let cb = ctrls[i] as? NSComboBox else { continue }
+            let keep = cb.stringValue
+            cb.removeAllItems()
+            cb.addItems(withObjectValues: staff)
+            cb.stringValue = keep
+        }
         if def.table == "orders", let cb = lineItem {
             cb.removeAllItems()
             lineItemIds = []
@@ -317,10 +384,15 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
                 (ctrls[i] as? NSButton)?.state = v == "1" ? .on : .off
             case .memo:
                 (ctrls[i] as? NSTextView)?.string = v
+            case .user:
+                (ctrls[i] as? NSComboBox)?.stringValue = v
+            case .date:
+                (ctrls[i] as? DateEdit)?.stringValue = v
             default:
                 (ctrls[i] as? NSTextField)?.stringValue = v
             }
         }
+        calendar.close()
         editor.isHidden = false
         if def.table == "orders" {
             linesBox?.isHidden = !(id > 0)   // строки — только у сохранённого заказа
@@ -342,6 +414,7 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
     // ── действия — они же хуки самотеста ──
 
     func newRecord() {
+        if readOnly { say(.warn, T.S("staff.admin_only")); return }
         pendingDeleteId = 0
         showEditor(0)
         say(.info, "Заполните поля и нажмите «Сохранить».")
@@ -368,6 +441,10 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
             (ctrls[i] as? NSButton)?.state = (value == "1" || value.lowercased() == "true") ? .on : .off
         case .memo:
             (ctrls[i] as? NSTextView)?.string = value
+        case .user:
+            (ctrls[i] as? NSComboBox)?.stringValue = value
+        case .date:
+            (ctrls[i] as? DateEdit)?.stringValue = value
         default:
             (ctrls[i] as? NSTextField)?.stringValue = value
         }
@@ -387,6 +464,10 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
             return (ctrls[i] as? NSButton)?.state == .on ? "1" : "0"
         case .memo:
             return (ctrls[i] as? NSTextView)?.string ?? ""
+        case .user:
+            return (ctrls[i] as? NSComboBox)?.stringValue ?? ""
+        case .date:
+            return (ctrls[i] as? DateEdit)?.stringValue ?? ""
         default:
             return (ctrls[i] as? NSTextField)?.stringValue ?? ""
         }
@@ -394,6 +475,7 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
 
     func save() {
         if editor.isHidden { return }
+        if readOnly { say(.warn, T.S("staff.admin_only")); return }
         var values: [String] = []
         for f in def.fields {
             var v = getField(f.name).trimmed
@@ -431,6 +513,7 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
     }
 
     func cancel() {
+        calendar.close()
         editor.isHidden = true
         linesBox?.isHidden = true
         editingId = -1
@@ -438,9 +521,11 @@ final class EntityPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate 
     }
 
     func deleteSelected() {
+        if readOnly { say(.warn, T.S("staff.admin_only")); return }
         let id = selectedId
         if id == 0 { say(.warn, "Выберите запись в списке, затем нажмите «Удалить»."); return }
         let name = rows.first { $0.id == id }.map { r in listCols.first.map { r.display[$0] } ?? "" } ?? ""
+        if let stop = beforeDelete?(id) { pendingDeleteId = 0; say(.err, stop); return }
         if pendingDeleteId != id {
             pendingDeleteId = id
             say(.warn, "Удалить «\(name)»? Нажмите «Удалить» ещё раз для подтверждения.")

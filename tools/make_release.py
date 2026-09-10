@@ -49,6 +49,8 @@ FILES = [
     ("API_ru.md", "API_ru.md"),
     ("GUIDE_ru.md", "GUIDE_ru.md"),
     ("README.md", "README.md"),
+    ("STAFF_ERP_ru.md", "STAFF_ERP_ru.md"),
+    ("sql/erp_users_sync.sql", "sql/erp_users_sync.sql"),
     ("sdk/README.md", "sdk/README.md"),
     ("sdk/python/contragenti_sdk.py", "sdk/python/contragenti_sdk.py"),
     ("sdk/cpp/contragenti_sdk.h", "sdk/cpp/contragenti_sdk.h"),

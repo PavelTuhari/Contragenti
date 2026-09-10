@@ -179,3 +179,14 @@ extension String {
 func writeStdout(_ s: String) {
     FileHandle.standardOutput.write((s + "\n").data(using: .utf8)!)
 }
+
+/// Имя человека в имени файла выгрузки: пробелы и разделители пути убираются.
+func safeFileName(_ s: String) -> String {
+    var r = ""
+    for ch in s {
+        if ch.isLetter || ch.isNumber { r.append(ch) }
+        else if ch == " " || ch == "-" || ch == "_" { r.append("_") }
+    }
+    while r.contains("__") { r = r.replacingOccurrences(of: "__", with: "_") }
+    return String(r.prefix(40)).trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+}

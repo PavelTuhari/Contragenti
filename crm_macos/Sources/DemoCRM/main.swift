@@ -97,7 +97,7 @@ func runSeed(_ dbArg: String) -> Int32 {
     if failed { return 2 }
     writeStdout("Тестовые данные добавлены в " + path)
     writeStdout("Добавлено: " + stats.text)
-    writeStdout("Всего в базе: клиентов \(db.count()), контактов \(data.count("contacts")), лидов \(data.count("leads")), сделок \(data.count("deals")), номенклатуры \(data.count("items")), заказов \(data.count("orders")), строк \(data.count("order_lines")), задач \(data.count("tasks"))")
+    writeStdout("Всего в базе: клиентов \(db.count()), контактов \(data.count("contacts")), лидов \(data.count("leads")), сделок \(data.count("deals")), номенклатуры \(data.count("items")), заказов \(data.count("orders")), строк \(data.count("order_lines")), задач \(data.count("tasks")), сотрудников \(data.count("users"))")
     return 0
 }
 

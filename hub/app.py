@@ -22,7 +22,7 @@ import uuid
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from . import config, importer, storage
+from . import config, importer, storage, users_sync
 
 CFG = config.load()
 QUEUE = None
@@ -161,6 +161,49 @@ async def batch_list(limit: int = 50, status: str = None,
     for r in rows:
         r.pop("filename", None)
     return {"batches": rows}
+
+
+@app.post("/api/v1/users")
+async def users_push(request: Request, x_api_key: str = Header(default=None)):
+    """Приём изменений по сотрудникам из CRM.
+
+    Тело: {"client": "demo-crm", "rows": [{"id": 12, "op": "U",
+           "changed_at": "...", "payload": "{\"login\":\"…\",…}"}, …]}
+    Каждая строка уходит в A$CRM$SYNC.APPLY_USER — заводит или обновляет
+    узел пользователя в дереве настроек UNIA. Приём помечается «немым»,
+    чтобы принятое не поехало обратно в CRM (защита от петли).
+    """
+    client = check_key(x_api_key)
+    body = await request.json()
+    rows = body.get("rows") or []
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=400, detail="rows должен быть списком")
+    if len(rows) > 500:
+        raise HTTPException(status_code=413, detail="за раз принимается не больше 500 строк")
+    try:
+        stat = await users_sync.exchange(CFG["oracle"], "push", rows=rows)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail="ERP недоступна: %s" % exc)
+    storage.log_event(None, "info", "сотрудники от %s: принято %s" % (client, stat["applied"]))
+    return {"status": "ok", "client": client, "time": users_sync.now_str(), **stat}
+
+
+@app.get("/api/v1/users")
+async def users_pull(limit: int = 200, x_api_key: str = Header(default=None)):
+    """Отдать CRM изменения по сотрудникам, поставленные в очередь в ERP.
+
+    Очередь A$CRM_SYNC наполняют триггеры на A$ADM, A$ADP и TMS_MUNC
+    (sql/erp_users_sync.sql). Отданные строки помечаются SENT_AT.
+    """
+    check_key(x_api_key)
+    limit = max(1, min(int(limit), 500))
+    try:
+        result = await users_sync.exchange(CFG["oracle"], "pull", limit=limit)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail="ERP недоступна: %s" % exc)
+    return {"status": "ok", "time": users_sync.now_str(),
+            "rows": [{"op": r["op"], "changed_at": r["changed_at"], **r["fields"]} for r in result["rows"]],
+            "pending": result["pending"]}
 
 
 @app.get("/api/v1/stats")

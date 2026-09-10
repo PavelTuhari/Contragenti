@@ -261,6 +261,7 @@ curl "http://127.0.0.1:9393/card?idno=1003600116460&format=xml"
 | **[API_ru.md](API_ru.md)** | Интеграция через HTTP: эндпоинты, XML-схема, примеры 1С / JS / curl |
 | **[TECHNICAL_ru.md](TECHNICAL_ru.md)** | Техническая документация: архитектура, потоки, парсеры |
 | **[NATIVE_ru.md](NATIVE_ru.md)** | Почему это нативное приложение |
+| **[STAFF_ERP_ru.md](STAFF_ERP_ru.md)** | Сотрудники в Demo CRM (регистрация, доступ, отчёт по людям) и обмен карточками с ERP UNIAC/OfficePlus через триггеры |
 
 ## Интеграция и Demo CRM
 

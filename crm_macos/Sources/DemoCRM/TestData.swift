@@ -12,8 +12,9 @@ import Foundation
 
 struct SeedStats {
     var clients = 0, contacts = 0, leads = 0, deals = 0, items = 0, orders = 0, lines = 0, tasks = 0, projects = 0, projectTasks = 0
+    var staff = 0
     var text: String {
-        "клиентов \(clients), контактов \(contacts), лидов \(leads), сделок \(deals), номенклатуры \(items), заказов \(orders) (строк \(lines)), задач \(tasks), проектов \(projects) (задач по проектам \(projectTasks))"
+        "клиентов \(clients), контактов \(contacts), лидов \(leads), сделок \(deals), номенклатуры \(items), заказов \(orders) (строк \(lines)), задач \(tasks), проектов \(projects) (задач по проектам \(projectTasks)), сотрудников \(staff)"
     }
 }
 
@@ -122,6 +123,34 @@ private let PROJECTS_SEED: [ProjectSeed] = [
 ]
 
 // шаги проекта: тема, исполнитель, часы; шаг 7 зависит от вида проекта
+// Сотрудники демо-фирмы: те же люди, что стоят исполнителями в задачах и
+// менеджерами в проектах, — иначе отчёт по людям окажется пустым.
+// Пароль у всех стандартный (STANDARD_PASSWORD), последний — отключённый
+// счёт: на нём видно, что уволенный не войдёт, но остаётся в истории задач.
+private struct StaffSeed {
+    let name, login, position, role, email, phone: String
+    let active: Bool
+}
+
+private let STAFF: [StaffSeed] = [
+    StaffSeed(name: "Natalia Guţu", login: "ngutu", position: "Директор", role: "Руководитель",
+              email: "director@demo.md", phone: "+373 69 100 100", active: true),
+    StaffSeed(name: "Ion Popescu", login: "ipopescu", position: "Менеджер по продажам", role: "Коммерческий",
+              email: "ion.popescu@demo.md", phone: "+373 69 100 101", active: true),
+    StaffSeed(name: "Maria Ceban", login: "mceban", position: "Дизайнер", role: "Коммерческий",
+              email: "maria.ceban@demo.md", phone: "+373 69 100 102", active: true),
+    StaffSeed(name: "Andrei Rusu", login: "arusu", position: "Мастер производства", role: "Производство",
+              email: "andrei.rusu@demo.md", phone: "+373 69 100 103", active: true),
+    StaffSeed(name: "Victor Botnari", login: "vbotnari", position: "Начальник монтажа", role: "Производство",
+              email: "victor.botnari@demo.md", phone: "+373 69 100 104", active: true),
+    StaffSeed(name: "Elena Ciobanu", login: "eciobanu", position: "Главный бухгалтер", role: "Бухгалтерия",
+              email: "elena.ciobanu@demo.md", phone: "+373 69 100 105", active: true),
+    StaffSeed(name: "Sergiu Lungu", login: "slungu", position: "Кладовщик", role: "Склад",
+              email: "sergiu.lungu@demo.md", phone: "+373 69 100 106", active: true),
+    StaffSeed(name: "Oleg Ţurcanu", login: "oturcanu", position: "Менеджер (уволен)", role: "Наблюдатель",
+              email: "oleg.turcanu@demo.md", phone: "+373 69 100 107", active: false),
+]
+
 private let PROJECT_STEPS: [[String]] = [
     ["Подготовка тендерной заявки", "Ion Popescu", "4"],
     ["Договор и спецификация", "Ion Popescu", "3"],
@@ -196,6 +225,16 @@ func seedDemo(_ db: ClientsDB, _ data: CrmData) -> SeedStats {
     var st = SeedStats()
     data.ensureSchema()
     let conn = data.db
+
+    // сотрудники: администратор + люди, которые стоят в задачах и проектах
+    data.ensureAdmin()
+    for p in STAFF where !exists(data, "users", "login = \(Q(p.login))") {
+        data.insert(DefUsers, vals(DefUsers, [
+            "full_name", p.name, "login", p.login, "position", p.position, "role", p.role,
+            "email", p.email, "phone", p.phone, "active", p.active ? "1" : "0",
+            "erp_code", "", "notes", p.active ? "" : "Счёт отключён: сотрудник уволен."]))
+        st.staff += 1
+    }
 
     // клиенты — через тот же путь, что и SDK (addFromCard), дедупликация по IDNO
     var clientIds: [Int] = []
@@ -614,6 +653,83 @@ func runDmlTest(_ db: ClientsDB, _ data: CrmData, _ log: inout [String]) -> Bool
     check(data.list(DefProjects, extraWhere: "t.status = 'Закрыт' AND t.id = \(id)").count == 1, "projects: пресет «Закрыт» находит проект")
     data.delete(DefProjects, id)
     check(data.count("tasks", "project_id = \(id)") == 0, "projects: DELETE удаляет задачи проекта")
+
+    // ── сотрудники: регистрация, стандартный пароль, отключение, роли ──
+    crudCycle(DefUsers, "full_name",
+              ["full_name", "Тест Сотрудник", "login", "dmluser", "position", "Оператор", "role", "Склад",
+               "email", "dml@demo.md", "phone", "+373 60 000-001", "active", "1"],
+              ["full_name", "Тест Сотрудник (изм.)", "login", "dmluser", "position", "Кладовщик", "role", "Производство",
+               "email", "dml2@demo.md", "phone", "+373 60 000-002", "active", "1"])
+    let uId = data.insert(DefUsers, vals(DefUsers, ["full_name", "Вход Тестовый", "login", "dmllogin",
+        "position", "Менеджер", "role", "Коммерческий", "email", "l@demo.md", "phone", "+373 60 000-003", "active", "1"]))
+    check(uId > 0, "users: регистрация сотрудника администратором → id \(uId)")
+    check(conn.scalarString("SELECT pass_state FROM users WHERE id = \(uId)") == PASS_STD,
+          "users: новый сотрудник помечен «\(PASS_STD)» паролем")
+    check(conn.scalarString("SELECT created_at FROM users WHERE id = \(uId)").count >= 10,
+          "users: дата регистрации проставлена автоматически")
+    check(data.loginCheck("dmllogin", STANDARD_PASSWORD).ok, "users: вход по стандартному паролю")
+    check(!data.loginCheck("dmllogin", "неверный").ok, "users: неверный пароль не пускает")
+    data.setPassword("dmllogin", "svoi-parol-1")
+    check(data.loginCheck("dmllogin", "svoi-parol-1").ok && !data.loginCheck("dmllogin", STANDARD_PASSWORD).ok,
+          "users: смена пароля сотрудником — старый стандартный больше не годится")
+    check(conn.scalarString("SELECT pass_state FROM users WHERE id = \(uId)") == PASS_OWN, "users: пароль помечен «\(PASS_OWN)»")
+    let rp = data.resetPassword(uId)
+    check(rp.ok && data.loginCheck("dmllogin", STANDARD_PASSWORD).ok,
+          "users: восстановление доступа администратором — снова стандартный пароль")
+    conn.run("UPDATE users SET active = 0 WHERE id = ?", [uId])
+    let off = data.loginCheck("dmllogin", STANDARD_PASSWORD)
+    check(!off.ok && off.reason.contains("отключ"), "users: отключённый счёт не пускает («\(off.reason)»)")
+    check(!data.staffNames().contains("Вход Тестовый"), "users: отключённый не предлагается исполнителем")
+    conn.run("UPDATE users SET active = 1 WHERE id = ?", [uId])
+    check(data.staffNames().contains("Вход Тестовый"), "users: включённый снова в списке исполнителей")
+    check(data.isAdmin("admin") && !data.isAdmin("dmllogin"), "users: роль администратора отличается от прочих")
+    // переименование тянет за собой задачи и проекты
+    let renTask = data.insert(DefTasks, vals(DefTasks, ["subject", "Задача переименования", "assignee", "Вход Тестовый",
+        "kind", "Задача", "due_at", D(1), "done", "0"]))
+    data.update(DefUsers, uId, vals(DefUsers, ["full_name", "Вход Изменённый", "login", "dmllogin", "position", "Менеджер",
+        "role", "Коммерческий", "email", "l@demo.md", "phone", "+373 60 000-003", "active", "1"]))
+    check(conn.scalarString("SELECT assignee FROM tasks WHERE id = \(renTask)") == "Вход Изменённый",
+          "users: переименование сотрудника переносится в задачи")
+    data.delete(DefTasks, renTask)
+
+    // ── обмен с ERP: очередь пишется триггерами, приём не уходит обратно ──
+    let q0 = data.syncPendingCount()
+    check(q0 > 0, "sync: триггеры поставили изменения сотрудников в очередь (\(q0))")
+    let last = data.syncPending().last
+    check(last?.entity == "users" && !(last?.payload.isEmpty ?? true), "sync: в очереди сущность users со снимком полей")
+    let parsed = CrmData.parseSyncPayload(last?.payload ?? "")
+    check(parsed["login"] == "dmllogin", "sync: снимок разбирается обратно (login = \(parsed["login"] ?? "—"))")
+    data.syncMarkSent([last?.id ?? 0], ack: "dml")
+    check(data.syncPendingCount() == q0 - 1, "sync: отправленная строка уходит из очереди")
+    let before = data.syncPendingCount()
+    let applied = data.applyUserFromErp(["login": "erpuser", "full_name": "ERP Сотрудник", "position": "Технолог",
+                                         "role": "Производство", "email": "erp@demo.md", "phone": "+373 60 000-009",
+                                         "active": "1", "erp_code": "7001"])
+    check(applied == "создан", "sync: карточка из ERP заведена в CRM")
+    check(data.syncPendingCount() == before, "sync: приём из ERP не ставится в очередь обратно (нет петли)")
+    check(data.applyUserFromErp(["login": "erpuser", "full_name": "ERP Сотрудник", "position": "Мастер",
+                                 "role": "Производство", "email": "erp@demo.md", "phone": "", "active": "0",
+                                 "erp_code": "7001"]) == "обновлён", "sync: повторная карточка обновляет, а не дублирует")
+    check(conn.scalarInt("SELECT active FROM users WHERE erp_code = '7001'") == 0, "sync: отключение сотрудника принято из ERP")
+    conn.run("DELETE FROM users WHERE erp_code = '7001'")
+    data.delete(DefUsers, uId)
+
+    // ── отчёт по людям: строка на человека и общий итог ──
+    let staffAll = buildReport(data, .staff)
+    check(staffAll.rowCount >= 5, "отчёт по сотрудникам: строка на каждого человека (\(staffAll.rowCount))")
+    let tasksTotal = data.count("tasks")
+    check(Int(staffAll.totals[5].replacingOccurrences(of: " ", with: "")) == tasksTotal,
+          "отчёт по сотрудникам: итог задач = \(tasksTotal), сходится с разделом «Календарь»")
+    let staffOne = buildReport(data, .staff, person: "Ion Popescu")
+    check(staffOne.rowCount == 1, "отчёт по сотрудникам: выбор человека оставляет одну строку")
+    let onePersonTasks = data.count("tasks", "t.assignee = 'Ion Popescu'")
+    check(Int(staffOne.totals[5].replacingOccurrences(of: " ", with: "")) == onePersonTasks,
+          "отчёт по сотрудникам: итог по человеку = \(onePersonTasks) задач")
+    let projOne = buildReport(data, .projects, person: "Maria Ceban")
+    check(projOne.rowCount == data.count("projects", "t.manager = 'Maria Ceban'"),
+          "отчёт по проектам: фильтр по менеджеру (\(projOne.rowCount))")
+    let xlsxP = (try? exportReport(data, .staff, .xlsx, dir: tmpDir, person: "Ion Popescu")) ?? ""
+    check(isZipFile(xlsxP) && xlsxP.contains("Ion"), "отчёт по сотруднику: отдельный файл выгрузки (\((xlsxP as NSString).lastPathComponent))")
 
     // ── уборка ──
     data.delete(DefItems, itemGoods)

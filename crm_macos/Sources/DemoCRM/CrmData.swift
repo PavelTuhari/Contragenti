@@ -9,9 +9,17 @@ enum FieldKind {
     case text, memo, number, money, date, `enum`
     case lookupClient, lookupDeal, lookupItem, lookupProject
     case bool, readOnly
+    /// Имя сотрудника: список активных сотрудников со стрелкой выбора,
+    /// но можно вписать своё — в базе остаётся тот же текст.
+    case user
+    /// Только для показа (дата регистрации, состояние пароля): выводится как
+    /// есть и не пишется обобщённым CRUD — значение ведёт программа.
+    case infoText
 
     var isLookup: Bool { [.lookupClient, .lookupDeal, .lookupItem, .lookupProject].contains(self) }
     var isNumeric: Bool { self == .number || self == .money }
+    /// Колонки, которые обобщённый CRUD не пишет.
+    var isCalculated: Bool { self == .readOnly || self == .infoText }
 }
 
 struct FieldDef {
@@ -92,6 +100,16 @@ let ENUM_UNIT = "шт;час;кг;м;м2;л;компл;услуга"
 let ENUM_ORDER_KIND = "Продажа;Услуга;Производство"
 let ENUM_ORDER_STATUS = "Черновик;Подтверждён;В работе;Выполнен;Оплачен;Отменён"
 let ENUM_TASK_KIND = "Задача;Звонок;Встреча"
+/// Роль сотрудника в CRM: администратор регистрирует людей и видит всё,
+/// остальные роли — подсказка для отчётов и прав (значения в базе русские).
+let ENUM_USER_ROLE = "Администратор;Руководитель;Коммерческий;Производство;Склад;Бухгалтерия;Наблюдатель"
+
+/// Стандартный пароль нового сотрудника: администратор называет его человеку,
+/// тот меняет пароль в «Настройках». Кнопка «Сбросить пароль» возвращает его.
+let STANDARD_PASSWORD = "crm2026"
+/// Состояние пароля в списке сотрудников (колонка pass_state).
+let PASS_STD = "стандартный"
+let PASS_OWN = "свой"
 
 func splitEnum(_ s: String) -> [String] { s.split(separator: ";", omittingEmptySubsequences: false).map(String.init) }
 
@@ -179,7 +197,7 @@ let DefTasks = EntityDef(table: "tasks", title: "Календарь", titleOne: 
     fieldDef("project_id", "Проект", .lookupProject, 170),
     fieldDef("stage", "Этап", .enum, 90, true, ENUM_TASK_STAGE, "Новая", "task_stage"),
     fieldDef("priority", "Приоритет", .enum, 80, true, ENUM_TASK_PRIORITY, "Обычный", "task_priority"),
-    fieldDef("assignee", "Исполнитель", .text, 120),
+    fieldDef("assignee", "Исполнитель", .user, 120),
     fieldDef("kind", "Вид", .enum, 80, true, ENUM_TASK_KIND, "Задача", "task_kind"),
     fieldDef("plan_start", "Начало", .date, 85, false, "", "today"),
     fieldDef("due_at", "Срок", .date, 85, true, "", "today"),
@@ -206,9 +224,26 @@ let DefProjects = EntityDef(table: "projects", title: "Проекты", titleOne
     fieldDef("paid", "Оплачено", .money, 90),
     fieldDef("start_date", "Начало", .date, 85, false, "", "today"),
     fieldDef("due_date", "Сдача", .date, 85, true, "", "today+30"),
-    fieldDef("manager", "Менеджер", .text, 110),
+    fieldDef("manager", "Менеджер", .user, 110),
     fieldDef("notes", "Описание", .memo)],
     orderBy: "id DESC", searchCols: "name,tender_no,manager")
+
+// Сотрудник — он же пользователь входа. Регистрирует администратор: логин,
+// стандартный пароль, контакты; счёт можно выключить («Работает» снято) —
+// такой человек не войдёт, но остаётся в задачах и отчётах.
+let DefUsers = EntityDef(table: "users", title: "Сотрудники", titleOne: "сотрудника", fields: [
+    fieldDef("full_name", "Сотрудник", .text, 165, true),
+    fieldDef("login", "Логин", .text, 85, true),
+    fieldDef("position", "Должность", .text, 120),
+    fieldDef("role", "Роль", .enum, 100, true, ENUM_USER_ROLE, "Коммерческий", "user_role"),
+    fieldDef("email", "E-mail", .text, 155),
+    fieldDef("phone", "Телефон", .text, 110),
+    fieldDef("active", "Работает", .bool, 60, false, "", "1"),
+    fieldDef("created_at", "Зарегистрирован", .infoText, 110),
+    fieldDef("pass_state", "Пароль", .infoText, 85),
+    fieldDef("erp_code", "Код в ERP", .text, 0),
+    fieldDef("notes", "Заметки", .memo)],
+    orderBy: "active DESC, full_name", searchCols: "full_name,login,email,phone,position")
 
 /// Пароль хранится только как SHA-256 с солью из логина.
 func passHash(_ user: String, _ password: String) -> String {
@@ -248,6 +283,17 @@ final class CrmData {
             let p = c.split(separator: " ", maxSplits: 1).map(String.init)
             addColumn("tasks", p[0], p.count > 1 ? p[1] : "")
         }
+        // сотрудники: карточка человека поверх старой таблицы входа
+        for c in ["position TEXT", "role TEXT", "email TEXT", "phone TEXT", "active INTEGER DEFAULT 1",
+                  "pass_state TEXT", "erp_code TEXT", "notes TEXT", "updated_at TEXT"] {
+            let p = c.split(separator: " ", maxSplits: 1).map(String.init)
+            addColumn("users", p[0], p.count > 1 ? p[1] : "")
+        }
+        db.run("UPDATE users SET active = 1 WHERE active IS NULL")
+        db.run("UPDATE users SET role = 'Администратор' WHERE COALESCE(role,'') = '' AND login = 'admin'")
+        db.run("UPDATE users SET role = 'Коммерческий' WHERE COALESCE(role,'') = ''")
+        db.run("UPDATE users SET pass_state = '\(PASS_OWN)' WHERE COALESCE(pass_state,'') = ''")
+        ensureSyncSchema()
         // задачи старой базы: этап из флага «выполнено», приоритет обычный
         db.run("UPDATE tasks SET stage = CASE WHEN COALESCE(done,0) = 1 THEN 'Готово' ELSE 'Новая' END WHERE COALESCE(stage,'') = ''")
         db.run("UPDATE tasks SET priority = 'Обычный' WHERE COALESCE(priority,'') = ''")
@@ -297,25 +343,68 @@ final class CrmData {
 
     func ensureAdmin() {
         if userCount() == 0 {
-            db.run("INSERT INTO users (login, pass_hash, full_name) VALUES (?, ?, ?)",
-                   ["admin", passHash("admin", "admin"), "Administrator"])
+            db.run("""
+            INSERT INTO users (login, pass_hash, full_name, position, role, email, active, pass_state)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+            """, ["admin", passHash("admin", "admin"), "Administrator", "Администратор системы",
+                  "Администратор", "admin@demo.md", PASS_OWN])
         }
     }
 
     func userCount() -> Int { db.scalarInt("SELECT COUNT(*) FROM users") }
 
-    func checkLogin(_ user: String, _ password: String) -> Bool {
+    /// Вход: логин ищется без учёта регистра, выключенный счёт не пускают.
+    /// Возвращает причину для строки сообщений — нужна и самотесту.
+    func loginCheck(_ user: String, _ password: String) -> (ok: Bool, reason: String) {
         let u = user.trimmed
-        if u.isEmpty { return false }
-        guard let r = db.rows("SELECT pass_hash FROM users WHERE login = ? COLLATE NOCASE", [u]).first else { return false }
-        return r.str("pass_hash") == passHash(u, password)
+        if u.isEmpty { return (false, "не указан логин") }
+        guard let r = db.rows("SELECT pass_hash, active FROM users WHERE login = ? COLLATE NOCASE", [u]).first else {
+            return (false, "нет такого сотрудника")
+        }
+        if r.str("pass_hash") != passHash(u, password) { return (false, "неверный пароль") }
+        if r.int("active") != 1 { return (false, "счёт отключён администратором") }
+        return (true, "")
     }
 
+    func checkLogin(_ user: String, _ password: String) -> Bool { loginCheck(user, password).ok }
+
+    /// Свой пароль сотрудника: состояние в списке переключается на «свой».
     @discardableResult
     func setPassword(_ user: String, _ password: String) -> Bool {
         if password.trimmed.isEmpty { return false }
-        db.run("UPDATE users SET pass_hash = ? WHERE login = ? COLLATE NOCASE", [passHash(user.trimmed, password), user.trimmed])
+        db.run("UPDATE users SET pass_hash = ?, pass_state = ?, updated_at = datetime('now','localtime') WHERE login = ? COLLATE NOCASE",
+               [passHash(user.trimmed, password), PASS_OWN, user.trimmed])
         return true
+    }
+
+    /// Восстановление доступа администратором: пароль снова стандартный.
+    /// Возвращает сам пароль — его называют сотруднику.
+    func resetPassword(_ userId: Int) -> (ok: Bool, login: String, password: String) {
+        let login = db.scalarString("SELECT login FROM users WHERE id = \(userId)")
+        if login.isEmpty { return (false, "", "") }
+        db.run("UPDATE users SET pass_hash = ?, pass_state = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+               [passHash(login, STANDARD_PASSWORD), PASS_STD, userId])
+        return (true, login, STANDARD_PASSWORD)
+    }
+
+    func userRole(_ login: String) -> String {
+        db.scalarString("SELECT COALESCE(role,'') FROM users WHERE login = \(quoted(login.trimmed)) COLLATE NOCASE")
+    }
+
+    func isAdmin(_ login: String) -> Bool { userRole(login) == "Администратор" }
+
+    /// Имена активных сотрудников — список выбора исполнителя и менеджера.
+    func staffNames() -> [String] {
+        db.rows("SELECT full_name FROM users WHERE COALESCE(active,1) = 1 AND COALESCE(full_name,'') <> '' ORDER BY full_name")
+            .map { $0.str("full_name") }
+    }
+
+    /// Переименование сотрудника тянет за собой задачи и проекты: имя лежит
+    /// в них текстом, иначе отчёт по людям развалится на два имени.
+    func renameStaff(_ oldName: String, _ newName: String) {
+        if oldName.trimmed.isEmpty || oldName == newName { return }
+        db.run("UPDATE tasks SET assignee = ? WHERE assignee = ?", [newName, oldName])
+        db.run("UPDATE projects SET manager = ? WHERE manager = ?", [newName, oldName])
     }
 
     // ── этапы процесса ──
@@ -418,6 +507,9 @@ final class CrmData {
                     row.display.append(v == "1" ? "Да" : "")
                 case .money, .readOnly:
                     row.display.append(fmtMoney(toDouble(v) ?? 0))
+                case .infoText:
+                    // дата регистрации показывается без секунд
+                    row.display.append(v.count >= 16 && v.contains(":") ? String(v.prefix(16)) : v)
                 default:
                     row.display.append(v)
                 }
@@ -441,9 +533,16 @@ final class CrmData {
     @discardableResult
     func insert(_ def: EntityDef, _ values: [String]) -> Int {
         var cols: [String] = [], pars: [Any?] = []
-        for (i, f) in def.fields.enumerated() where f.kind != .readOnly {
+        for (i, f) in def.fields.enumerated() where !f.kind.isCalculated {
             cols.append(f.name)
             pars.append(bindValue(f, i < values.count ? values[i] : ""))
+        }
+        if def.table == "users" {
+            // pass_hash объявлен NOT NULL: новый сотрудник получает стандартный
+            // пароль, администратор называет его человеку (кнопка «Сбросить пароль»)
+            let login = (def.index(of: "login").map { $0 < values.count ? values[$0] : "" } ?? "").trimmed
+            cols.append("pass_hash"); pars.append(passHash(login, STANDARD_PASSWORD))
+            cols.append("pass_state"); pars.append(PASS_STD)
         }
         let sql = "INSERT INTO \(def.table) (\(cols.joined(separator: ", "))) VALUES (\(cols.map { _ in "?" }.joined(separator: ", ")))"
         guard db.run(sql, pars) else { return 0 }
@@ -455,13 +554,20 @@ final class CrmData {
     }
 
     func update(_ def: EntityDef, _ id: Int, _ values: [String]) {
+        // имя сотрудника лежит в задачах и проектах текстом: переименование
+        // должно дойти и туда, иначе отчёт по людям раздвоится
+        let oldName = def.table == "users" ? db.scalarString("SELECT COALESCE(full_name,'') FROM users WHERE id = \(id)") : ""
         var sets: [String] = [], pars: [Any?] = []
-        for (i, f) in def.fields.enumerated() where f.kind != .readOnly {
+        for (i, f) in def.fields.enumerated() where !f.kind.isCalculated {
             sets.append("\(f.name) = ?")
             pars.append(bindValue(f, i < values.count ? values[i] : ""))
         }
         pars.append(id)
         db.run("UPDATE \(def.table) SET \(sets.joined(separator: ", ")) WHERE id = ?", pars)
+        if def.table == "users" {
+            db.run("UPDATE users SET updated_at = datetime('now','localtime') WHERE id = ?", [id])
+            if let i = def.index(of: "full_name"), i < values.count { renameStaff(oldName, values[i].trimmed) }
+        }
         // задача: этап и флаг «выполнено» — одно состояние, этап главнее
         if def.table == "tasks" {
             db.run("UPDATE tasks SET done = CASE WHEN stage = 'Готово' THEN 1 ELSE 0 END WHERE id = ?", [id])

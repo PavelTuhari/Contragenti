@@ -201,6 +201,12 @@ final class ReportsPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate
     private var table: ReportTable?
     private var previewRowsData: [[String]] = []
     private var xlsxBtn: EspoButton!, pdfBtn: EspoButton!, dirBtn: EspoButton!
+    /// Выбор человека: «Все (итого)» либо один сотрудник — отчёт строится
+    /// по нему, а строка итогов остаётся на месте.
+    private var personBox: NSPopUpButton!
+    private var personLabel: NSTextField!
+    private var personNames: [String] = [""]
+    private(set) var person = ""
 
     init(data: CrmData, say: @escaping SayProc, exportDir: String) {
         self.data = data
@@ -219,7 +225,11 @@ final class ReportsPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate
 
     private func build() {
         addSubview(header)
-        makeLabel(header, T.S("nav.reports"), x: 15, y: 14, w: 400, h: 30, color: ESPO_TEXT, size: 16)
+        makeLabel(header, T.S("nav.reports"), x: 15, y: 14, w: 240, h: 30, color: ESPO_TEXT, size: 16)
+        personLabel = makeLabel(header, T.S("reports.person"), x: 262, y: 20, w: 90, color: ESPO_MUTED, size: 9)
+        personBox = makeCombo(header, x: 352, y: 16, w: 230)
+        personBox.target = self
+        personBox.action = #selector(onPersonChange)
         xlsxBtn = EspoButton(T.S("btn.export_xlsx"), primary: true, width: 175) { [weak self] in _ = self?.export(.xlsx) }
         pdfBtn = EspoButton(T.S("btn.export_pdf"), primary: false, width: 155) { [weak self] in _ = self?.export(.pdf) }
         dirBtn = EspoButton(T.S("btn.folder"), primary: false, width: 150) { [weak self] in self?.openDir() }
@@ -240,6 +250,8 @@ final class ReportsPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate
     override func layout() {
         super.layout()
         header.frame = NSRect(x: 0, y: 0, width: bounds.width, height: 56)
+        personLabel.frame = NSRect(x: 262, y: 20, width: 90, height: 18)
+        personBox.frame = NSRect(x: 352, y: 16, width: min(230, max(120, header.bounds.width - 850)), height: 28)
         xlsxBtn.frame = NSRect(x: header.bounds.width - 190, y: 12, width: 175, height: 36)
         pdfBtn.frame = NSRect(x: header.bounds.width - 190 - 8 - 155, y: 12, width: 155, height: 36)
         dirBtn.frame = NSRect(x: header.bounds.width - 190 - 8 - 155 - 8 - 150, y: 12, width: 150, height: 36)
@@ -248,11 +260,50 @@ final class ReportsPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate
         previewScroll.frame = NSRect(x: 384, y: 82, width: bounds.width - 384, height: bounds.height - 82)
     }
 
-    func refresh() { showPreview(current) }
+    func refresh() {
+        fillPersons()
+        showPreview(current)
+    }
+
+    /// Список людей: все сотрудники плюс исполнители задач, которых в списке
+    /// сотрудников нет, — иначе по ним нельзя построить отчёт.
+    private func fillPersons() {
+        let keep = person
+        var names = data.staffNames()
+        for r in data.rows("SELECT DISTINCT assignee FROM tasks WHERE COALESCE(assignee,'') <> '' ORDER BY assignee") {
+            let a = r.str("assignee")
+            if !names.contains(a) { names.append(a) }
+        }
+        personNames = [""] + names
+        personBox.removeAllItems()
+        personBox.addItem(withTitle: T.S("reports.person_all"))
+        for n in names { personBox.menu?.addItem(withTitle: n, action: nil, keyEquivalent: "") }
+        person = keep
+        personBox.selectItem(at: max(0, personNames.firstIndex(of: keep) ?? 0))
+        if personBox.indexOfSelectedItem <= 0 { person = "" }
+    }
+
+    @objc private func onPersonChange() {
+        let i = personBox.indexOfSelectedItem
+        person = (i > 0 && i < personNames.count) ? personNames[i] : ""
+        showPreview(current)
+    }
+
+    /// Хук самотеста и внешнего вызова: выбрать человека по имени.
+    @discardableResult
+    func selectPerson(_ name: String) -> Bool {
+        guard let i = personNames.firstIndex(of: name) else { return false }
+        personBox.selectItem(at: i)
+        onPersonChange()
+        return true
+    }
 
     private func showPreview(_ kind: ReportKind) {
         current = kind
-        let t = buildReport(data, kind)
+        // выбор человека включён только там, где у отчёта есть такой разрез
+        personBox.isEnabled = kind.byPerson
+        personLabel.textColor = kind.byPerson ? ESPO_MUTED : ESPO_BTN_BRD
+        let t = buildReport(data, kind, person: kind.byPerson ? person : "")
         table = t
         previewTitle.stringValue = "   \(t.title) — \(t.subtitle)"
         for c in preview.tableColumns { preview.removeTableColumn(c) }
@@ -276,8 +327,9 @@ final class ReportsPage: FlippedView, NSTableViewDataSource, NSTableViewDelegate
 
     func export(_ fmt: ExportFormat) -> String {
         do {
-            let path = try exportReport(data, current, fmt, dir: exportDir)
-            say(.ok, "Отчёт «\(current.title)» выгружен: \(path)")
+            let who = current.byPerson ? person : ""
+            let path = try exportReport(data, current, fmt, dir: exportDir, person: who)
+            say(.ok, "Отчёт «\(current.title)»\(who.isEmpty ? "" : " (" + who + ")") выгружен: \(path)")
             return path
         } catch {
             say(.err, "Не удалось выгрузить отчёт: \(error)")

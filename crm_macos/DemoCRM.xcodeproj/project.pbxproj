@@ -11,6 +11,7 @@
 		043BBC4C5CED761CBD2524DD /* ClientsDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021DCF2D55AEF329A0333E4A /* ClientsDB.swift */; };
 		1C78B13B3E2DFD877D527B59 /* sample_card.xml in Resources */ = {isa = PBXBuildFile; fileRef = EC5005DDDF2FE822B793BDF6 /* sample_card.xml */; };
 		26910A2F9330CD583615F2D4 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76A290EF989984352EC0209D /* Theme.swift */; };
+		2C09CBB3D3F29373F78B51DA /* UsersSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EFACAD1ECFFDDCD26CA6EA5 /* UsersSync.swift */; };
 		34D82F260DA3AE45B0C89444 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53673B339837D73BD22FF3D4 /* MainWindow.swift */; };
 		3C7659AB86183A7754318E78 /* Xlsx.swift in Sources */ = {isa = PBXBuildFile; fileRef = EADD8666FA42597B9185020D /* Xlsx.swift */; };
 		3C9F172F56C2D83CC58A532B /* ErpApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B88FDBF0608B0DE40A18324 /* ErpApi.swift */; };
@@ -56,6 +57,7 @@
 		554F3300868E4B872930E1D0 /* Demo CRM.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Demo CRM.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		587497161E77EAD9EA55F885 /* Contragenti.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contragenti.swift; sourceTree = "<group>"; };
 		6AA53B7EF8CEA9DC305E9F7E /* lang.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = lang.json; sourceTree = "<group>"; };
+		6EFACAD1ECFFDDCD26CA6EA5 /* UsersSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsersSync.swift; sourceTree = "<group>"; };
 		70E80BD1C693FDE6C77B95E6 /* GanttPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GanttPage.swift; sourceTree = "<group>"; };
 		755C4D5889825F2BC3F9829E /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		76A290EF989984352EC0209D /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -111,6 +113,7 @@
 				E8F526DABFFDA45DB8BF5639 /* SQLite.swift */,
 				C739C29E49DC87F75EB50C0D /* TestData.swift */,
 				76A290EF989984352EC0209D /* Theme.swift */,
+				6EFACAD1ECFFDDCD26CA6EA5 /* UsersSync.swift */,
 				B9F13FABE1532C1DBA9493E9 /* Util.swift */,
 				353E51059C9DD3FE4B4115EC /* WorkspacePage.swift */,
 				EADD8666FA42597B9185020D /* Xlsx.swift */,
@@ -239,6 +242,7 @@
 				E30F74D658662FEBA1FAE0D2 /* SQLite.swift in Sources */,
 				8416DF41BF66871CF2303575 /* TestData.swift in Sources */,
 				26910A2F9330CD583615F2D4 /* Theme.swift in Sources */,
+				2C09CBB3D3F29373F78B51DA /* UsersSync.swift in Sources */,
 				C313520AC22892391684D12B /* Util.swift in Sources */,
 				BAD8B38BE177D2EA550C278B /* WorkspacePage.swift in Sources */,
 				3C7659AB86183A7754318E78 /* Xlsx.swift in Sources */,

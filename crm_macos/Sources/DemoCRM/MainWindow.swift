@@ -5,14 +5,14 @@
 import AppKit
 
 enum NavSection: Int, CaseIterable {
-    case workspace = 0, kanban, process, gantt, accounts, contacts, leads, deals, items, orders, projects, calendar, reports, settings
+    case workspace = 0, kanban, process, gantt, accounts, contacts, leads, deals, items, orders, projects, calendar, staff, reports, settings
 
     var key: String {
         ["nav.workspace", "nav.kanban", "nav.process", "nav.gantt", "nav.clients", "nav.contacts", "nav.leads", "nav.deals",
-         "nav.items", "nav.orders", "nav.projects", "nav.calendar", "nav.reports", "nav.settings"][rawValue]
+         "nav.items", "nav.orders", "nav.projects", "nav.calendar", "nav.staff", "nav.reports", "nav.settings"][rawValue]
     }
     var glyph: String {
-        ["⌂", "▦", "⇶", "▤", "▣", "☺", "✉", "$", "▤", "▥", "⚑", "▦", "▤", "⚙"][rawValue]
+        ["⌂", "▦", "⇶", "▤", "▣", "☺", "✉", "$", "▤", "▥", "⚑", "▦", "☺", "▤", "⚙"][rawValue]
     }
 }
 
@@ -295,7 +295,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSTableV
     private func buildEntityPages() {
         let sayP: SayProc = { [weak self] k, m in self?.say(k, m) }
         let defs: [(NavSection, EntityDef)] = [(.contacts, DefContacts), (.leads, DefLeads), (.deals, DefDeals), (.items, DefItems),
-                                               (.orders, DefOrders), (.calendar, DefTasks), (.projects, DefProjects)]
+                                               (.orders, DefOrders), (.calendar, DefTasks), (.projects, DefProjects),
+                                               (.staff, DefUsers)]
         for (s, d) in defs {
             let p = EntityPage(data: crm, def: d, say: sayP)
             content.addSubview(p)
@@ -315,6 +316,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSTableV
                                      ["t.done = 0", "t.done = 0 AND t.due_at = date('now','localtime')",
                                       "t.done = 0 AND t.due_at < date('now','localtime')", "",
                                       "t.done = 0 AND t.stage = 'В работе'", "COALESCE(t.project_id,0) > 0"])
+        // сотрудники: регистрирует администратор, он же восстанавливает доступ
+        pages[.staff]?.addExtraButton(T.S("btn.reset_pass"), width: 170) { [weak self] in self?.onResetPassword() }
+        pages[.staff]?.addExtraButton(T.S("sync.title"), width: 200) { [weak self] in self?.onSyncStaff() }
+        pages[.staff]?.setPresets(["Все", "Работают", "Отключены", "Администраторы"],
+                                  ["", "COALESCE(t.active,1) = 1", "COALESCE(t.active,1) = 0", "t.role = 'Администратор'"])
         pages[.projects]?.addExtraButton("Задачи проекта", width: 140) { [weak self] in self?.onProjectTasks() }
         pages[.projects]?.addExtraButton("План (Гант)", width: 120) { [weak self] in self?.onProjectGantt() }
         pages[.projects]?.setPresets(
@@ -416,13 +422,17 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSTableV
     }
 
     private func onLoginClick() {
-        if crm.checkLogin(loginUser.stringValue, loginPass.stringValue) {
+        let r = crm.loginCheck(loginUser.stringValue, loginPass.stringValue)
+        if r.ok {
             user = loginUser.stringValue.trimmed
+            applyStaffRights()
             loginPanel.isHidden = true
             say(.ok, T.F("login.welcome", [user]))
         } else {
-            loginError.stringValue = T.S("login.bad")
-            say(.warn, T.S("login.bad"))
+            // причина отказа названа: отключённый счёт легко принять за опечатку
+            let msg = T.S("login.bad") + " (" + r.reason + ")"
+            loginError.stringValue = msg
+            say(.warn, msg)
         }
     }
 
@@ -771,6 +781,53 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSTableV
         say(.ok, "Задача отмечена выполненной.")
     }
 
+    // ── сотрудники ──
+
+    /// Восстановление доступа: пароль снова стандартный, администратор
+    /// называет его сотруднику. Пароль виден только в строке сообщений.
+    private func onResetPassword() {
+        guard let p = pages[.staff] else { return }
+        if !crm.isAdmin(user) { say(.warn, T.S("staff.admin_only")); return }
+        let id = p.selectedId
+        if id == 0 { say(.warn, T.S("staff.pick")); return }
+        let r = crm.resetPassword(id)
+        if !r.ok { say(.err, T.S("staff.pick")); return }
+        p.refresh()
+        p.selectById(id)     // карточка перечитывается: колонка «Пароль» показывает новое состояние
+        say(.ok, T.F("staff.pass_reset", [r.login, r.password]))
+    }
+
+    /// Раздел «Сотрудники» открыт всем, запись — только администратору;
+    /// последнего администратора удалить нельзя, иначе в базу никто не войдёт.
+    private func applyStaffRights() {
+        guard let p = pages[.staff] else { return }
+        p.setReadOnly(!crm.isAdmin(user))
+        p.beforeDelete = { [weak self] id in
+            guard let s = self else { return nil }
+            if s.crm.db.scalarString("SELECT COALESCE(role,'') FROM users WHERE id = \(id)") != "Администратор" { return nil }
+            let others = s.crm.db.scalarInt("SELECT COUNT(*) FROM users WHERE role = 'Администратор' AND COALESCE(active,1) = 1 AND id <> \(id)")
+            return others > 0 ? nil : T.S("staff.last_admin")
+        }
+    }
+
+    /// Обмен карточками сотрудников с ERP: сначала отдаём свою очередь
+    /// (её наполняют триггеры), потом принимаем встречную. Приём идёт с
+    /// выключенной очередью, поэтому обратно ничего не уезжает.
+    private func onSyncStaff() {
+        if !erp.configured { say(.warn, T.S("sync.off")); return }
+        let pending = crm.syncPending()
+        say(.info, T.F("sync.pending", [String(pending.count)]))
+        let push = erp.pushUsers(pending)
+        if !push.ok { say(.err, T.F("sync.fail", [erp.lastError])); return }
+        if !push.acks.isEmpty { crm.syncMarkSent(push.acks, ack: "erp") }
+        let pull = erp.pullUsers()
+        if !pull.ok { say(.err, T.F("sync.fail", [erp.lastError])); return }
+        var taken = 0
+        for r in pull.rows where crm.applyUserFromErp(r) != "пропущен" { taken += 1 }
+        pages[.staff]?.refresh()
+        say(.ok, T.F("sync.done", [String(push.applied), String(taken)]))
+    }
+
     private func onSettingsSave() {
         client.launcherExe = launcherEdit.stringValue.trimmed
         erp.url = erpUrlEdit.stringValue.trimmed
@@ -820,6 +877,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSTableV
     func testSetFilter(_ text: String) { search.stringValue = text; onSearchChange() }
     func testClickAdd() { onAddClick() }
     func testClickNav(_ s: NavSection) { onNavClick(s) }
+    /// Хук самотеста: кнопка «Сбросить пароль» раздела «Сотрудники».
+    func testResetPassword() { onResetPassword() }
+    /// Хук самотеста: кнопка «Список» в календаре — список задач вместо сетки месяца.
+    func testCalendarList() { calendarAsGrid = false; selectSection(.calendar) }
     func testImportXml(_ xml: String) -> (AddResult, CounterpartyCard?) {
         guard let card = client.parseCardXml(xml) else {
             say(.err, "Разбор XML не удался: " + client.lastError)

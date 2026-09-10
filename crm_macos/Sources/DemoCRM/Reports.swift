@@ -4,7 +4,7 @@
 import Foundation
 
 enum ReportKind: Int, CaseIterable {
-    case process = 0, receivables, salesByClient, funnel, stock, projects
+    case process = 0, receivables, salesByClient, funnel, stock, projects, staff
 
     var title: String {
         switch self {
@@ -14,6 +14,7 @@ enum ReportKind: Int, CaseIterable {
         case .funnel: return "Воронка продаж"
         case .stock: return "Остатки номенклатуры"
         case .projects: return "Проекты: тендеры, авансы, задачи"
+        case .staff: return "Сотрудники: задачи, часы, проекты"
         }
     }
 
@@ -25,11 +26,16 @@ enum ReportKind: Int, CaseIterable {
         case .funnel: return "Сделки по этапам: количество, сумма, средний чек"
         case .stock: return "Товары и изделия: остаток и его стоимость"
         case .projects: return "Каждый проект: этап, бюджет, аванс и оплата, долг, задачи и просрочка"
+        case .staff: return "По каждому человеку и итого: задачи, готово, просрочка, часы, проекты"
         }
     }
 
+    /// Отчёт можно построить по одному человеку — для него включён выбор
+    /// сотрудника на странице отчётов.
+    var byPerson: Bool { self == .staff || self == .projects }
+
     var slug: String {
-        ["process", "receivables", "sales_by_client", "funnel", "stock", "projects"][rawValue]
+        ["process", "receivables", "sales_by_client", "funnel", "stock", "projects", "staff"][rawValue]
     }
 }
 
@@ -159,10 +165,11 @@ private func reportStock(_ data: CrmData) -> ReportTable {
     return t
 }
 
-private func reportProjects(_ data: CrmData) -> ReportTable {
+private func reportProjects(_ data: CrmData, _ person: String = "") -> ReportTable {
     let t = ReportTable()
     t.title = ReportKind.projects.title
-    t.subtitle = "Состояние на \(todayStr). Долг = бюджет − аванс − оплата (для незакрытых и не проигранных)."
+    t.subtitle = (person.isEmpty ? "Все проекты" : "Менеджер: " + person)
+        + ". Состояние на \(todayStr). Долг = бюджет − аванс − оплата (для незакрытых и не проигранных)."
     t.addCol("Проект", .text, 200)
     t.addCol("Клиент", .text, 150)
     t.addCol("Этап", .text, 80)
@@ -182,6 +189,7 @@ private func reportProjects(_ data: CrmData) -> ReportTable {
       COALESCE(p.budget,0) AS budget, COALESCE(p.prepay_pct,0) AS pct, COALESCE(p.prepaid,0) AS prepaid,
       COALESCE(p.paid,0) AS paid, COALESCE(p.due_date,'') AS due
     FROM projects p LEFT JOIN clients c ON c.id = p.client_id
+    \(person.isEmpty ? "" : "WHERE p.manager = " + quoted(person))
     ORDER BY CASE p.status WHEN 'Закрыт' THEN 2 WHEN 'Проигран' THEN 3 ELSE 1 END, p.due_date
     """) {
         let status = r.str("status")
@@ -198,23 +206,107 @@ private func reportProjects(_ data: CrmData) -> ReportTable {
     return t
 }
 
-func buildReport(_ data: CrmData, _ kind: ReportKind) -> ReportTable {
+/// Отчёт по людям: строка на сотрудника плюс строки для исполнителей, которых
+/// в списке сотрудников нет (старые задачи), плюс «Без исполнителя» — так
+/// итог по задачам сходится с разделом «Календарь».
+private func reportStaff(_ data: CrmData, _ person: String) -> ReportTable {
+    let t = ReportTable()
+    t.title = ReportKind.staff.title
+    t.subtitle = (person.isEmpty ? "Все сотрудники" : "Сотрудник: " + person)
+        + ". Состояние на \(todayStr). Просрочка — срок задачи в прошлом, задача не закрыта."
+    t.addCol("Сотрудник", .text, 170)
+    t.addCol("Должность", .text, 140)
+    t.addCol("Роль", .text, 100)
+    t.addCol("Зарегистрирован", .date, 90)
+    t.addCol("Счёт", .text, 70)
+    t.addCol("Задач", .number, 55)
+    t.addCol("Готово", .number, 55)
+    t.addCol("В работе", .number, 60)
+    t.addCol("Просрочено", .number, 70)
+    t.addCol("Часы план", .number, 65)
+    t.addCol("Часы факт", .number, 65)
+    t.addCol("Проектов", .number, 60)
+    t.addCol("Бюджет проектов, MDL", .money, 110)
+
+    let flt = person.isEmpty ? "" : " AND t.assignee = \(quoted(person))"
+    var tot = [0, 0, 0, 0], totProjects = 0
+    var totPlan = 0.0, totFact = 0.0, totBudget = 0.0
+
+    func statsFor(_ name: String) -> (Int, Int, Int, Int, Double, Double) {
+        let cond = name.isEmpty ? "COALESCE(t.assignee,'') = ''" : "t.assignee = \(quoted(name))"
+        guard let r = data.rows("""
+        SELECT COUNT(*) AS n, SUM(CASE WHEN COALESCE(t.done,0) = 1 THEN 1 ELSE 0 END) AS d,
+          SUM(CASE WHEN COALESCE(t.done,0) = 0 AND t.stage = 'В работе' THEN 1 ELSE 0 END) AS w,
+          SUM(CASE WHEN COALESCE(t.done,0) = 0 AND COALESCE(t.due_at,'') <> '' AND t.due_at < date('now','localtime') THEN 1 ELSE 0 END) AS o,
+          COALESCE(SUM(t.hours_plan),0) AS hp, COALESCE(SUM(t.hours_fact),0) AS hf
+        FROM tasks t WHERE \(cond)
+        """).first else { return (0, 0, 0, 0, 0, 0) }
+        return (r.int("n"), r.int("d"), r.int("w"), r.int("o"), r.dbl("hp"), r.dbl("hf"))
+    }
+
+    func projectsFor(_ name: String) -> (Int, Double) {
+        if name.isEmpty { return (0, 0) }
+        guard let r = data.rows("SELECT COUNT(*) AS n, COALESCE(SUM(budget),0) AS b FROM projects WHERE manager = \(quoted(name))").first
+        else { return (0, 0) }
+        return (r.int("n"), r.dbl("b"))
+    }
+
+    func addPerson(_ name: String, _ position: String, _ role: String, _ reg: String, _ state: String) {
+        let (n, d, w, o, hp, hf) = statsFor(name)
+        let (pn, pb) = projectsFor(name)
+        t.addRow([name.isEmpty ? "Без исполнителя" : name, position, role, String(reg.prefix(10)), state,
+                  N(n), N(d), N(w), o > 0 ? N(o) : "", hp > 0 ? fmt2(hp) : "", hf > 0 ? fmt2(hf) : "",
+                  pn > 0 ? N(pn) : "", pb > 0 ? M(pb) : ""])
+        tot[0] += n; tot[1] += d; tot[2] += w; tot[3] += o
+        totPlan += hp; totFact += hf; totProjects += pn; totBudget += pb
+    }
+
+    var known: [String] = []
+    for r in data.rows("""
+    SELECT full_name, COALESCE(position,'') AS pos, COALESCE(role,'') AS role,
+      COALESCE(created_at,'') AS reg, COALESCE(active,1) AS act
+    FROM users WHERE COALESCE(full_name,'') <> '' ORDER BY COALESCE(active,1) DESC, full_name
+    """) {
+        let name = r.str("full_name")
+        known.append(name)
+        if !person.isEmpty && name != person { continue }
+        addPerson(name, r.str("pos"), r.str("role"), r.str("reg"), r.int("act") == 1 ? "работает" : "отключён")
+    }
+    // исполнители задач, которых нет в списке сотрудников, и задачи без исполнителя
+    if person.isEmpty {
+        for r in data.rows("SELECT DISTINCT COALESCE(assignee,'') AS a FROM tasks t WHERE 1=1\(flt) ORDER BY a") {
+            let a = r.str("a")
+            if known.contains(a) { continue }
+            addPerson(a, a.isEmpty ? "" : "не в списке сотрудников", "", "", "")
+        }
+    }
+    t.setTotals(["Итого", person.isEmpty ? "человек: \(t.rowCount)" : "", "", "", "",
+                 N(tot[0]), N(tot[1]), N(tot[2]), N(tot[3]),
+                 totPlan > 0 ? fmt2(totPlan) : "", totFact > 0 ? fmt2(totFact) : "",
+                 totProjects > 0 ? N(totProjects) : "", totBudget > 0 ? M(totBudget) : ""])
+    return t
+}
+
+func buildReport(_ data: CrmData, _ kind: ReportKind, person: String = "") -> ReportTable {
     switch kind {
     case .process: return reportProcess(data)
     case .receivables: return reportReceivables(data)
     case .salesByClient: return reportSalesByClient(data)
     case .funnel: return reportFunnel(data)
     case .stock: return reportStock(data)
-    case .projects: return reportProjects(data)
+    case .projects: return reportProjects(data, person)
+    case .staff: return reportStaff(data, person)
     }
 }
 
 /// Сохраняет отчёт в каталог и возвращает полный путь к файлу.
-func exportReport(_ data: CrmData, _ kind: ReportKind, _ fmt: ExportFormat, dir: String) throws -> String {
+func exportReport(_ data: CrmData, _ kind: ReportKind, _ fmt: ExportFormat, dir: String, person: String = "") throws -> String {
     try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
     let ext = fmt == .xlsx ? ".xlsx" : ".pdf"
-    let path = (dir as NSString).appendingPathComponent("\(kind.slug)_\(D(0))\(ext)")
-    let t = buildReport(data, kind)
+    // имя файла с человеком: выгрузки по разным людям не затирают друг друга
+    let who = person.isEmpty ? "" : "_" + safeFileName(person)
+    let path = (dir as NSString).appendingPathComponent("\(kind.slug)\(who)_\(D(0))\(ext)")
+    let t = buildReport(data, kind, person: person)
     if fmt == .xlsx { try saveTableToXlsx(t, path) } else { try saveTableToPdf(t, path) }
     return path
 }

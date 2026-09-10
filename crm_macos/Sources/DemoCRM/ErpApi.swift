@@ -124,6 +124,41 @@ final class ErpClient {
         }
     }
 
+    // ── сотрудники: обмен карточками через хаб ──
+
+    /// Отдаёт очередь CRM в ERP. Возвращает принятые строки и id, которые
+    /// можно пометить отправленными.
+    func pushUsers(_ rows: [SyncRow]) -> (ok: Bool, applied: Int, acks: [Int]) {
+        lastError = ""
+        if !configured { lastError = "адрес ERP не задан (crm.ini, секция [erp])"; return (false, 0, []) }
+        if rows.isEmpty { return (true, 0, []) }
+        let payload: [String: Any] = [
+            "client": clientId,
+            "rows": rows.map { ["id": $0.id, "op": $0.op, "changed_at": $0.changedAt, "payload": $0.payload] },
+        ]
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else {
+            lastError = "не удалось собрать запрос"; return (false, 0, [])
+        }
+        guard let (code, data) = request("POST", "/api/v1/users", body: body,
+                                         headers: ["Content-Type": "application/json", "X-Client-Id": clientId],
+                                         timeout: Double(timeoutMs) * 2 / 1000) else { return (false, 0, []) }
+        if code != 200 {
+            lastError = "HTTP \(code): " + (String(data: data, encoding: .utf8) ?? "").left(200)
+            return (false, 0, [])
+        }
+        let j = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let errs = (j?["errors"] as? [Any])?.count ?? 0
+        if errs > 0 { lastError = "ERP отклонила строк: \(errs)" }
+        return (true, jint(j, "applied"), (j?["acks"] as? [Int]) ?? [])
+    }
+
+    /// Забирает изменения, поставленные в очередь на стороне ERP.
+    func pullUsers(limit: Int = 200) -> (ok: Bool, rows: [[String: String]]) {
+        guard let j = get("/api/v1/users?limit=\(limit)") else { return (false, []) }
+        let raw = (j["rows"] as? [[String: Any]]) ?? []
+        return (true, raw.map { r in r.mapValues { "\($0)" } })
+    }
+
     func batchStatus(_ batchId: String) -> String? {
         guard let j = get("/api/v1/batches/" + batchId) else { return nil }
         return jstr(j, "status")

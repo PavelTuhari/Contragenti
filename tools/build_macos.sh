@@ -101,7 +101,8 @@ tail -1 "$OUT/seed_democrm.log" | sed 's/^/   /'
 cp crm_delphi/lang.json crm_delphi/processes.json crm_delphi/sample_card.xml crm_delphi/README_ru.md "$STAGE/DemoCRM/"
 ditto sdk "$STAGE/sdk"
 cp README.md INTEGRATION.md API_ru.md GUIDE_ru.md INSTALL_MACOS_ru.md INSTALL_MACOS_RO.md INSTALL_WINDOWS_ru.md \
-   INSTALL_MSI_ru.md INSTALL_RO.md VERSION release.json setup_wizard_macos.py setup_common.py "$STAGE/"
+   INSTALL_MSI_ru.md INSTALL_RO.md STAFF_ERP_ru.md VERSION release.json setup_wizard_macos.py setup_common.py "$STAGE/"
+mkdir -p "$STAGE/sql" && cp sql/erp_users_sync.sql "$STAGE/sql/"
 cp "$ICON" "$STAGE/app_icon.icns"
 # ad-hoc подпись убирает часть предупреждений Gatekeeper (Developer ID нет)
 for app in "$STAGE"/*.app; do codesign --force --deep --sign - "$app" >/dev/null 2>&1 || true; done

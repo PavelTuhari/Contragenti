@@ -34,6 +34,7 @@
       "nav.orders": "Comenzi",
       "nav.projects": "Proiecte",
       "nav.calendar": "Calendar",
+      "nav.staff": "Angajați",
       "nav.reports": "Rapoarte",
       "nav.settings": "Setări",
       "btn.create": "Creează",
@@ -170,7 +171,22 @@
       "kanban.project": "Proiect: %s",
       "kanban.tasks_of": "sarcini %s",
       "report.projects": "Proiecte: licitații, avansuri, sarcini",
-      "report.projects.hint": "Fiecare proiect: etapă, buget, avans și plată, datorie, sarcini și întârzieri"
+      "report.projects.hint": "Fiecare proiect: etapă, buget, avans și plată, datorie, sarcini și întârzieri",
+      "btn.reset_pass": "Resetează parola",
+      "staff.admin_only": "Înregistrarea angajaților este disponibilă administratorului.",
+      "staff.pick": "Alegeți angajatul în listă.",
+      "staff.pass_reset": "Parola pentru «%s» este din nou cea standard: %s. Comunicați-o angajatului — o schimbă în «Setări».",
+      "staff.last_admin": "Este ultimul administrator activ — nu poate fi șters.",
+      "staff.std_pass": "Angajatul nou primește parola standard %s; o schimbă în «Setări».",
+      "reports.person": "Angajat",
+      "reports.person_all": "Toți (total)",
+      "report.staff": "Angajați: sarcini, ore, proiecte",
+      "report.staff.hint": "Pe fiecare persoană și total: sarcini, finalizate, întârzieri, ore, proiecte",
+      "sync.title": "Sincronizare cu ERP",
+      "sync.pending": "În coadă: %s modificări ale angajaților.",
+      "sync.done": "Sincronizat cu ERP: trimise %s, primite %s.",
+      "sync.off": "Adresa ERP nu este setată (Setări).",
+      "sync.fail": "Sincronizarea a eșuat: %s"
     },
     "enums": {
       "client_type": [
@@ -282,6 +298,15 @@
         "Normală",
         "Ridicată",
         "Urgent"
+      ],
+      "user_role": [
+        "Administrator",
+        "Conducere",
+        "Comercial",
+        "Producție",
+        "Depozit",
+        "Contabilitate",
+        "Observator"
       ]
     }
   },
@@ -313,6 +338,7 @@
       "nav.orders": "Orders",
       "nav.projects": "Projects",
       "nav.calendar": "Calendar",
+      "nav.staff": "Employees",
       "nav.reports": "Reports",
       "nav.settings": "Settings",
       "btn.create": "Create",
@@ -449,7 +475,22 @@
       "kanban.project": "Project: %s",
       "kanban.tasks_of": "tasks %s",
       "report.projects": "Projects: tenders, advances, tasks",
-      "report.projects.hint": "Each project: stage, budget, advance and payment, debt, tasks and overdue"
+      "report.projects.hint": "Each project: stage, budget, advance and payment, debt, tasks and overdue",
+      "btn.reset_pass": "Reset password",
+      "staff.admin_only": "Only the administrator can register employees.",
+      "staff.pick": "Select an employee in the list.",
+      "staff.pass_reset": "Password for «%s» is the standard one again: %s. Tell it to the employee — they change it in Settings.",
+      "staff.last_admin": "This is the last active administrator — cannot be deleted.",
+      "staff.std_pass": "A new employee gets the standard password %s and changes it in Settings.",
+      "reports.person": "Employee",
+      "reports.person_all": "Everyone (total)",
+      "report.staff": "Employees: tasks, hours, projects",
+      "report.staff.hint": "Per person and total: tasks, done, overdue, hours, projects",
+      "sync.title": "Sync with ERP",
+      "sync.pending": "Queued: %s employee changes.",
+      "sync.done": "Synced with ERP: sent %s, received %s.",
+      "sync.off": "ERP address is not set (Settings).",
+      "sync.fail": "Sync failed: %s"
     },
     "enums": {
       "client_type": [
@@ -561,6 +602,15 @@
         "Normal",
         "High",
         "Urgent"
+      ],
+      "user_role": [
+        "Administrator",
+        "Management",
+        "Sales",
+        "Production",
+        "Warehouse",
+        "Accounting",
+        "Observer"
       ]
     }
   },
@@ -592,6 +642,7 @@
       "nav.orders": "Заказы",
       "nav.projects": "Проекты",
       "nav.calendar": "Календарь",
+      "nav.staff": "Сотрудники",
       "nav.reports": "Отчёты",
       "nav.settings": "Настройки",
       "btn.create": "Создать",
@@ -728,7 +779,22 @@
       "kanban.project": "Проект: %s",
       "kanban.tasks_of": "задач %s",
       "report.projects": "Проекты: тендеры, авансы, задачи",
-      "report.projects.hint": "Каждый проект: этап, бюджет, аванс и оплата, долг, задачи и просрочка"
+      "report.projects.hint": "Каждый проект: этап, бюджет, аванс и оплата, долг, задачи и просрочка",
+      "btn.reset_pass": "Сбросить пароль",
+      "staff.admin_only": "Регистрация сотрудников доступна администратору.",
+      "staff.pick": "Выберите сотрудника в списке.",
+      "staff.pass_reset": "Пароль для «%s» снова стандартный: %s. Назовите его сотруднику — он сменит пароль в «Настройках».",
+      "staff.last_admin": "Это последний действующий администратор — его нельзя удалить.",
+      "staff.std_pass": "Новый сотрудник получает стандартный пароль %s и меняет его в «Настройках».",
+      "reports.person": "Сотрудник",
+      "reports.person_all": "Все (итого)",
+      "report.staff": "Сотрудники: задачи, часы, проекты",
+      "report.staff.hint": "По каждому человеку и итого: задачи, готово, просрочка, часы, проекты",
+      "sync.title": "Синхронизация с ERP",
+      "sync.pending": "В очереди: %s изменений по сотрудникам.",
+      "sync.done": "Синхронизация с ERP: отправлено %s, принято %s.",
+      "sync.off": "Адрес ERP не задан (Настройки).",
+      "sync.fail": "Синхронизация не удалась: %s"
     },
     "enums": {
       "client_type": [
@@ -840,6 +906,15 @@
         "Обычный",
         "Высокий",
         "Срочно"
+      ],
+      "user_role": [
+        "Администратор",
+        "Руководитель",
+        "Коммерческий",
+        "Производство",
+        "Склад",
+        "Бухгалтерия",
+        "Наблюдатель"
       ]
     }
   }

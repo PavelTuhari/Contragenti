@@ -312,3 +312,101 @@ func pumpSleep(_ seconds: Double) {
         if rest > 0 { Thread.sleep(forTimeInterval: min(rest, 0.005)) }
     }
 }
+
+/// Поле даты с календарём (просьба из акта: «календарь для выбора даты»).
+/// Текстовое поле «ГГГГ-ММ-ДД» + кнопка, раскрывающая календарь **внутри**
+/// страницы: модальных окон в программе нет, самотест жмёт те же методы.
+final class DateEdit: FlippedView {
+    let edit = NSTextField()
+    let btn = EspoButton("▾", primary: false, width: 26, action: nil)
+    /// Страница даёт панель календаря: она одна на редактор и позиционируется
+    /// под тем полем, у которого нажали кнопку.
+    var onPick: ((DateEdit) -> Void)?
+
+    var stringValue: String {
+        get { edit.stringValue }
+        set { edit.stringValue = newValue }
+    }
+
+    init(x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat = 26) {
+        super.init(frame: NSRect(x: x, y: y, width: w, height: h))
+        edit.frame = NSRect(x: 0, y: 0, width: w - 28, height: h)
+        edit.font = espoFont(10)
+        edit.placeholderString = "ГГГГ-ММ-ДД"
+        edit.isBezeled = true
+        edit.bezelStyle = .squareBezel
+        edit.focusRingType = .none
+        addSubview(edit)
+        btn.frame = NSRect(x: w - 26, y: 0, width: 26, height: h)
+        btn.action = { [weak self] in guard let s = self else { return }; s.onPick?(s) }
+        addSubview(btn)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+}
+
+/// Календарь для DateEdit: панель с NSDatePicker, живёт в редакторе страницы.
+final class CalendarPopup: FlippedView {
+    let picker = NSDatePicker()
+    private var target: DateEdit?
+    var onChosen: (() -> Void)?
+
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: 152, height: 162))
+        bgColor = ESPO_WHITE
+        borderColor = ESPO_PANEL_BRD
+        isHidden = true
+        picker.frame = NSRect(x: 6, y: 6, width: 139, height: 148)
+        picker.datePickerStyle = .clockAndCalendar
+        picker.datePickerElements = .yearMonthDay
+        picker.isBezeled = false
+        picker.isBordered = false
+        picker.drawsBackground = false
+        picker.target = self
+        picker.action = #selector(onPickerChange)
+        addSubview(picker)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// Показывает календарь под полем; в нём — дата поля или сегодня.
+    func open(for de: DateEdit, in parent: NSView) {
+        target = de
+        picker.dateValue = parseISODate(de.stringValue) ?? Date()
+        let p = de.convert(NSPoint(x: 0, y: de.bounds.height + 2), to: parent)
+        var x = p.x
+        if x + frame.width > parent.bounds.width - 6 { x = max(6, parent.bounds.width - frame.width - 6) }
+        frame.origin = NSPoint(x: x, y: p.y)
+        isHidden = false
+        parent.addSubview(self, positioned: .above, relativeTo: nil)
+    }
+
+    func close() { isHidden = true; target = nil }
+
+    @objc private func onPickerChange() {
+        target?.stringValue = dateStr(picker.dateValue)
+        close()
+        onChosen?()
+    }
+
+    /// Хук самотеста: то же, что клик по числу в календаре.
+    func testPick(_ date: Date) {
+        picker.dateValue = date
+        onPickerChange()
+    }
+}
+
+/// Редактируемый список (стрелка выбора + свободный ввод) — исполнитель,
+/// менеджер: имя берётся из списка сотрудников, но можно вписать своё.
+func makeComboBox(_ parent: NSView, x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat = 26, items: [String] = []) -> NSComboBox {
+    let c = NSComboBox(frame: NSRect(x: x, y: y, width: w, height: h))
+    c.font = espoFont(10)
+    c.isEditable = true
+    c.completes = true
+    c.hasVerticalScroller = true
+    c.numberOfVisibleItems = 12
+    c.focusRingType = .none
+    c.addItems(withObjectValues: items)
+    parent.addSubview(c)
+    return c
+}

@@ -705,6 +705,81 @@ final class GuiSelfTest {
              "задача \(id): срок \(dateStr(d1)) → \(v)", "gantt_task_drag")
         g.dragBar(tr, .move, -3); pump()
 
+        // ── сотрудники: регистрация администратором, доступ, календарь и выбор исполнителя ──
+        num += 1
+        form.testClickNav(.staff); pump()
+        p = form.page(.staff)!
+        let staffBefore = p.listCount
+        step("Сотрудники: раздел открыт, в списке люди демо-фирмы с датой регистрации и состоянием пароля",
+             form.testSection == .staff && staffBefore >= 9, "сотрудников \(staffBefore)", "staff_list")
+
+        num += 1
+        p.newRecord(); pump()
+        p.setField("full_name", "Vasile Munteanu"); p.setField("login", "vmunteanu")
+        p.setField("position", "Оператор ЧПУ"); p.setField("role", "Производство")
+        p.setField("email", "vasile.munteanu@demo.md"); p.setField("phone", "+373 69 100 108")
+        p.setField("active", "1")
+        p.save(); pump()
+        let newUserId = crm.scalarInt("SELECT id FROM users WHERE login = 'vmunteanu'")
+        let regDate = crm.scalarString("SELECT COALESCE(created_at,'') FROM users WHERE id = \(newUserId)")
+        let passState = crm.scalarString("SELECT COALESCE(pass_state,'') FROM users WHERE id = \(newUserId)")
+        step("Сотрудники: администратор зарегистрировал «Vasile Munteanu» — дата регистрации и стандартный пароль проставлены сами",
+             p.listCount == staffBefore + 1 && regDate.count >= 10 && passState == PASS_STD && crm.checkLogin("vmunteanu", STANDARD_PASSWORD),
+             "id \(newUserId), зарегистрирован \(regDate.prefix(16)), пароль «\(passState)», вход по стандартному паролю проверен", "staff_new")
+
+        num += 1
+        crm.setPassword("vmunteanu", "moya-parola")
+        p.refresh(); pump()
+        p.selectById(newUserId); pump()
+        form.testResetPassword(); pump()
+        step("Сотрудники: «Сбросить пароль» возвращает стандартный — администратор называет его сотруднику",
+             crm.checkLogin("vmunteanu", STANDARD_PASSWORD) && form.testMessageKind == .ok &&
+             crm.scalarString("SELECT pass_state FROM users WHERE id = \(newUserId)") == PASS_STD,
+             form.testMessage, "staff_reset_pass")
+
+        num += 1
+        p.selectById(newUserId); pump()
+        p.setField("active", "0")
+        p.save(); pump()
+        let offCheck = crm.loginCheck("vmunteanu", STANDARD_PASSWORD)
+        p.selectPreset(2); pump()   // «Отключены»
+        step("Сотрудники: счёт отключён — в программу не пускает, человек остаётся в списке и в истории задач",
+             !offCheck.ok && p.listCount >= 2, "отказ: «\(offCheck.reason)»; отключённых в списке \(p.listCount)", "staff_disabled")
+        p.selectById(newUserId); pump()
+        p.setField("active", "1"); p.save(); pump()
+        p.selectPreset(0); pump()
+
+        num += 1
+        form.testCalendarList(); pump()   // «Список» вместо сетки месяца — карточка задачи
+        p = form.page(.calendar)!
+        p.newRecord(); pump()
+        let choices = p.userChoices("assignee")
+        p.setField("subject", "Согласовать макет с производством")
+        p.setField("assignee", "Andrei Rusu")
+        step("Календарь: у поля «Исполнитель» стрелка выбора из списка сотрудников",
+             choices.count >= 8 && choices.contains("Andrei Rusu") && choices.contains("Vasile Munteanu"),
+             "в списке \(choices.count): " + choices.prefix(4).joined(separator: ", ") + " …", "task_assignee_list")
+
+        num += 1
+        let opened = p.showCalendar("due_at"); pump()
+        step("Календарь: кнопка у поля «Срок» раскрывает календарь прямо в карточке — отдельного окна нет",
+             opened && p.calendarVisible, "календарь показан под полем", "task_date_calendar")
+
+        num += 1
+        let wanted = addDays(todayD, 12)
+        let picked = p.pickDate("due_at", wanted); pump()
+        step("Календарь: число выбрано мышью — дата попала в поле, календарь закрылся",
+             picked && !p.calendarVisible && p.getField("due_at") == dateStr(wanted),
+             "выбрано \(p.getField("due_at")) (ожидалось \(dateStr(wanted)))", "task_date_picker")
+        p.save(); pump()
+        let pickedId = crm.scalarInt("SELECT COALESCE(MAX(id),0) FROM tasks WHERE subject = 'Согласовать макет с производством'")
+        num += 1
+        step("Календарь: задача сохранена с выбранными исполнителем и сроком",
+             crm.scalarString("SELECT assignee FROM tasks WHERE id = \(pickedId)") == "Andrei Rusu" &&
+             crm.scalarString("SELECT due_at FROM tasks WHERE id = \(pickedId)") == dateStr(wanted),
+             "задача \(pickedId): исполнитель \(crm.scalarString("SELECT assignee FROM tasks WHERE id = \(pickedId)")), срок \(crm.scalarString("SELECT due_at FROM tasks WHERE id = \(pickedId)"))",
+             "task_saved_picked")
+
         let rp = form.reports!
         num += 1
         form.testClickNav(.reports); pump()
@@ -748,8 +823,27 @@ final class GuiSelfTest {
             exports += [rp.export(.xlsx), rp.export(.pdf)]
         }
         let allOk = exports.filter { $0.hasSuffix(".xlsx") }.allSatisfy { isZipFile($0) } && exports.filter { $0.hasSuffix(".pdf") }.allSatisfy { isPdfFile($0) }
-        step("Отчёты «Продажи по клиентам» и «Воронка продаж»: все 6 отчётов выгружены в xlsx и pdf", allOk && exports.count == 12,
+        step("Отчёты «Продажи по клиентам» и «Воронка продаж»: шесть отчётов по сделкам, складу и проектам выгружены в xlsx и pdf", allOk && exports.count == 12,
              "файлов \(exports.count): " + exports.map { ($0 as NSString).lastPathComponent }.joined(separator: ", "), "report_all")
+
+        num += 1
+        rp.selectReport(.staff); pump()
+        let staffRows = rp.previewRows
+        xlsx = rp.export(.xlsx); pdf = rp.export(.pdf)
+        step("Отчёт «Сотрудники»: строка на человека, последняя — общий итог по задачам, часам и проектам",
+             staffRows >= 9 && isZipFile(xlsx) && isPdfFile(pdf),
+             "строк \(staffRows) (людей \(staffRows - 1) + итог); \((xlsx as NSString).lastPathComponent), \((pdf as NSString).lastPathComponent)", "report_staff")
+        exports += [xlsx, pdf]
+
+        num += 1
+        let picked2 = rp.selectPerson("Ion Popescu"); pump()
+        let onePdf = rp.export(.pdf)
+        step("Отчёты: выбор «Сотрудник» строит тот же отчёт по одному человеку — итог остаётся, файл выгрузки отдельный",
+             picked2 && rp.previewRows == 2 && isPdfFile(onePdf) && (onePdf as NSString).lastPathComponent.contains("Ion"),
+             "строк \(rp.previewRows); \((onePdf as NSString).lastPathComponent)", "report_staff_person")
+        exports.append(onePdf)
+        rp.selectPerson("")
+        pump()
 
         num += 1
         form.testClickNav(.accounts)
