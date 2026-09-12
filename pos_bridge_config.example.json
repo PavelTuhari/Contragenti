@@ -1,0 +1,36 @@
+{
+  "_comment": "Пример настроек прослойки. Скопируйте в pos_bridge_config.json (он в .gitignore) или задайте переменные окружения. Секретов в репозитории нет.",
+  "host": "127.0.0.1",
+  "port": 50800,
+  "clients": {
+    "ключ-кассового-приложения": { "name": "Sunmi-1", "secret": "секрет-для-подписи" }
+  },
+  "fiscalcloud": {
+    "base_url": "http://localhost:50700",
+    "api_key": "выдаётся SoftLider",
+    "api_secret": "выдаётся SoftLider",
+    "device_id": "идентификатор кассы",
+    "point_of_sale_id": "",
+    "timeout": 30
+  },
+  "catalog": {
+    "source": "demo",
+    "crm_db": "",
+    "limit": 5000,
+    "default_tax_group": "A"
+  },
+  "oracle": {
+    "dsn": "192.168.0.24:1521/clouddev.world",
+    "user": "BONUS2019",
+    "password": "",
+    "org_user": "paralax",
+    "org_password": "",
+    "client_dir": ""
+  },
+  "export": {
+    "crm_db": "",
+    "client_name": "Розничный покупатель",
+    "order_prefix": "POS-"
+  },
+  "poll_seconds": 60
+}

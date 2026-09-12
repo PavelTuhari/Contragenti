@@ -103,3 +103,7 @@ crm_macos/DemoCRM/
 crm_macos/DemoCRM.xcodeproj/xcuserdata/
 crm_macos/DemoCRM.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcuserstate
+
+# прослойка кассы: локальные настройки с ключами и рабочая база
+pos_bridge_config.json
+pos_bridge_data/
