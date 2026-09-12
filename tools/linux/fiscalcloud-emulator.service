@@ -1,0 +1,20 @@
+[Unit]
+Description=FiscalCloud emulator (SoftLider API) for POS testing
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=posbridge
+Environment=FC_EMULATOR_CONFIG=/etc/fiscalcloud-emulator/config.json
+ExecStart=/opt/pos-bridge/.venv/bin/python -m pos_bridge.fc_emulator serve
+WorkingDirectory=/opt/pos-bridge
+Restart=on-failure
+RestartSec=3
+# имитатор ничего не пишет вне своего каталога
+ProtectSystem=full
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

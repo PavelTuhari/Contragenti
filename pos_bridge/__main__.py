@@ -9,6 +9,8 @@
     python -m pos_bridge sync --source erp    перечитать каталог из учёта
     python -m pos_bridge pull                 забрать чеки и положить в учёт
     python -m pos_bridge selftest             сквозная проверка без кассы (0/1)
+    python -m pos_bridge fc-gui               окно имитатора кассы
+    python -m pos_bridge fc-conformance       сверка имитатора с описанием FiscalCloud
     python -m pos_bridge check-oracle         проверить доступ к OfficePlus
 """
 
@@ -318,6 +320,20 @@ def cmd_pull(args):
     return 0
 
 
+def cmd_fc_gui(args):
+    """Окно имитатора FiscalCloud — отдельная программа."""
+    from .fc_emulator import gui, settings as fc_settings
+    if not gui.available():
+        print("tkinter недоступен — на сервере запускайте без окна:")
+        print("  python -m pos_bridge.fc_emulator serve")
+        return 2
+    cfg = fc_settings.load()
+    if args.port:
+        cfg["port"] = args.port
+    gui.run(cfg)
+    return 0
+
+
 def cmd_fc_conformance(args):
     """Сверка имитатора с описанием FiscalCloud: каждая точка, каждое поле."""
     from .fc_emulator import build_app as build_fc
@@ -489,6 +505,10 @@ def main(argv=None):
     s.add_argument("--limit", type=int)
     s.add_argument("--query")
     s.set_defaults(func=cmd_import_erp)
+
+    s = sub.add_parser("fc-gui", help="окно имитатора FiscalCloud")
+    s.add_argument("--port", type=int)
+    s.set_defaults(func=cmd_fc_gui)
 
     s = sub.add_parser("fc-conformance", help="сверить имитатор FiscalCloud с описанием API")
     s.set_defaults(func=cmd_fc_conformance)

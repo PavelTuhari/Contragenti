@@ -28,6 +28,43 @@ PAYMENT_TYPES = [
 CASH_TYPE_CODE = 0
 
 
+# реквизиты «устройства»: заменяются настройками программы
+DEVICE_INFO = {
+    "id": DEMO_DEVICE_ID,
+    "pointOfSaleId": DEMO_POS_ID,
+    "name": "Sunmi V2s (имитатор)",
+    "serialNumber": "DEMO-0001",
+    "registrationNumber": "DEMO-REG-0001",
+    "model": "Sunmi V2s + SoftLider FiscalCloud",
+    "organizationName": "DEMO SRL",
+    "idnx": "1000000000000",
+    "address": "mun. Chişinău, str. Demo 1",
+    "subdivisionCode": "01",
+}
+
+
+def configure(cfg):
+    """Применить настройки программы: реквизиты, группы НДС, виды оплат."""
+    global DEMO_DEVICE_ID, DEMO_POS_ID
+    dev = cfg.get("device") or {}
+    DEVICE_INFO.update({k: v for k, v in dev.items() if v})
+    DEMO_DEVICE_ID = DEVICE_INFO["id"]
+    DEMO_POS_ID = DEVICE_INFO["pointOfSaleId"]
+    groups = cfg.get("taxGroups") or []
+    if groups:
+        TAX_GROUPS[:] = [{"rowNumber": i, "enabled": bool(g.get("enabled", True)),
+                          "code": str(g["code"]).upper(), "rate": float(g.get("rate") or 0)}
+                         for i, g in enumerate(groups, 1)]
+    pays = cfg.get("paymentTypes") or []
+    if pays:
+        PAYMENT_TYPES[:] = [{"rowNumber": i, "code": int(p["code"]), "name": p.get("name") or str(p["code"]),
+                             "enabled": bool(p.get("enabled", True)),
+                             "openCashDrawer": bool(p.get("openCashDrawer"))}
+                            for i, p in enumerate(pays, 1)]
+    STATE.use_alternative_receipts = bool(cfg.get("useAlternativeReceipts"))
+    STATE.tax_authority_online = bool(cfg.get("taxAuthorityOnline", True))
+
+
 def now():
     return datetime.datetime.now()
 
@@ -109,7 +146,28 @@ class State:
     def __init__(self):
         self.reset()
 
+    # ── журнал обращений (его показывает окно программы) ──
+    LOG_LIMIT = 500
+
+    def log(self, method, path, status, note=""):
+        self.requests.append({"time": human(now()), "method": method, "path": path,
+                              "status": status, "note": note})
+        if len(self.requests) > self.LOG_LIMIT:
+            del self.requests[:len(self.requests) - self.LOG_LIMIT]
+
+    # вызывается после каждого изменяющего запроса: программа сохраняет
+    # состояние сразу, а не только по таймеру и при остановке
+    on_change = None
+
+    def changed(self):
+        if callable(self.on_change):
+            try:
+                self.on_change()
+            except Exception:  # noqa: BLE001 — сохранение не должно ронять ответ кассе
+                pass
+
     def reset(self):
+        self.requests = []
         self.started_at = now()
         self.numbers = {}              # сквозные номера по видам документов
         self.documents = {"receipt": [], "return": [], "alternative": [],
@@ -136,15 +194,15 @@ class State:
     def device(self, device_id=None):
         d = SPEC.blank("FiscalDeviceDto")
         d.update({
-            "id": device_id or DEMO_DEVICE_ID,
-            "name": "Sunmi V2s (имитатор)",
-            "serialNumber": "DEMO-0001",
-            "registrationNumber": "DEMO-REG-0001",
-            "model": "Sunmi V2s + SoftLider FiscalCloud",
-            "organizationName": "DEMO SRL",
-            "idnx": "1000000000000",
-            "address": "mun. Chişinău, str. Demo 1",
-            "subdivisionCode": "01",
+            "id": device_id or DEVICE_INFO["id"],
+            "name": DEVICE_INFO["name"],
+            "serialNumber": DEVICE_INFO["serialNumber"],
+            "registrationNumber": DEVICE_INFO["registrationNumber"],
+            "model": DEVICE_INFO["model"],
+            "organizationName": DEVICE_INFO["organizationName"],
+            "idnx": DEVICE_INFO["idnx"],
+            "address": DEVICE_INFO["address"],
+            "subdivisionCode": DEVICE_INFO["subdivisionCode"],
             "mevKeyEncrypted": "",
             "isFiscalized": True,
             "isDeregistered": False,
@@ -162,7 +220,7 @@ class State:
                     "activeUntil": iso(self.started_at + datetime.timedelta(days=365))})
         d["licenseData"] = lic
         pos = SPEC.blank("FiscalDevicePointOfSaleDto")
-        pos.update({"rowNumber": 1, "id": DEMO_POS_ID, "code": "01", "allowFreeSale": True,
+        pos.update({"rowNumber": 1, "id": DEVICE_INFO["pointOfSaleId"], "code": "01", "allowFreeSale": True,
                     "useBankTerminals": True, "bankTerminalsIDList": "MAIB-01"})
         d["pointsOfSale"] = [pos]
         rng = SPEC.blank("FiscalDeviceAlternativeReceiptsRangeDto")
@@ -212,7 +270,7 @@ class State:
             "organizationName": dev["organizationName"],
             "idnx": dev["idnx"],
             "address": dev["address"],
-            "pointOfSaleId": point_of_sale_id or DEMO_POS_ID,
+            "pointOfSaleId": point_of_sale_id or DEVICE_INFO["pointOfSaleId"],
             "pointOfSaleCode": "01",
             "mevId": str(uuid.uuid4()),
             "mevDateTime": iso(t),
@@ -240,6 +298,90 @@ class State:
         start = max(0, int(start_index or 0))
         take = max(0, int(count if count is not None else 100))
         return items[start:start + take], len(items)
+
+
+    # ── сохранение между запусками ──
+    # Настоящая касса помнит сквозные номера и накопительные суммы после
+    # выключения, поэтому имитатор тоже кладёт своё состояние на диск.
+    def dump(self):
+        sh = self.shift
+        return {
+            "version": 1,
+            "startedAt": iso(self.started_at),
+            "numbers": self.numbers,
+            "documents": self.documents,
+            "grandTotal": self.grand_total, "grandTax": self.grand_tax,
+            "annualTotal": self.annual_total, "annualTax": self.annual_tax,
+            "altSeries": self.alt_series, "altNext": self.alt_next,
+            "useAlternativeReceipts": self.use_alternative_receipts,
+            "taxAuthorityOnline": self.tax_authority_online,
+            "shift": {
+                "openedAt": iso(sh.opened_at), "currentNumber": sh.current_number,
+                "taxTotals": {k: list(v) for k, v in sh.tax_totals.items()},
+                "paymentTotals": {str(k): v for k, v in sh.payment_totals.items()},
+                "cashIn": sh.cash_in, "cashOut": sh.cash_out, "total": sh.total,
+                "receiptCount": sh.receipt_count, "lastReceiptNumber": sh.last_receipt_number,
+            },
+        }
+
+    def restore(self, data):
+        if not isinstance(data, dict) or data.get("version") != 1:
+            return False
+        self.reset()
+        self.started_at = _parse(data.get("startedAt")) or now()
+        self.numbers = {k: int(v) for k, v in (data.get("numbers") or {}).items()}
+        for kind, docs in (data.get("documents") or {}).items():
+            if kind in self.documents:
+                self.documents[kind] = list(docs)
+        self.grand_total = float(data.get("grandTotal") or 0)
+        self.grand_tax = float(data.get("grandTax") or 0)
+        self.annual_total = float(data.get("annualTotal") or 0)
+        self.annual_tax = float(data.get("annualTax") or 0)
+        self.alt_series = data.get("altSeries") or "AA"
+        self.alt_next = int(data.get("altNext") or 1)
+        self.use_alternative_receipts = bool(data.get("useAlternativeReceipts"))
+        self.tax_authority_online = bool(data.get("taxAuthorityOnline", True))
+        sh = data.get("shift") or {}
+        self.shift.opened_at = _parse(sh.get("openedAt")) or now()
+        self.shift.current_number = {k: int(v) for k, v in (sh.get("currentNumber") or {}).items()}
+        self.shift.tax_totals = {k: [float(v[0]), float(v[1])] for k, v in (sh.get("taxTotals") or {}).items()}
+        self.shift.payment_totals = {int(k): float(v) for k, v in (sh.get("paymentTotals") or {}).items()}
+        self.shift.cash_in = float(sh.get("cashIn") or 0)
+        self.shift.cash_out = float(sh.get("cashOut") or 0)
+        self.shift.total = float(sh.get("total") or 0)
+        self.shift.receipt_count = int(sh.get("receiptCount") or 0)
+        self.shift.last_receipt_number = int(sh.get("lastReceiptNumber") or 0)
+        return True
+
+    def save_to(self, path):
+        if not path:
+            return False
+        import json
+        import os
+        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(self.dump(), f, ensure_ascii=False, indent=1)
+        os.replace(tmp, path)
+        return True
+
+    def load_from(self, path):
+        import json
+        import os
+        if not path or not os.path.exists(path):
+            return False
+        try:
+            with open(path, encoding="utf-8") as f:
+                return self.restore(json.load(f))
+        except (ValueError, OSError):
+            return False
+
+
+def _parse(text):
+    try:
+        return datetime.datetime.fromisoformat(text) if text else None
+    except (TypeError, ValueError):
+        return None
 
 
 STATE = State()

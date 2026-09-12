@@ -22,9 +22,20 @@ from .spec import SPEC
 from .state import (CASH_TYPE_CODE, DEMO_DEVICE_ID, DEMO_POS_ID, PAYMENT_TYPES, STATE, TAX_GROUPS,
                     human, iso, m2, now, payment_name, rate_of)
 
-# ключи демо-стенда
+# ключи демо-стенда; настройками программы заменяются на свои
 DEMO_API_KEY = "demo-api-key-0000000000000000000000000000"
 DEMO_API_SECRET = "demo-api-secret-000000000000000000000000"
+API = {"key": DEMO_API_KEY, "secret": DEMO_API_SECRET}
+
+
+def configure(cfg):
+    """Применить настройки программы к имитатору."""
+    from .state import configure as configure_state
+    if cfg.get("apiKey"):
+        API["key"] = cfg["apiKey"]
+    if cfg.get("apiSecret"):
+        API["secret"] = cfg["apiSecret"]
+    configure_state(cfg)
 
 # соответствие вида документа схемам описания
 KINDS = {
@@ -78,14 +89,14 @@ def paged(schema, items, total):
 
 async def guard(request: Request, need_device=True):
     """(ошибка, тело). Ошибка — готовый ответ, тело — разобранный JSON."""
-    if request.headers.get("api-key") != DEMO_API_KEY:
+    if request.headers.get("api-key") != API["key"]:
         return fail("Invalid API key", 401, "Unauthorized"), None
     device = request.headers.get("api-deviceid") or ""
     if need_device and not device:
         return fail("Api-DeviceId header is required", 400, "BadRequest"), None
     raw = (await request.body()).decode("utf-8") if request.method in ("POST", "PUT") else ""
     path_and_query = request.url.path + (("?" + request.url.query) if request.url.query else "")
-    good, why = signing.check(DEMO_API_SECRET, dict(request.headers), request.method, path_and_query, raw)
+    good, why = signing.check(API["secret"], dict(request.headers), request.method, path_and_query, raw)
     if not good:
         return fail("Invalid signature: %s" % why, 401, "Unauthorized"), None
     if raw:
@@ -98,7 +109,8 @@ async def guard(request: Request, need_device=True):
 
 
 def pos_of(request):
-    return request.headers.get("api-pointofsaleid") or DEMO_POS_ID
+    from .state import DEVICE_INFO
+    return request.headers.get("api-pointofsaleid") or DEVICE_INFO["pointOfSaleId"]
 
 
 # ── сборка документов ──
@@ -224,10 +236,15 @@ def short_of(kind, doc):
     return s
 
 
-def make_report(report_type, request, body=None):
-    """X- или Z-отчёт по накопленным итогам смены."""
+def make_report(report_type, point_of_sale_id=None, body=None):
+    """X- или Z-отчёт по накопленным итогам смены.
+
+    Вызывается и из API, и из окна программы, поэтому принимает не запрос,
+    а идентификатор рабочего места.
+    """
     body = body or {}
-    doc = STATE.head("ReportDto", "report", pos_of(request))
+    from .state import DEVICE_INFO
+    doc = STATE.head("ReportDto", "report", point_of_sale_id or DEVICE_INFO["pointOfSaleId"])
     sh = STATE.shift
     tax_items = []
     total_tax = 0.0
@@ -301,6 +318,15 @@ def build_app():
         return {"status": "ok", "receipts": len(STATE.documents["receipt"]),
                 "shiftOpenedAt": iso(STATE.shift.opened_at)}
 
+    @app.middleware("http")
+    async def journal(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/"):
+            STATE.log(request.method, request.url.path, response.status_code)
+            if request.method == "POST" and response.status_code == 200:
+                STATE.changed()
+        return response
+
     r = APIRouter(prefix="/api/v1")
 
     # ── высокоуровневые операции ──
@@ -356,14 +382,14 @@ def build_app():
         err, body = await guard(request)
         if err:
             return err
-        return ok(make_report("ZReport", request, body))
+        return ok(make_report("ZReport", pos_of(request), body))
 
     @r.post("/operations/intermediatetotals")
     async def intermediate(request: Request):
         err, body = await guard(request)
         if err:
             return err
-        return ok(make_report("XReport", request, body))
+        return ok(make_report("XReport", pos_of(request), body))
 
     # ── фискальные чеки ──
 
@@ -520,7 +546,7 @@ def build_app():
         kind = body.get("type") or "XReport"
         if kind not in ("ZReport", "XReport"):
             return fail("Unknown report type: %s" % kind, 422, "ValidationError")
-        return ok(make_report(kind, request, body))
+        return ok(make_report(kind, pos_of(request), body))
 
     @r.get("/reports")
     async def list_reports(request: Request, startIndex: int = 0, count: int = 100):
@@ -670,7 +696,7 @@ def build_app():
             return err
         age = (now() - STATE.shift.opened_at).total_seconds()
         if age >= 24 * 3600:
-            make_report("ZReport", request, {})
+            make_report("ZReport", pos_of(request), {})
             env = ok(None)
             env["message"] = "Z report issued: shift was older than 24 hours"
             return env
