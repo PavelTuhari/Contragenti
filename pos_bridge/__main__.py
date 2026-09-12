@@ -318,6 +318,20 @@ def cmd_pull(args):
     return 0
 
 
+def cmd_fc_conformance(args):
+    """Сверка имитатора с описанием FiscalCloud: каждая точка, каждое поле."""
+    from .fc_emulator import build_app as build_fc
+    from .fc_emulator import conformance
+    server, _ = _serve(build_fc(), "127.0.0.1", args.emulator_port)
+    if not _wait_up("http://127.0.0.1:%d/health" % args.emulator_port):
+        print("[FAIL] имитатор не поднялся")
+        return 1
+    ok = conformance.run("http://127.0.0.1:%d" % args.emulator_port)
+    server.should_exit = True
+    print("\nСоответствие описанию FiscalCloud: %s" % ("True" if ok else "False"))
+    return 0 if ok else 1
+
+
 def cmd_mysql_setup(args):
     """Стенд OfficePlus на MySQL: таблицы TMS_* и наполнение из источника."""
     from . import mysql_source
@@ -475,6 +489,9 @@ def main(argv=None):
     s.add_argument("--limit", type=int)
     s.add_argument("--query")
     s.set_defaults(func=cmd_import_erp)
+
+    s = sub.add_parser("fc-conformance", help="сверить имитатор FiscalCloud с описанием API")
+    s.set_defaults(func=cmd_fc_conformance)
 
     s = sub.add_parser("mysql-setup", help="поднять стенд OfficePlus на MySQL (таблицы TMS_*)")
     s.add_argument("--from-source", choices=["demo", "erp", "file", "mysql-table"],
