@@ -18,7 +18,9 @@ import datetime
 import html
 import json
 import os
+import re
 import shutil
+import struct
 import subprocess
 import sys
 import time
@@ -281,6 +283,22 @@ JS = """
 """
 
 
+def png_size(path):
+    """Размер PNG из заголовка файла — чтобы место под снимок резервировалось.
+
+    Без этого браузер не знает высоту картинки, страница прыгает по мере
+    загрузки, и переход по ссылке оглавления попадает мимо раздела.
+    """
+    try:
+        with open(path, "rb") as f:
+            head = f.read(33)
+        if head[:8] != b"\x89PNG\r\n\x1a\n":
+            return None
+        return struct.unpack(">II", head[16:24])
+    except (OSError, struct.error):
+        return None
+
+
 def rel_to_book(md_path, href):
     """Ссылка из документа — в адрес, работающий из docs/book/index.html."""
     if href.startswith(("http://", "https://", "mailto:", "#")):
@@ -338,9 +356,11 @@ def build(manifest, checks=None):
                 continue
             body.append('<div class="gallery">')
             for name, caption in items:
-                body.append('<figure><img src="img/%s" alt="%s" loading="lazy">'
+                size = png_size(os.path.join(IMG_DIR, name))
+                dims = ' width="%d" height="%d"' % size if size else ""
+                body.append('<figure><img src="img/%s" alt="%s"%s loading="lazy">'
                             "<figcaption>%s</figcaption></figure>"
-                            % (html.escape(name), html.escape(caption), html.escape(caption)))
+                            % (html.escape(name), html.escape(caption), dims, html.escape(caption)))
             body.append("</div>")
 
         for md_path, label in ch["docs"]:
@@ -354,7 +374,9 @@ def build(manifest, checks=None):
                 link_fix=lambda h, p=md_path: rel_to_book(p, h),
                 image_fix=lambda s, p=md_path: rel_to_book(p, s),
                 heading_offset=1, used_slugs=used)
-            title = label or os.path.basename(md_path)
+            # без явного названия берём первый заголовок самого документа
+            first = re.search(r"^#\s+(.+)$", text, re.M)
+            title = label or (first.group(1).strip() if first else os.path.basename(md_path))
             body.append('<article class="doc" id="%s">' % anchor)
             body.append('<div class="doc-head">%s<span class="src">%s</span></div>'
                         % (html.escape(title), html.escape(md_path)))
