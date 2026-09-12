@@ -22,6 +22,9 @@ DEFAULTS = {
     # FiscalCloud (SoftLider): локальный сервис ставится на 50700,
     # облако — https://cloud.fiscalcloud.md
     "fiscalcloud": {
+        # имитатор вместо настоящей кассы: поднимается вместе с прослойкой и
+        # подменяет адрес. Для боевой работы — false и адрес сервиса SoftLider
+        "emulator": False,
         "base_url": "http://localhost:50700",
         "api_key": "",
         "api_secret": "",
@@ -33,6 +36,7 @@ DEFAULTS = {
     # откуда берём товары и цены
     #   demo   — база Demo CRM (items) — тот же демо-режим, что и был
     #   erp    — Oracle OfficePlus: TMS_UNIVERS (TIP='P') + TMS_MPT
+    #   mysql  — то же самое, но из MySQL / MariaDB (необязательная замена Oracle)
     #   file   — json-файл со списком товаров
     "catalog": {
         "source": "demo",
@@ -52,6 +56,25 @@ DEFAULTS = {
         "client_dir": "",
         "org_user": "paralax",     # организации лежат в другой схеме
         "org_password": "",
+    },
+
+    # MySQL / MariaDB — необязательный источник вместо Oracle.
+    # Пароль в настройках не хранится: keychain_service указывает, где его взять.
+    "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306,
+        "unix_socket": "",
+        "user": "root",
+        "password": "",
+        "keychain_service": "",
+        "keychain_account": "",
+        "database": "",
+        "charset": "utf8mb4",
+        "timeout": 10,
+        # officeplus — таблицы TMS_*, как в Oracle; custom — свой SQL ниже
+        "profile": "officeplus",
+        "goods_sql": "",
+        "clients_sql": "",
     },
 
     # куда класть принятые продажи
@@ -94,6 +117,10 @@ def load(path=None):
         "TMS_USER": ("oracle", "org_user"),
         "TMS_PASSWORD": ("oracle", "org_password"),
         "ORACLE_CLIENT_DIR": ("oracle", "client_dir"),
+        "MYSQL_HOST": ("mysql", "host"),
+        "MYSQL_USER": ("mysql", "user"),
+        "MYSQL_PASSWORD": ("mysql", "password"),
+        "MYSQL_DATABASE": ("mysql", "database"),
         "POS_CATALOG_SOURCE": ("catalog", "source"),
         "POS_CRM_DB": ("catalog", "crm_db"),
     }

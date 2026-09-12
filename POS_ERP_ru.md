@@ -107,7 +107,89 @@ curl -s -X POST http://127.0.0.1:50800/api/v1/pos/sale \
 У товаров OfficePlus группа НДС уже готова: `TMS_UNIVERS.CODTVA` — это та же
 буква, что `TaxGroupCode` в FiscalCloud, пересчитывать ничего не нужно.
 
-## 5. Реальные данные OfficePlus
+## 5. Имитатор кассы — необязательный
+
+Настоящая касса нужна не всегда: на разработке и показе её заменяет
+встроенный имитатор. Включается одной строкой настроек, код кассового
+приложения при этом не меняется — те же заголовки, та же подпись, те же
+тела ответов:
+
+```json
+{ "fiscalcloud": { "emulator": true } }
+```
+
+С этой настройкой `serve` сам поднимает имитатор на `:50700` и указывает на
+него прослойку; в журнале запуска видно, к чему подключились:
+
+```
+Касса: имитатор FiscalCloud на :50700 (настройка fiscalcloud.emulator)
+Каталог: источник mysql
+```
+
+Для боевой работы — `"emulator": false` и адрес сервиса SoftLider
+(`http://localhost:50700` для локального, `https://cloud.fiscalcloud.md`
+для облака).
+
+## 6. Источник данных: Oracle или MySQL
+
+Oracle остаётся, но он больше не обязателен. Тот же каталог читается из
+MySQL / MariaDB — это выбор одной строки:
+
+```json
+{ "catalog": { "source": "mysql" } }
+```
+
+Схема задаётся профилем:
+
+| Профиль | Что читает |
+|---|---|
+| `officeplus` | те же таблицы, что в Oracle: `TMS_UNIVERS` (TIP='P') + `TMS_MPT`, `TMS_UNIVERS` (TIP='O') + `TMS_ORG` |
+| `custom` | свой `goods_sql` / `clients_sql` из настроек |
+
+Свой запрос обязан вернуть колонки с известными именами: для товаров
+`id, code, barcode, name, unit, price, vat, tax_group`, для организаций
+`id, denumire, idno, adresa, administratori`. Чего нет — подставится пустым,
+группа НДС подберётся по ставке.
+
+Проверка и подготовка стенда:
+
+```bash
+python -m pos_bridge check-mysql          # версия, база, пользователь, пример строк
+python -m pos_bridge mysql-setup --from-source demo        # таблицы TMS_* и наполнение
+python -m pos_bridge sync                 # каталог кассы из выбранного источника
+```
+
+`mysql-setup` создаёт в MySQL те же таблицы `TMS_UNIVERS` / `TMS_MPT` /
+`TMS_ORG`, что и в Oracle, поэтому профиль `officeplus` работает и на
+стенде, и на боевой базе. Наполнить можно из демо-базы (`--from-source demo`),
+из Oracle (`erp`), из файла (`file`) или из любой другой таблицы MySQL
+(`mysql-table` с `--from-db` и `--from-sql`).
+
+## 7. Пароли — в связке ключей
+
+В настройках пароля нет: указано, где его взять.
+
+```json
+"mysql": {
+  "user": "posbridge",
+  "keychain_service": "MySQL pos_bridge (localhost)",
+  "keychain_account": "posbridge"
+}
+```
+
+Прослойка читает его через `security find-generic-password`; при первом
+обращении macOS спросит разрешение. Порядок поиска: явный пароль в
+настройках → связка ключей → переменная окружения (`MYSQL_PASSWORD`,
+`GOODS_PASSWORD`, `TMS_PASSWORD`). Так же настраивается и Oracle
+(`keychain_service` / `org_keychain_service`). Положить пароль в связку:
+
+```bash
+security add-generic-password -U -s "MySQL pos_bridge (localhost)" -a posbridge -w
+```
+
+Ключ `-w` без значения спросит пароль и не оставит его в истории команд.
+
+## 8. Реальные данные OfficePlus
 
 Демо-режим остаётся как был: `clients.db` с генератором. Реальные данные
 идут в отдельную базу, режимы не смешиваются.
@@ -133,7 +215,7 @@ export GOODS_PASSWORD=…      # схема товаров (BONUS2019)
 Instant Client, но со старым сервером нужен «толстый» режим: путь к клиенту
 задаётся в `oracle.client_dir` или переменной `ORACLE_CLIENT_DIR`.
 
-## 6. Боевой запуск
+## 9. Боевой запуск
 
 ```bash
 .venv/bin/python -m pos_bridge serve --port 50800

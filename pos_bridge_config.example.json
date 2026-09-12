@@ -1,11 +1,15 @@
 {
-  "_comment": "Пример настроек прослойки. Скопируйте в pos_bridge_config.json (он в .gitignore) или задайте переменные окружения. Секретов в репозитории нет.",
+  "_comment": "Пример настроек прослойки. Скопируйте в pos_bridge_config.json (он в .gitignore) или задайте переменные окружения. Пароли в репозитории не хранятся: их берут из связки ключей macOS по keychain_service/keychain_account.",
   "host": "127.0.0.1",
   "port": 50800,
   "clients": {
-    "ключ-кассового-приложения": { "name": "Sunmi-1", "secret": "секрет-для-подписи" }
+    "ключ-кассового-приложения": {
+      "name": "Sunmi-1",
+      "secret": "секрет-для-подписи"
+    }
   },
   "fiscalcloud": {
+    "emulator": false,
     "base_url": "http://localhost:50700",
     "api_key": "выдаётся SoftLider",
     "api_secret": "выдаётся SoftLider",
@@ -17,7 +21,8 @@
     "source": "demo",
     "crm_db": "",
     "limit": 5000,
-    "default_tax_group": "A"
+    "default_tax_group": "A",
+    "_source_values": "demo | erp (Oracle) | mysql | file"
   },
   "oracle": {
     "dsn": "192.168.0.24:1521/clouddev.world",
@@ -25,12 +30,29 @@
     "password": "",
     "org_user": "paralax",
     "org_password": "",
-    "client_dir": ""
+    "client_dir": "",
+    "keychain_service": "OfficePlus Oracle (BONUS2019)",
+    "keychain_account": "BONUS2019",
+    "org_keychain_service": "OfficePlus Oracle (paralax)",
+    "org_keychain_account": "paralax"
   },
   "export": {
     "crm_db": "",
     "client_name": "Розничный покупатель",
     "order_prefix": "POS-"
   },
-  "poll_seconds": 60
+  "poll_seconds": 60,
+  "mysql": {
+    "unix_socket": "/tmp/mysql.sock",
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "posbridge",
+    "keychain_service": "MySQL pos_bridge (localhost)",
+    "keychain_account": "posbridge",
+    "database": "officeplus",
+    "profile": "officeplus",
+    "_profile_values": "officeplus (таблицы TMS_*) | custom (свой goods_sql/clients_sql)",
+    "goods_sql": "",
+    "clients_sql": ""
+  }
 }

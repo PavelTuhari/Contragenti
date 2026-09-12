@@ -14,9 +14,34 @@ ORDER_STATUS = "Оплачен"
 ORDER_KIND = "Продажа"
 
 
+# Таблицы Demo CRM, в которые ложится чек. Создаются, если базы ещё нет:
+# продажи можно принимать и в свежую базу реальных данных (erp.db).
+DDL = [
+    """CREATE TABLE IF NOT EXISTS clients (
+         id INTEGER PRIMARY KEY AUTOINCREMENT, denumire TEXT NOT NULL, idno TEXT,
+         forma_juridica TEXT, adresa TEXT, administrator TEXT, source TEXT,
+         client_type TEXT, phone TEXT, email TEXT, notes TEXT, contact_person TEXT,
+         added_at TEXT DEFAULT (datetime('now','localtime')))""",
+    """CREATE TABLE IF NOT EXISTS items (
+         id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, name TEXT NOT NULL, kind TEXT,
+         unit_ TEXT, price REAL DEFAULT 0, vat REAL DEFAULT 20, stock REAL DEFAULT 0, notes TEXT)""",
+    """CREATE TABLE IF NOT EXISTS orders (
+         id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT NOT NULL, order_date TEXT,
+         client_id INTEGER, kind TEXT, status TEXT, total REAL DEFAULT 0, advance REAL DEFAULT 0,
+         paid REAL DEFAULT 0, due_date TEXT, ship_date TEXT, notes TEXT, posted INTEGER DEFAULT 0,
+         erp_batch TEXT, erp_sent_at TEXT, project_id INTEGER,
+         created_at TEXT DEFAULT (datetime('now','localtime')))""",
+    """CREATE TABLE IF NOT EXISTS order_lines (
+         id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, item_id INTEGER NOT NULL,
+         qty REAL DEFAULT 1, price REAL DEFAULT 0, sum REAL DEFAULT 0)""",
+]
+
+
 def _conn(path):
     conn = sqlite3.connect(path, timeout=15)
     conn.row_factory = sqlite3.Row
+    for sql in DDL:
+        conn.execute(sql)
     return conn
 
 

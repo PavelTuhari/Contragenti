@@ -212,6 +212,18 @@ def cmd_selftest(args):
     finally:
         catalog.orgs_from_erp, catalog.from_erp = real_orgs, real_goods
 
+    # MySQL — необязательный источник: если сервер есть, читаем через него
+    from . import mysql_source
+    try:
+        info = mysql_source.ping(cfg)
+        rows, where = mysql_source.goods(cfg, None, 5)
+        good_my = len(rows) > 0
+        print("[%s] MySQL как источник вместо Oracle: %s, база %s, товаров прочитано %d"
+              % ("OK  " if good_my else "FAIL", info["v"], info["db"], len(rows)))
+        ok = ok and good_my
+    except mysql_source.MySqlError as exc:
+        print("[    ] MySQL не проверялся: %s" % str(exc)[:90])
+
     server.should_exit = True
     print("       песочница (рабочие базы не тронуты): %s" % sandbox)
     print("\nPOS-прослойка self-test: %s" % ("True" if ok else "False"))
@@ -248,13 +260,18 @@ def cmd_demo(args):
 
 def cmd_serve(args):
     cfg = config.load()
-    if args.demo_fiscal:
+    if args.demo_fiscal or cfg["fiscalcloud"].get("emulator"):
         cfg = demo_config(cfg, args.emulator_port)
         _serve(emulator.build_app(), "127.0.0.1", args.emulator_port)
         _wait_up("http://127.0.0.1:%d/health" % args.emulator_port)
     import uvicorn
     app = build_app(cfg)
     app.state.bridge.load_device()
+    if cfg["fiscalcloud"].get("emulator") or args.demo_fiscal:
+        print("Касса: имитатор FiscalCloud на :%d (настройка fiscalcloud.emulator)" % args.emulator_port)
+    else:
+        print("Касса: %s" % cfg["fiscalcloud"]["base_url"])
+    print("Каталог: источник %s" % cfg["catalog"]["source"])
     print("Прослойка: http://%s:%d/api-docs (описание), /api-playground (песочница)"
           % (cfg["host"], args.port or cfg["port"]))
     uvicorn.run(app, host=cfg["host"], port=args.port or cfg["port"], log_level="info")
@@ -299,6 +316,75 @@ def cmd_pull(args):
                 exported += 1
     print("Чеков на устройстве %d, забрано %d, новых %d, в учёт %d" % (total, len(rows), new, exported))
     return 0
+
+
+def cmd_mysql_setup(args):
+    """Стенд OfficePlus на MySQL: таблицы TMS_* и наполнение из источника."""
+    from . import mysql_source
+    cfg = config.load()
+    try:
+        info = mysql_source.ping(cfg)
+    except mysql_source.MySqlError as exc:
+        print("[FAIL] %s" % exc)
+        return 2
+    print("[OK]   MySQL %s, база %s, пользователь %s" % (info["v"], info["db"], info["who"]))
+
+    goods_rows, clients_rows = [], []
+    if args.from_source:
+        src = args.from_source
+        if src == "mysql-table":
+            probe = json.loads(json.dumps(cfg))
+            probe["mysql"] = dict(cfg["mysql"])
+            probe["mysql"]["database"] = args.from_db or cfg["mysql"]["database"]
+            probe["mysql"]["profile"] = "custom"
+            probe["mysql"]["goods_sql"] = args.from_sql
+            goods_rows, where = mysql_source.goods(probe, None, args.limit or 5000, None)
+            print("       товары из %s: %d" % (where, len(goods_rows)))
+        else:
+            goods_rows, where = catalog.load(cfg, None, src, args.limit)
+            print("       товары из %s (%s): %d" % (src, where, len(goods_rows)))
+            if src == "demo":
+                import sqlite3
+                conn = sqlite3.connect(where)
+                conn.row_factory = sqlite3.Row
+                # в базе CRM колонка называется administrator, в OfficePlus — DIRECTOR
+                clients_rows = [{"denumire": r["denumire"], "idno": r["idno"],
+                                 "adresa": r["adresa"], "administratori": r["administrator"]}
+                                for r in conn.execute(
+                                    "SELECT denumire, idno, adresa, administrator FROM clients")]
+                conn.close()
+                print("       организации из демо-базы: %d" % len(clients_rows))
+
+    stat = mysql_source.setup(cfg, goods_rows, clients_rows)
+    print("[OK]   стенд OfficePlus на MySQL готов: новых товаров %d, организаций %d"
+          % (stat["goods"], stat["clients"]))
+    return 0
+
+
+def cmd_check_mysql(args):
+    from . import mysql_source
+    cfg = config.load()
+    try:
+        info = mysql_source.ping(cfg)
+    except mysql_source.MySqlError as exc:
+        print("[FAIL] %s" % exc)
+        return 2
+    print("[OK]   MySQL %s, база %s, пользователь %s" % (info["v"], info["db"], info["who"]))
+    rc = 0
+    try:
+        rows, where = mysql_source.goods(cfg, None, 5)
+        print("[OK]   товары (%s): %d — %s" % (where, len(rows),
+              ", ".join("%s %.2f" % (r["name"][:26], r["price"]) for r in rows[:3])))
+    except mysql_source.MySqlError as exc:
+        print("[FAIL] товары: %s" % exc)
+        rc = 2
+    try:
+        rows = mysql_source.clients(cfg, 5)
+        print("[OK]   организации: %d — %s" % (len(rows),
+              ", ".join("%s %s" % (r["denumire"][:26], r["idno"]) for r in rows[:3])))
+    except mysql_source.MySqlError as exc:
+        print("[    ] организации: %s" % exc)
+    return rc
 
 
 def cmd_import_erp(args):
@@ -389,6 +475,17 @@ def main(argv=None):
     s.add_argument("--limit", type=int)
     s.add_argument("--query")
     s.set_defaults(func=cmd_import_erp)
+
+    s = sub.add_parser("mysql-setup", help="поднять стенд OfficePlus на MySQL (таблицы TMS_*)")
+    s.add_argument("--from-source", choices=["demo", "erp", "file", "mysql-table"],
+                   help="чем наполнить стенд")
+    s.add_argument("--from-db", help="для mysql-table: база-источник")
+    s.add_argument("--from-sql", help="для mysql-table: SELECT с колонками id,name,price,…")
+    s.add_argument("--limit", type=int)
+    s.set_defaults(func=cmd_mysql_setup)
+
+    s = sub.add_parser("check-mysql", help="проверить доступ к MySQL")
+    s.set_defaults(func=cmd_check_mysql)
 
     s = sub.add_parser("check-oracle", help="проверить доступ к OfficePlus")
     s.set_defaults(func=cmd_check_oracle)

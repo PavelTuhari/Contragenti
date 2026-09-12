@@ -130,7 +130,13 @@ def _oracle_connect(cfg, schema="goods"):
         raise CatalogError("не установлен oracledb (pip install oracledb)") from exc
     o = cfg["oracle"]
     user = o["user"] if schema == "goods" else o.get("org_user") or o["user"]
-    pwd = o["password"] if schema == "goods" else o.get("org_password") or o["password"]
+    from . import secret
+    if schema == "goods":
+        pwd = secret.password_for(o, "GOODS_PASSWORD")
+    else:
+        pwd = o.get("org_password") or secret.password_for(
+            {"password": "", "keychain_service": o.get("org_keychain_service", ""),
+             "keychain_account": o.get("org_keychain_account", "")}, "TMS_PASSWORD")
     if not pwd:
         raise CatalogError(
             "не задан пароль Oracle (%s): переменная окружения %s или pos_bridge_config.json"
@@ -222,6 +228,23 @@ def from_file(cfg, groups=None):
     return out, path
 
 
+def from_mysql(cfg, groups=None, limit=5000, q=None):
+    """Товары из MySQL/MariaDB — необязательная замена Oracle."""
+    from . import mysql_source
+    try:
+        return mysql_source.goods(cfg, groups, limit, q)
+    except mysql_source.MySqlError as exc:
+        raise CatalogError(str(exc))
+
+
+def orgs_from_mysql(cfg, limit=2000, q=None):
+    from . import mysql_source
+    try:
+        return mysql_source.clients(cfg, limit, q)
+    except mysql_source.MySqlError as exc:
+        raise CatalogError(str(exc))
+
+
 def load(cfg, groups=None, source=None, limit=None, q=None):
     """Забрать товары из выбранного источника. Возвращает (записи, откуда)."""
     src = (source or cfg["catalog"]["source"] or "demo").lower()
@@ -230,6 +253,8 @@ def load(cfg, groups=None, source=None, limit=None, q=None):
         return from_demo(cfg, groups, lim)
     if src == "erp":
         return from_erp(cfg, groups, lim, q)
+    if src == "mysql":
+        return from_mysql(cfg, groups, lim, q)
     if src == "file":
         return from_file(cfg, groups)
     raise CatalogError("неизвестный источник каталога: %r" % src)
