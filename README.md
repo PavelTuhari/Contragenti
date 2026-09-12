@@ -264,6 +264,7 @@ curl "http://127.0.0.1:9393/card?idno=1003600116460&format=xml"
 | **[STAFF_ERP_ru.md](STAFF_ERP_ru.md)** | Сотрудники в Demo CRM (регистрация, доступ, отчёт по людям) и обмен карточками с ERP UNIAC/OfficePlus через триггеры |
 | **[POS_ERP_ru.md](POS_ERP_ru.md)** | Касса Sunmi с фискализацией SoftLider (FiscalCloud) и оплатой MAIB: прослойка `pos_bridge`, товары и цены на кассу, продажи обратно в учёт, реальные данные OfficePlus из Oracle |
 | **[IMPLEMENTATION_ru.md](IMPLEMENTATION_ru.md)** | **Руководство по внедрению:** варианты развёртывания, фазы, роли и RACI, процедуры, приёмочные испытания, ИБ, риски, показатели, формы актов |
+| **[docs/metodichka.html](docs/metodichka.html)** | **Методичка со скриншотами:** 19 занятий от установки до приёмки — цель, шаги, снимок экрана, «должно получиться» и разбор типичных ошибок; чек-лист, контрольные вопросы, словарь |
 | **[ARTICLE_AI_ru.md](ARTICLE_AI_ru.md)** | **Статья:** Delphi, Oracle и C++ под управлением ИИ — разбор проекта как образца для похожих ([HTML](docs/article-ai-delphi-oracle-cpp.html), [версия для Habr](docs/habr/article-habr.md)) |
 
 ## Интеграция и Demo CRM

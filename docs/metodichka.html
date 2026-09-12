@@ -1,0 +1,875 @@
+<meta charset="utf-8">
+<title>Методичка Contragenti и Demo CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ink:#12222f; --ink-soft:#3d5162; --mute:#69808f;
+  --paper:#f6f7f5; --card:#ffffff; --rule:#d7dde0; --rule-soft:#e6eaec;
+  --accent:#0b6e5f; --accent-soft:#e3efec; --accent-line:#c9e0da;
+  --stamp:#a63a2b; --stamp-soft:#f6e7e4; --stamp-line:#e8ccc6;
+  --shadow:0 1px 2px rgba(18,34,47,.05),0 8px 22px rgba(18,34,47,.06);
+  --code-bg:#12222f; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e6edf1; --ink-soft:#b3c2cc; --mute:#8399a6;
+    --paper:#0e1a23; --card:#152532; --rule:#263a49; --rule-soft:#1d2f3c;
+    --accent:#4fc0aa; --accent-soft:#12332e; --accent-line:#1c4a42;
+    --stamp:#e08574; --stamp-soft:#3a201b; --stamp-line:#5a2e26;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.35);
+    --code-bg:#0a1620; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e6edf1; --ink-soft:#b3c2cc; --mute:#8399a6;
+  --paper:#0e1a23; --card:#152532; --rule:#263a49; --rule-soft:#1d2f3c;
+  --accent:#4fc0aa; --accent-soft:#12332e; --accent-line:#1c4a42;
+  --stamp:#e08574; --stamp-soft:#3a201b; --stamp-line:#5a2e26;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.35);
+  --code-bg:#0a1620; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:0 24px 96px}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace}
+p{max-width:68ch}
+a{color:var(--accent)}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header{padding:64px 0 34px;border-bottom:2px solid var(--ink)}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+  font-weight:700;margin:0 0 14px}
+h1{font-family:Spectral,Georgia,serif;font-weight:600;font-size:clamp(32px,5.2vw,48px);
+  line-height:1.08;margin:0;letter-spacing:-.015em;text-wrap:balance}
+.lede{font-family:Spectral,Georgia,serif;font-size:19px;line-height:1.5;color:var(--ink-soft);
+  margin:16px 0 0;max-width:58ch}
+.meta{display:flex;flex-wrap:wrap;gap:6px 26px;margin:22px 0 0;font-size:13px;color:var(--mute)}
+.meta b{color:var(--ink-soft);font-weight:500}
+
+.toc{margin:30px 0 0;border:1px solid var(--rule);border-radius:3px;background:var(--card);
+  padding:20px 24px}
+.toc h2{font-family:"Public Sans",sans-serif;font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--mute);margin:0 0 14px;font-weight:700}
+.toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:34px}
+.toc li{margin:0 0 7px;font-size:13.5px;break-inside:avoid}
+.toc li.part{font-weight:700;margin-top:12px;color:var(--ink)}
+.toc li.part:first-child{margin-top:0}
+.toc a{text-decoration:none;color:var(--ink-soft)}
+.toc a:hover{color:var(--accent);text-decoration:underline}
+.toc .n{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--accent);
+  margin-right:7px;font-variant-numeric:tabular-nums}
+
+.part{padding:58px 0 0}
+.part>.ph{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--rule);
+  padding-bottom:10px;margin-bottom:6px}
+.part>.ph .pn{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:500;
+  color:var(--stamp);letter-spacing:.06em;white-space:nowrap}
+.part>.ph h2{font-family:Spectral,Georgia,serif;font-weight:600;font-size:27px;margin:0;
+  letter-spacing:-.01em}
+.part .pfor{font-size:13px;color:var(--mute);margin:0 0 8px}
+
+.lesson{padding:34px 0 0}
+.lesson h3{font-size:18px;font-weight:700;margin:0 0 6px;letter-spacing:-.005em;text-wrap:balance}
+.lesson h3 .ln{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--accent);
+  font-weight:500;margin-right:9px;font-variant-numeric:tabular-nums}
+.goal{font-size:14.5px;color:var(--ink-soft);margin:0 0 14px;padding-left:13px;
+  border-left:2px solid var(--accent-line);max-width:66ch}
+.goal b{color:var(--accent);font-weight:600}
+
+ol.steps{margin:14px 0 0;padding:0 0 0 2px;list-style:none;counter-reset:st}
+ol.steps li{counter-increment:st;position:relative;padding:0 0 11px 34px;font-size:14.5px;
+  color:var(--ink-soft);line-height:1.55;max-width:66ch}
+ol.steps li::before{content:counter(st);position:absolute;left:0;top:1px;
+  font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;color:var(--accent);
+  width:22px;height:22px;border:1px solid var(--rule);border-radius:50%;background:var(--card);
+  display:flex;align-items:center;justify-content:center}
+ol.steps li b{color:var(--ink)}
+
+.ui{font-family:"Public Sans",sans-serif;font-size:13px;font-weight:600;
+  background:var(--rule-soft);color:var(--ink);border:1px solid var(--rule);
+  border-radius:3px;padding:1px 7px;white-space:nowrap}
+code.inl{background:var(--accent-soft);color:var(--accent);padding:1px 5px;border-radius:2px;
+  font-size:12.5px}
+
+figure{margin:20px 0 0}
+figure img{display:block;width:100%;height:auto;border:1px solid var(--rule);border-radius:3px;
+  box-shadow:var(--shadow);background:var(--card)}
+figcaption{font-size:12.5px;color:var(--mute);margin:9px 0 0;max-width:68ch}
+figcaption b{color:var(--ink-soft);font-weight:600}
+
+.check,.oops,.note{border-radius:3px;padding:14px 18px;margin:18px 0 0;font-size:14px}
+.check{background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--ink-soft)}
+.oops{background:var(--stamp-soft);border:1px solid var(--stamp-line);color:var(--ink-soft)}
+.note{background:var(--card);border:1px solid var(--rule);color:var(--ink-soft)}
+.check p,.oops p,.note p{margin:0;max-width:none}
+.check p+p,.oops p+p,.note p+p{margin-top:8px}
+.check .h,.oops .h,.note .h{display:block;font-size:11px;letter-spacing:.08em;
+  text-transform:uppercase;font-weight:700;margin-bottom:5px}
+.check .h{color:var(--accent)} .oops .h{color:var(--stamp)} .note .h{color:var(--mute)}
+
+pre{background:var(--code-bg);color:var(--code-fg);border-radius:3px;padding:14px 17px;
+  overflow-x:auto;font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.65;
+  margin:15px 0 0}
+pre .c{color:var(--code-dim)} pre .g{color:var(--code-hi)}
+
+.tblwrap{overflow-x:auto;margin:16px 0 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--card)}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);font-weight:700}
+td.mono-c{font-family:"IBM Plex Mono",monospace;font-size:12.5px;white-space:nowrap}
+
+ul.cl{margin:16px 0 0;padding:0;list-style:none;display:grid;gap:1px;background:var(--rule);
+  border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+ul.cl li{background:var(--card);padding:11px 16px;font-size:14px;color:var(--ink-soft);
+  display:grid;grid-template-columns:20px 1fr;gap:12px;align-items:start}
+ul.cl li::before{content:"";display:block;width:14px;height:14px;margin-top:4px;
+  border:1.5px solid var(--accent);border-radius:2px}
+
+.qa{margin:16px 0 0;padding:0;list-style:none;counter-reset:q}
+.qa li{counter-increment:q;position:relative;padding:0 0 10px 30px;font-size:14.5px;
+  color:var(--ink-soft);max-width:66ch}
+.qa li::before{content:counter(q) ".";position:absolute;left:0;top:0;
+  font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--stamp)}
+.qa li .a{display:block;font-size:13px;color:var(--mute);margin-top:3px}
+
+dl.gloss{margin:16px 0 0;display:grid;grid-template-columns:auto 1fr;gap:9px 22px;font-size:14px}
+dl.gloss dt{font-weight:700;color:var(--ink);white-space:nowrap}
+dl.gloss dd{margin:0;color:var(--ink-soft);max-width:60ch}
+
+.top{font-size:12px;color:var(--mute);text-decoration:none;margin-left:auto;white-space:nowrap}
+footer{margin:62px 0 0;padding:22px 0 0;border-top:1px solid var(--rule);font-size:13px;
+  color:var(--mute)}
+@media (max-width:620px){
+  header{padding:40px 0 26px}
+  .toc ol{columns:1}
+  dl.gloss{grid-template-columns:1fr;gap:2px 0}
+  dl.gloss dd{margin-bottom:10px}
+}
+@media print{
+  body{background:#fff}
+  .toc{break-inside:avoid}
+  .lesson,figure,.check,.oops{break-inside:avoid}
+  .top{display:none}
+}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Учебно-методическое пособие · версия решения 1.3.7</p>
+  <h1>Contragenti и Demo CRM: методичка</h1>
+  <p class="lede">Девятнадцать занятий от установки на чистую машину до приёмочных
+  проверок. Каждое занятие — цель, шаги, снимок экрана и способ убедиться, что
+  получилось именно то, что должно.</p>
+  <div class="meta">
+    <span><b>Для кого</b> ИТ-администратор, ключевой пользователь, приёмочная комиссия</span>
+    <span><b>Сопутствующий документ</b> IMPLEMENTATION_ru.md</span>
+    <span><b>Редакция</b> 1.0 от 12.09.2026</span>
+  </div>
+
+  <nav class="toc">
+    <h2>Содержание</h2>
+    <ol>
+      <li class="part">Часть I. Установка и настройка</li>
+      <li><a href="#l1"><span class="n">01</span>Что и куда ставится</a></li>
+      <li><a href="#l2"><span class="n">02</span>Установка на Windows</a></li>
+      <li><a href="#l3"><span class="n">03</span>Установка на macOS</a></li>
+      <li><a href="#l4"><span class="n">04</span>Мастер настройки</a></li>
+      <li class="part">Часть II. Работа в Contragenti</li>
+      <li><a href="#l5"><span class="n">05</span>Первый поиск</a></li>
+      <li><a href="#l6"><span class="n">06</span>Источники и когда их переключать</a></li>
+      <li><a href="#l7"><span class="n">07</span>Карточка организации</a></li>
+      <li><a href="#l8"><span class="n">08</span>Работа без интернета</a></li>
+      <li><a href="#l9"><span class="n">09</span>Возврат карточки в свою систему</a></li>
+      <li class="part">Часть III. Demo CRM</li>
+      <li><a href="#l10"><span class="n">10</span>Вход, роли, первый экран</a></li>
+      <li><a href="#l11"><span class="n">11</span>Клиент из реестра и дубли</a></li>
+      <li><a href="#l12"><span class="n">12</span>Лид, сделка, клиент</a></li>
+      <li><a href="#l13"><span class="n">13</span>Заказ и его проведение</a></li>
+      <li><a href="#l14"><span class="n">14</span>Рабочий стол и канбан</a></li>
+      <li><a href="#l15"><span class="n">15</span>Процесс, план работ, календарь</a></li>
+      <li><a href="#l16"><span class="n">16</span>Проекты и отчёты</a></li>
+      <li class="part">Часть IV. Интеграция</li>
+      <li><a href="#l17"><span class="n">17</span>Подключение к справочнику ERP</a></li>
+      <li><a href="#l18"><span class="n">18</span>Общий справочник через хаб</a></li>
+      <li class="part">Часть V. Приёмка</li>
+      <li><a href="#l19"><span class="n">19</span>Проверки с кодами возврата</a></li>
+      <li><a href="#cl">Чек-лист и контрольные вопросы</a></li>
+      <li><a href="#gloss">Словарь</a></li>
+    </ol>
+  </nav>
+</header>
+
+<!-- ─────────────────────────── ЧАСТЬ I ─────────────────────────── -->
+<section class="part" id="p1">
+  <div class="ph"><span class="pn">ЧАСТЬ I</span><h2>Установка и настройка</h2></div>
+  <p class="pfor">Выполняет ИТ-администратор. Занятия 1–4, ориентировочно полдня на первое
+  рабочее место и 15 минут на каждое следующее.</p>
+
+  <div class="lesson" id="l1">
+    <h3><span class="ln">01</span>Что и куда ставится</h3>
+    <p class="goal"><b>Цель:</b> понимать, из чего состоит решение и где окажутся данные,
+    прежде чем что-либо запускать.</p>
+    <p>Устанавливаются три программы. Они лежат рядом и работают вместе, но независимы:
+    каждую можно запустить отдельно.</p>
+    <div class="tblwrap">
+    <table>
+      <tr><th>Программа</th><th>Что делает</th><th>Кто пользуется</th></tr>
+      <tr><td><b>Contragenti</b></td><td>Ищет организацию в государственном реестре,
+        хранит найденное в своей базе, отдаёт карточку другим программам</td><td>Оператор</td></tr>
+      <tr><td><b>Demo CRM</b></td><td>Пример учётной системы: клиенты, сделки, заказы,
+        проекты, задачи. Показывает, как встроить поиск в свою программу</td><td>Оператор</td></tr>
+      <tr><td><b>Мастер настройки</b></td><td>Проверяет компьютер, обновляет компоненты,
+        разворачивает стартовую базу, делает самопроверку</td><td>Администратор</td></tr>
+    </table>
+    </div>
+    <p>Данные <b>никогда не лежат в папке с программой</b>, если та находится в
+    <code class="inl">Program Files</code>. Это правило действует и для администратора —
+    иначе у разных пользователей получились бы разные базы.</p>
+    <div class="tblwrap">
+    <table>
+      <tr><th>Что</th><th>Windows</th><th>macOS</th></tr>
+      <tr><td>База организаций, настройки</td><td class="mono-c">%LOCALAPPDATA%\Contragenti\</td>
+        <td class="mono-c">~/Library/Application Support/Contragenti/</td></tr>
+      <tr><td>База CRM, отчёты</td><td class="mono-c">…\Contragenti\DemoCRM\</td>
+        <td class="mono-c">…/Contragenti/DemoCRM/</td></tr>
+      <tr><td>Журналы</td><td class="mono-c">…\Contragenti\logs\</td>
+        <td class="mono-c">~/Library/Logs/Contragenti/</td></tr>
+    </table>
+    </div>
+    <div class="note"><span class="h">Запомнить</span>
+      <p>Переустановка программы данные не затрагивает. Чтобы перенести рабочее место на
+      другой компьютер, достаточно скопировать каталог данных.</p></div>
+  </div>
+
+  <div class="lesson" id="l2">
+    <h3><span class="ln">02</span>Установка на Windows</h3>
+    <p class="goal"><b>Цель:</b> установить решение и понять, какой из двух установщиков
+    выбрать.</p>
+    <ol class="steps">
+      <li>Скачайте <code class="inl">Contragenti-1.3.7-setup.exe</code> из каталога
+        <code class="inl">release/</code> репозитория. Файл небольшой, около 12 МБ:
+        программу он <b>скачивает во время установки</b>, поэтому нужен интернет.</li>
+      <li>Запустите. Браузер может предупредить, что файл «редко скачивают» — это значит,
+        что он не подписан сертификатом издателя, а не то, что он опасен. Подлинность
+        проверяется сравнением контрольной суммы с манифестом <code class="inl">release.json</code>.</li>
+      <li>Подтвердите запрос прав администратора, чтобы установить в
+        <code class="inl">C:\Program Files\Contragenti</code> для всех пользователей.
+        Если прав нет — откажитесь: установка продолжится в профиль текущего пользователя.</li>
+      <li>Дождитесь окончания. Автоматически откроется мастер настройки — это занятие 4.</li>
+    </ol>
+    <p>Для централизованной раздачи — тихая установка:</p>
+    <pre>Contragenti-1.3.7-setup.exe /S /D=C:\Program Files\Contragenti --lang ro</pre>
+    <p>Дополнительно: <code class="inl">--no-shortcuts</code> — без ярлыков,
+    <code class="inl">--no-wizard</code> — не открывать мастер,
+    <code class="inl">--extract-only &lt;каталог&gt;</code> — портативная распаковка без
+    записей в реестр.</p>
+    <div class="oops"><span class="h">Если не получилось</span>
+      <p><b>«The system administrator has set policies to prevent this installation»</b> —
+      это код 1625, запрет политики на пакеты Windows Installer. Установщик
+      <code class="inl">setup.exe</code> с Windows Installer не связан и этим запретом не
+      блокируется; ошибку выдаёт именно MSI-вариант.</p>
+      <p><b>Интернета на машине нет.</b> Тогда наоборот — нужен MSI: он содержит всё
+      внутри и ничего не докачивает. Запускать из окна с правами администратора:
+      <code class="inl">msiexec /i Contragenti-1.3.7-win64.msi /qn</code></p></div>
+  </div>
+
+  <div class="lesson" id="l3">
+    <h3><span class="ln">03</span>Установка на macOS</h3>
+    <p class="goal"><b>Цель:</b> установить решение на Mac и пройти предупреждение
+    Gatekeeper.</p>
+    <ol class="steps">
+      <li>Выполните в терминале одну строку:
+        <pre>curl -fsSL https://raw.githubusercontent.com/PavelTuhari/Contragenti/main/release/contragenti-macos-install.sh | bash</pre>
+        Либо установите пакет <code class="inl">Contragenti-1.3.7-macos.pkg</code>
+        из каталога <code class="inl">release/</code>.</li>
+      <li>При первом запуске приложения macOS сообщит, что разработчик не проверен.
+        Закройте окно, щёлкните по приложению <b>правой кнопкой</b> и выберите
+        <span class="ui">Открыть</span> — этот способ разрешает запуск навсегда.</li>
+      <li>Установятся три приложения: <b>Contragenti.app</b> со встроенным Python,
+        нативная <b>Demo CRM.app</b> и <b>Contragenti Setup.app</b>. Отдельно ставить
+        Python не нужно.</li>
+    </ol>
+    <div class="note"><span class="h">Почему предупреждение</span>
+      <p>Подпись Apple Developer ID платная и требует накопленной репутации, как и
+      code-signing на Windows. Отсутствие подписи — вопрос стоимости, а не безопасности;
+      контрольные суммы всех файлов опубликованы в манифесте.</p></div>
+  </div>
+
+  <div class="lesson" id="l4">
+    <h3><span class="ln">04</span>Мастер настройки</h3>
+    <p class="goal"><b>Цель:</b> довести рабочее место до состояния «готово» и получить
+    документальное подтверждение этого.</p>
+    <p>Мастер открывается сам после установки; позже его можно вызвать из меню «Пуск» —
+    <span class="ui">Contragenti — настройка и обновление</span>. Он последовательно
+    проходит одиннадцать шагов: составляет технический паспорт компьютера, проверяет
+    Chrome и Python, обращается к репозиторию за обновлениями, разворачивает стартовую
+    базу организаций, настраивает CRM и язык, заполняет демонстрационные данные,
+    проверяет ярлыки и запускает самопроверку обеих программ.</p>
+    <ol class="steps">
+      <li>Выберите язык вверху окна: <b>Română</b>, <b>English</b> или <b>Русский</b>.
+        Выбор запоминается и передаётся в Demo CRM.</li>
+      <li>Оставьте отмеченными все шаги и нажмите <span class="ui">Выполнить</span>.</li>
+      <li>Дождитесь зелёного <b>Готово</b>. Каждый шаг отмечается как выполненный,
+        пропущенный или ошибочный.</li>
+      <li>При ошибке нажмите <span class="ui">Открыть отчёт</span>: мастер собирает
+        технический паспорт, журнал и события установки в один файл, который можно
+        приложить к обращению.</li>
+    </ol>
+    <p>Для проверки без окна — например, из скрипта раздачи ПО:</p>
+    <pre><span class="c">rem код возврата 0 и строка «ошибок 0, замечаний 0» = место принято</span>
+"%ProgramFiles%\Contragenti\ContragentiSetup.exe" --check --offline --no-seed --no-python</pre>
+    <figure>
+      <img src="screenshots_ru/06_selftest.png" alt="Окно самопроверки: список выполненных проверок" loading="lazy">
+      <figcaption><b>Самопроверка.</b> Такой же список выдаёт мастер на последнем шаге:
+      проверки идут по пунктам, и каждая либо пройдена, либо нет.</figcaption>
+    </figure>
+    <div class="check"><span class="h">Должно получиться</span>
+      <p>Мастер завершился с итогом «ошибок 0, замечаний 0». На рабочем столе появились
+      ярлыки <b>Contragenti</b> и <b>Demo CRM</b>, а в базе организаций — около
+      219 стартовых записей.</p></div>
+    <div class="oops"><span class="h">Если не получилось</span>
+      <p><b>Не найден Google Chrome.</b> Без него портал недоступен. Мастер выводит кнопку
+      со ссылкой на установку; после установки Chrome шаг перезапускается.</p>
+      <p><b>В журнале <code class="inl">CERTIFICATE_VERIFY_FAILED</code>.</b> Хранилище
+      сертификатов Windows устарело. Мастер сам повторяет запрос с набором корневых
+      сертификатов из поставки; проверка сертификата при этом не отключается. Если
+      повторяется — обновите систему.</p></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── ЧАСТЬ II ─────────────────────────── -->
+<section class="part" id="p2">
+  <div class="ph"><span class="pn">ЧАСТЬ II</span><h2>Работа в Contragenti</h2>
+    <a class="top" href="#p1">↑ наверх</a></div>
+  <p class="pfor">Для оператора. Занятия 5–9, около часа с практикой.</p>
+
+  <div class="lesson" id="l5">
+    <h3><span class="ln">05</span>Первый поиск</h3>
+    <p class="goal"><b>Цель:</b> найти организацию по названию и понять, что происходит
+    на экране во время поиска.</p>
+    <ol class="steps">
+      <li>Откройте <b>Contragenti</b>. Открывается вкладка <span class="ui">Онлайн-поиск</span>.</li>
+      <li>Введите в поле часть названия, фамилию руководителя или IDNO — все три варианта
+        работают.</li>
+      <li>Нажмите <span class="ui">Поиск</span>. <b>Откроется настоящее окно Chrome</b> —
+        так и должно быть: форма реестра защищена невидимой проверкой, которая срабатывает
+        только для настоящего браузера.</li>
+      <li>Если Google показал картинку с проверкой — <b>решите её в окне Chrome</b>.
+        Программа ждёт; обходить проверку она не умеет и не должна.</li>
+      <li>Результаты появятся в таблице. Они <b>сразу сохраняются в локальную базу</b>,
+        повторный поиск той же организации уже не потребует портала.</li>
+    </ol>
+    <figure>
+      <img src="screenshots_ru/01_online.png" alt="Вкладка онлайн-поиска со списком найденных организаций" loading="lazy">
+      <figcaption><b>Онлайн-поиск.</b> Слева переключатели источников, ниже — таблица
+      результатов. Строка состояния внизу показывает, что происходит прямо сейчас.</figcaption>
+    </figure>
+    <div class="oops"><span class="h">Если не получилось</span>
+      <p><b>Поиск «висит».</b> Загляните в окно Chrome: скорее всего, там ждёт проверка.
+      Не включайте «скрытый браузер» — проверку станет невозможно пройти.</p>
+      <p><b>Ничего не найдено, хотя организация существует.</b> Портал отдаёт не все
+      действующие организации. Включите второй источник — занятие 6.</p></div>
+  </div>
+
+  <div class="lesson" id="l6">
+    <h3><span class="ln">06</span>Источники и когда их переключать</h3>
+    <p class="goal"><b>Цель:</b> осознанно управлять тем, куда программа обращается за
+    данными.</p>
+    <p>Источников три, каждый включается отдельно, выбор запоминается между запусками.</p>
+    <div class="tblwrap">
+    <table>
+      <tr><th>Источник</th><th>Что даёт</th><th>Скорость</th><th>Когда выключать</th></tr>
+      <tr><td><b>date.gov.md</b></td><td>Полная карточка: форма, адрес, руководители,
+        учредители, задолженность</td><td>10–30 секунд</td><td>Когда нужна только быстрая
+        проверка существования организации</td></tr>
+      <tr><td><b>data2b.md</b></td><td>Название, IDNO, адрес</td><td>Доли секунды</td>
+        <td>Практически никогда: он бесплатный, быстрый и без проверок</td></tr>
+      <tr><td><b>Своя база</b></td><td>Всё, что накоплено ранее</td><td>Мгновенно</td>
+        <td>Когда нужно видеть только свежий ответ портала</td></tr>
+    </table>
+    </div>
+    <figure>
+      <img src="screenshots/08_sources_ru.png" alt="Переключатели источников поиска рядом с полем ввода" loading="lazy">
+      <figcaption><b>Переключатели «Источники».</b> Включённые источники опрашиваются
+      одновременно, результаты объединяются и дедуплицируются по IDNO.</figcaption>
+    </figure>
+    <div class="check"><span class="h">Должно получиться</span>
+      <p>Выключите <b>date.gov.md</b> и повторите поиск: ответ придёт почти мгновенно и
+      без окна Chrome. Включите обратно — вернётся полная карточка.</p></div>
+    <div class="note"><span class="h">Практический совет</span>
+      <p>Если оба онлайн-источника выключены, поиск идёт только по локальной базе. Это
+      удобный режим для работы без интернета и для быстрого просмотра уже найденного.</p></div>
+  </div>
+
+  <div class="lesson" id="l7">
+    <h3><span class="ln">07</span>Карточка организации</h3>
+    <p class="goal"><b>Цель:</b> прочитать карточку и понимать, откуда взялось каждое
+    поле.</p>
+    <ol class="steps">
+      <li>Выберите организацию в таблице результатов.</li>
+      <li>Нажмите <span class="ui">Подробнее</span> — программа откроет страницу карточки
+        на портале и заберёт полные сведения.</li>
+      <li>Ниже появятся блоки: базовые данные, <b>учредители</b> с долями и
+        <b>задолженность перед бюджетом</b>.</li>
+      <li>Кнопка <span class="ui">Экспорт в Markdown</span> сохраняет карточку отдельным
+        файлом — в том числе для передачи в ИИ-помощник, формат для этого и задуман.</li>
+    </ol>
+    <figure>
+      <img src="screenshots_ru/03_card.png" alt="Карточка организации с учредителями и задолженностью" loading="lazy">
+      <figcaption><b>Карточка.</b> Поля реестра доступны только для чтения — так
+      исключается расхождение с государственным источником.</figcaption>
+    </figure>
+    <div class="note"><span class="h">Что означает «Ликвидирована»</span>
+      <p>Поле приходит с портала в виде <code class="inl">Da</code> или
+      <code class="inl">Nu</code>. Значение <code class="inl">Da</code> — организация
+      ликвидирована; это повод остановить сделку, а не техническая ошибка.</p></div>
+  </div>
+
+  <div class="lesson" id="l8">
+    <h3><span class="ln">08</span>Работа без интернета</h3>
+    <p class="goal"><b>Цель:</b> пользоваться накопленной базой, когда портал недоступен
+    или не нужен.</p>
+    <ol class="steps">
+      <li>Перейдите на вкладку <span class="ui">Только БД</span>.</li>
+      <li>Введите любую часть названия или IDNO и нажмите <span class="ui">Найти</span>.
+        Поиск идёт по локальному файлу и не обращается к сети.</li>
+      <li>Через меню <span class="ui">Экспорт</span> базу можно выгрузить целиком в CSV
+        или Excel, а выбранные строки — в отдельные файлы Markdown.</li>
+    </ol>
+    <figure>
+      <img src="screenshots_ru/02_db_list.png" alt="Вкладка «Только БД» со списком накопленных организаций" loading="lazy">
+      <figcaption><b>Только БД.</b> Стартовая база содержит около 219 организаций и
+      пополняется автоматически при каждом успешном поиске.</figcaption>
+    </figure>
+  </div>
+
+  <div class="lesson" id="l9">
+    <h3><span class="ln">09</span>Возврат карточки в свою систему</h3>
+    <p class="goal"><b>Цель:</b> понять, как чужая программа получает карточку и что
+    видит оператор в этот момент.</p>
+    <p>Сценарий такой: в учётной системе не нашли контрагента, она запускает Contragenti
+    с готовым фильтром, оператор выбирает нужную организацию — и карточка возвращается
+    обратно в формате XML.</p>
+    <ol class="steps">
+      <li>Учётная система запускает программу с ключами
+        <code class="inl">--pick --out card.xml</code> и передаёт фильтр.</li>
+      <li>Окно открывается <b>с уже выполненным поиском</b>, вверху видна строка задания.</li>
+      <li>Оператор выбирает организацию и нажимает <span class="ui">Вернуть контрагента</span>.</li>
+      <li>Программа записывает карточку в файл и закрывается. Вызвавшая система
+        раскладывает поля по своим колонкам.</li>
+    </ol>
+    <figure>
+      <img src="screenshots/05_return_ru.png" alt="Режим выбора контрагента с кнопкой возврата" loading="lazy">
+      <figcaption><b>Режим выбора.</b> Кнопка <b>Вернуть контрагента</b> появляется только
+      тогда, когда программу вызвала другая система.</figcaption>
+    </figure>
+    <div class="note"><span class="h">Три исхода, которые должна уметь обработать ваша система</span>
+      <p><b>Карточка получена</b> — файл создан, поля разложены.
+      <b>Организация уже есть</b> — сверка идёт по IDNO, дубль не заводится.
+      <b>Оператор закрыл окно</b> — файла нет, и это <b>не ошибка</b>, а отказ от выбора.</p></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── ЧАСТЬ III ─────────────────────────── -->
+<section class="part" id="p3">
+  <div class="ph"><span class="pn">ЧАСТЬ III</span><h2>Demo CRM</h2>
+    <a class="top" href="#p1">↑ наверх</a></div>
+  <p class="pfor">Для оператора. Занятия 10–16. Demo CRM — рабочий пример учётной системы:
+  на ней удобно учиться и по ней же строится интеграция со своей программой.</p>
+
+  <div class="lesson" id="l10">
+    <h3><span class="ln">10</span>Вход, роли, первый экран</h3>
+    <p class="goal"><b>Цель:</b> войти в программу и понимать, что можно делать с вашей
+    ролью.</p>
+    <ol class="steps">
+      <li>Запустите <b>Demo CRM</b>. Панель входа появляется прямо в окне — отдельного
+        диалога нет.</li>
+      <li>Введите логин и пароль. Первый вход в новую базу — <b>admin / admin</b>; смените
+        пароль сразу в разделе <span class="ui">Настройки</span>.</li>
+      <li>Выберите язык — он запоминается и общий с Contragenti.</li>
+    </ol>
+    <figure>
+      <img src="../crm_delphi/shots_gui/01_login.png" alt="Панель входа в Demo CRM" loading="lazy">
+      <figcaption><b>Вход.</b> При отказе программа называет причину: нет такого
+      сотрудника, неверный пароль или счёт отключён администратором.</figcaption>
+    </figure>
+    <p>Роль определяет, что доступно на запись. Заводить сотрудников может только
+    администратор; остальные видят список, но кнопки записи у них погашены.</p>
+    <div class="tblwrap">
+    <table>
+      <tr><th>Роль</th><th>Типичные задачи</th></tr>
+      <tr><td>Администратор</td><td>Сотрудники, доступ, настройки, пароли</td></tr>
+      <tr><td>Руководитель</td><td>Рабочий стол, отчёты, проекты целиком</td></tr>
+      <tr><td>Коммерческий</td><td>Клиенты, лиды, сделки, заказы</td></tr>
+      <tr><td>Производство, Склад</td><td>Заказы, номенклатура, план работ</td></tr>
+      <tr><td>Бухгалтерия</td><td>Оплаты, дебиторская задолженность, отчёты</td></tr>
+      <tr><td>Наблюдатель</td><td>Только просмотр</td></tr>
+    </table>
+    </div>
+    <figure>
+      <img src="../crm_delphi/shots_gui/08_start.png" alt="Главное окно Demo CRM после входа" loading="lazy">
+      <figcaption><b>Первый экран.</b> Слева разделы, справа содержимое. Сообщения
+      появляются <b>цветной строкой внизу</b> — модальных окон в программе нет ни одного.</figcaption>
+    </figure>
+    <div class="note"><span class="h">Почему нет всплывающих окон</span>
+      <p>Модальное окно останавливает работу и делает невозможной проверку без человека.
+      Поэтому результат действия показывается строкой внизу, а удаление подтверждается
+      <b>повторным нажатием той же кнопки</b>.</p></div>
+  </div>
+
+  <div class="lesson" id="l11">
+    <h3><span class="ln">11</span>Клиент из реестра и дубли</h3>
+    <p class="goal"><b>Цель:</b> завести клиента, не набирая реквизиты руками, и увидеть,
+    как работает защита от дублей.</p>
+    <ol class="steps">
+      <li>Откройте раздел <span class="ui">Клиенты</span>.</li>
+      <li>Наберите в поле поиска название организации — оно уйдёт в Contragenti как
+        стартовый фильтр.</li>
+      <li>Нажмите <span class="ui">Создать из реестра</span>. Откроется Contragenti с
+        готовым поиском.</li>
+      <li>Выберите организацию и нажмите <span class="ui">Вернуть контрагента</span>.</li>
+      <li>Клиент появится в списке с заполненными реквизитами. Дополните то, чего нет в
+        реестре: тип, телефон, e-mail, контактное лицо, — и нажмите
+        <span class="ui">Сохранить</span>.</li>
+    </ol>
+    <figure>
+      <img src="../crm_delphi/shots_gui/09_import_unisim.png" alt="Клиент, заведённый из государственного реестра" loading="lazy">
+      <figcaption><b>Клиент заведён.</b> Поля из реестра доступны только для чтения,
+      редактируются лишь собственные данные компании.</figcaption>
+    </figure>
+    <p>Теперь повторите шаги 3–4 с <b>той же самой</b> организацией.</p>
+    <figure>
+      <img src="../crm_delphi/shots_gui/11_duplicate.png" alt="Повторный импорт отбит как дубликат" loading="lazy">
+      <figcaption><b>Дубль отбит.</b> Сверка идёт по IDNO, а не по названию: в реестре одна
+      и та же компания встречается в разном написании и с разной диакритикой.</figcaption>
+    </figure>
+    <div class="check"><span class="h">Должно получиться</span>
+      <p>Первый импорт добавил клиента, второй сообщил о дубликате, и число клиентов в
+      заголовке окна не изменилось.</p></div>
+  </div>
+
+  <div class="lesson" id="l12">
+    <h3><span class="ln">12</span>Лид, сделка, клиент</h3>
+    <p class="goal"><b>Цель:</b> пройти путь от первого интереса до клиента в справочнике.</p>
+    <ol class="steps">
+      <li>В разделе <span class="ui">Лиды</span> нажмите <span class="ui">Создать</span>
+        и заполните имя, компанию, телефон, источник обращения.</li>
+      <li>По мере работы меняйте статус: <b>Новый</b> → <b>В работе</b>.</li>
+      <li>Когда интерес подтвердился, нажмите <span class="ui">В клиенты</span>. Программа
+        создаст клиента, свяжет его с лидом и поставит статус <b>Конвертирован</b>.</li>
+      <li>В разделе <span class="ui">Сделки</span> заведите сделку на этого клиента,
+        укажите сумму и предполагаемую дату закрытия.</li>
+    </ol>
+    <figure>
+      <img src="../crm_delphi/shots_gui/30_lead_convert.png" alt="Лид превращён в клиента" loading="lazy">
+      <figcaption><b>Конверсия лида.</b> Повторное нажатие ничего не испортит: программа
+      ответит, что лид уже конвертирован.</figcaption>
+    </figure>
+  </div>
+
+  <div class="lesson" id="l13">
+    <h3><span class="ln">13</span>Заказ и его проведение</h3>
+    <p class="goal"><b>Цель:</b> собрать заказ из позиций и понять, что делает
+    <span class="ui">Провести</span>.</p>
+    <ol class="steps">
+      <li>Откройте <span class="ui">Заказы</span> и нажмите <span class="ui">Создать</span>.
+        Укажите номер, клиента, вид заказа и дату.</li>
+      <li>В нижней панели нажмите <span class="ui">+ Строка</span>, выберите позицию из
+        номенклатуры, укажите количество и цену. Сумма считается автоматически.</li>
+      <li>Доведите статус до <b>Выполнен</b> или <b>Оплачен</b>.</li>
+      <li>Нажмите <span class="ui">Провести</span>.</li>
+    </ol>
+    <figure>
+      <img src="../crm_delphi/shots_gui/34_order_lines.png" alt="Заказ со строками позиций" loading="lazy">
+      <figcaption><b>Строки заказа.</b> Позиции берутся из раздела «Номенклатура»,
+      вручную названия не набираются.</figcaption>
+    </figure>
+    <p>Проведение меняет остатки, и у разных видов заказа по-разному:</p>
+    <div class="tblwrap">
+    <table>
+      <tr><th>Вид заказа</th><th>Что происходит с остатком</th></tr>
+      <tr><td>Продажа</td><td>Уменьшается на количество в строках</td></tr>
+      <tr><td>Производство</td><td>Увеличивается: изделие изготовлено</td></tr>
+      <tr><td>Услуга</td><td>Не меняется</td></tr>
+    </table>
+    </div>
+    <figure>
+      <img src="../crm_delphi/shots_gui/35_order_posted.png" alt="Проведённый заказ" loading="lazy">
+      <figcaption><b>Проведено.</b> Повторное проведение невозможно — заказ помечен, и
+      остатки второй раз не тронутся.</figcaption>
+    </figure>
+    <div class="oops"><span class="h">Если кнопка не срабатывает</span>
+      <p>Провести можно только заказ в статусе <b>Выполнен</b> или <b>Оплачен</b> и только
+      один раз. Строка внизу назовёт причину отказа.</p></div>
+  </div>
+
+  <div class="lesson" id="l14">
+    <h3><span class="ln">14</span>Рабочий стол и канбан</h3>
+    <p class="goal"><b>Цель:</b> видеть состояние дел целиком и менять стадии
+    перетаскиванием.</p>
+    <p><b>Рабочий стол</b> — восемь плиток по стадиям процесса, от предложения до
+    закрытия. В каждой видно количество, сумму и сколько позиций просрочено. Щелчок по
+    плитке открывает соответствующий раздел с уже наложенным фильтром.</p>
+    <figure>
+      <img src="../crm_delphi/shots_gui/40_workspace.png" alt="Рабочий стол с плитками по стадиям" loading="lazy">
+      <figcaption><b>Рабочий стол.</b> Плитка с просрочкой — первое, на что смотрят утром.</figcaption>
+    </figure>
+    <p><b>Канбан</b> содержит пять досок: заказы, сделки, задачи, проекты и задачи
+    проектов. Карточку можно перетащить мышью или перевести кнопками
+    <span class="ui">←</span> и <span class="ui">→</span>; двойной щелчок открывает запись.</p>
+    <figure>
+      <img src="../crm_delphi/shots_gui/47_kanban_orders.png" alt="Канбан заказов по колонкам процесса" loading="lazy">
+      <figcaption><b>Канбан заказов.</b> Перетаскивание меняет стадию сразу в базе —
+      отдельно сохранять не нужно.</figcaption>
+    </figure>
+  </div>
+
+  <div class="lesson" id="l15">
+    <h3><span class="ln">15</span>Процесс, план работ, календарь</h3>
+    <p class="goal"><b>Цель:</b> пользоваться тремя способами смотреть на одни и те же
+    данные.</p>
+    <p><b>Бизнес-процесс</b> — схема с дорожками: кто за что отвечает и в каком порядке.
+    Щелчок по узлу показывает его карточки и описание, двойной — открывает раздел с
+    фильтром. Описание узла можно править прямо здесь, оно сохраняется в общий файл
+    процессов.</p>
+    <figure>
+      <img src="../crm_delphi/shots_gui/55_process_scheme.png" alt="Схема бизнес-процесса с дорожками и узлами" loading="lazy">
+      <figcaption><b>Процесс.</b> Карточку можно перетащить из узла в узел — стадия
+      изменится так же, как на канбане.</figcaption>
+    </figure>
+    <p><b>План работ</b> — диаграмма Ганта: план и факт, красным просроченное, зелёным
+    закрытое, вертикальная линия «сегодня». Полосу можно двигать мышью и растягивать за
+    край. В режиме проектов видны стрелки зависимостей между задачами.</p>
+    <figure>
+      <img src="../crm_delphi/shots_gui/65_gantt_all.png" alt="Диаграмма Ганта по заказам и задачам" loading="lazy">
+      <figcaption><b>План работ.</b> Производственные заказы раскрываются в отдельные
+      операции.</figcaption>
+    </figure>
+    <p><b>Календарь</b> — сетка месяца. Задачу можно перетащить на другой день, и срок
+    изменится.</p>
+    <figure>
+      <img src="../crm_delphi/shots_gui/53_calendar_month.png" alt="Календарь задач сеткой месяца" loading="lazy">
+      <figcaption><b>Календарь.</b> Двойной щелчок по задаче открывает её карточку.</figcaption>
+    </figure>
+  </div>
+
+  <div class="lesson" id="l16">
+    <h3><span class="ln">16</span>Проекты и отчёты</h3>
+    <p class="goal"><b>Цель:</b> вести проект с тендером и авансом и выгружать отчёты.</p>
+    <p>Проект отличается от заказа тем, что живёт долго и состоит из этапов. В карточке
+    есть номер тендера, срок подачи, бюджет, процент аванса и полученные оплаты. Кнопки
+    <span class="ui">Задачи проекта</span> и <span class="ui">План (Гант)</span> открывают
+    его этапы.</p>
+    <figure>
+      <img src="../crm_delphi/shots_gui/66_projects_list.png" alt="Список проектов с тендерами и бюджетами" loading="lazy">
+      <figcaption><b>Проекты.</b> Этапы создаются по шаблону; шаг с авансом пропускается,
+      если аванс не предусмотрен.</figcaption>
+    </figure>
+    <p>В разделе <span class="ui">Отчёты</span> доступны шесть отчётов: исполнение заказов,
+    дебиторская задолженность, продажи по клиентам, воронка продаж, остатки номенклатуры и
+    проекты. Дополнительно выбирается сотрудник — «все» или конкретный человек.</p>
+    <ol class="steps">
+      <li>Выберите отчёт в списке — таблица появится тут же, в окне.</li>
+      <li>Нажмите <span class="ui">Excel</span> или <span class="ui">PDF</span>.</li>
+      <li>Кнопка открытия папки покажет файл: он сохраняется в каталог отчётов с датой в
+        имени.</li>
+    </ol>
+    <figure>
+      <img src="../crm_delphi/shots_gui/60_report_process.png" alt="Отчёт об исполнении заказов" loading="lazy">
+      <figcaption><b>Отчёт.</b> Файлы xlsx и PDF формируются самой программой, Excel и
+      Acrobat для этого не нужны.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ─────────────────────────── ЧАСТЬ IV ─────────────────────────── -->
+<section class="part" id="p4">
+  <div class="ph"><span class="pn">ЧАСТЬ IV</span><h2>Интеграция</h2>
+    <a class="top" href="#p1">↑ наверх</a></div>
+  <p class="pfor">Выполняет ИТ-администратор вместе с администратором базы данных.
+  Занятия 17–18, только для вариантов развёртывания B–D.</p>
+
+  <div class="lesson" id="l17">
+    <h3><span class="ln">17</span>Подключение к справочнику ERP</h3>
+    <p class="goal"><b>Цель:</b> отправлять найденные организации прямо в справочник
+    ERP una.md, без промежуточных выгрузок.</p>
+    <ol class="steps">
+      <li>Установите <b>64-битный Oracle Instant Client</b>. Для сервера версии 11.2 это
+        обязательно: «тонкий» режим драйвера такую версию не поддерживает.</li>
+      <li>Откройте настройки подключения в Contragenti и заполните строку подключения,
+        техническую учётную запись и путь к Instant Client.</li>
+      <li><b>Пароль задавайте переменной окружения</b>
+        (<code class="inl">TMS_PASSWORD</code>), а не в файле настроек: окружение имеет
+        приоритет, а файл может попасть в резервную копию или систему контроля версий.</li>
+      <li>Нажмите проверку связи. Затем отметьте организации в списке и отправьте их.</li>
+    </ol>
+    <figure>
+      <img src="screenshots_ru/08_tms_settings.png" alt="Окно настроек подключения к ERP" loading="lazy">
+      <figcaption><b>Настройки подключения.</b> Поле пароля можно оставить пустым — тогда
+      значение берётся из окружения.</figcaption>
+    </figure>
+    <figure>
+      <img src="screenshots_ru/07_tms_panel.png" alt="Панель отправки организаций в ERP" loading="lazy">
+      <figcaption><b>Панель отправки.</b> Виден ход выполнения и итог по каждой
+      организации.</figcaption>
+    </figure>
+    <p>Каждая организация ложится в справочник <b>тремя связанными блоками</b>: справочная
+    запись, реквизиты и банковские счета. Каждый блок идёт своей транзакцией, поэтому сбой
+    на счетах не отменяет уже заведённую организацию.</p>
+    <div class="check"><span class="h">Должно получиться</span>
+      <p>Тестовая организация появилась в справочнике всеми тремя блоками, связанными общим
+      идентификатором. Повторная отправка той же организации второй записи не создала —
+      сверка идёт по фискальному коду и подкреплена ограничением в самой базе.</p></div>
+    <div class="oops"><span class="h">Если не получилось</span>
+      <p><b>Ошибка инициализации драйвера.</b> Проверьте разрядность Instant Client: нужна
+      64-битная сборка, и путь к ней должен быть указан явно.</p>
+      <p><b>Организация пропущена.</b> Записи без идентификационного кода в справочник не
+      передаются: их не с чем сверять, и при каждой отправке они бы задваивались.</p></div>
+  </div>
+
+  <div class="lesson" id="l18">
+    <h3><span class="ln">18</span>Общий справочник через хаб</h3>
+    <p class="goal"><b>Цель:</b> собрать базы с нескольких рабочих мест в один справочник.</p>
+    <p>Рабочие места отправляют свои базы на хаб, он ставит пакет в очередь и вливает его
+    в справочник асинхронно. Приём и импорт разделены намеренно: пакет переживает
+    перезапуск и недоступность базы данных.</p>
+    <ol class="steps">
+      <li>Выпустите ключ каждому рабочему месту — по ключу видно, кто прислал пакет, и
+        отзыв одного не затрагивает остальные:
+        <pre>python tools/hub_keygen.py <span class="g">"Бухгалтерия"</span> --save
+python tools/hub_keygen.py --list</pre></li>
+      <li>Запустите хаб контейнером либо службой systemd (обе процедуры описаны в
+        <code class="inl">deploy/README_ru.md</code>).</li>
+      <li>Выставьте его наружу только через reverse-proxy с TLS: пакет — это база
+        организаций, по открытому HTTP она ходить не должна.</li>
+      <li>На рабочих местах пропишите адрес хаба и ключ. Отправка пойдёт в фоне.</li>
+    </ol>
+    <div class="note"><span class="h">Проверка после установки</span>
+      <p>Обращение к хабу без ключа должно возвращать отказ, с ключом — приниматься.
+      Если хаб слушает внешний адрес, а ключи не заданы, приём закрыт намеренно:
+      иначе в общий справочник смог бы писать любой, кто знает адрес.</p></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── ЧАСТЬ V ─────────────────────────── -->
+<section class="part" id="p5">
+  <div class="ph"><span class="pn">ЧАСТЬ V</span><h2>Приёмка и самоконтроль</h2>
+    <a class="top" href="#p1">↑ наверх</a></div>
+  <p class="pfor">Для приёмочной комиссии. Занятие 19 и материалы для самопроверки.</p>
+
+  <div class="lesson" id="l19">
+    <h3><span class="ln">19</span>Проверки с кодами возврата</h3>
+    <p class="goal"><b>Цель:</b> принимать работу по измеримому результату, а не по
+    словам исполнителя.</p>
+    <p>Каждая программа умеет проверить себя сама и закончить работу кодом возврата.
+    Это и есть материал приёмки: в протокол вносится фактическое значение.</p>
+    <div class="tblwrap">
+    <table>
+      <tr><th>Команда</th><th>Что проверяет</th><th>Ожидается</th></tr>
+      <tr><td class="mono-c">Contragenti.exe --selftest</td><td>База, три языка, экспорт,
+        сеть, разборщики страниц, настройки источников</td><td>8 из 8, код 0</td></tr>
+      <tr><td class="mono-c">ContragentiCRM.exe --selftest</td><td>Разбор карточки,
+        добавление и отсечение дубля</td><td>Успех, код 0</td></tr>
+      <tr><td class="mono-c">ContragentiCRM.exe --dml-test</td><td>Операции со всеми
+        таблицами во временной базе</td><td>110 проверок, код 0</td></tr>
+      <tr><td class="mono-c">ContragentiCRM.exe --gui-test</td><td>Сценарий интерфейса со
+        снимками экрана</td><td>80 из 80, отчёт создан</td></tr>
+      <tr><td class="mono-c">ContragentiSetup.exe --check --offline</td><td>Все шаги
+        мастера без окна</td><td>«ошибок 0, замечаний 0»</td></tr>
+    </table>
+    </div>
+    <div class="note"><span class="h">Как это читать</span>
+      <p>Проверка интерфейса из 80 шагов включает вход с неверным паролем, переключение
+      языка, импорт и повторный импорт, перетаскивание на канбане и диаграмме Ганта,
+      проведение заказа, выгрузку всех отчётов — и настоящий вызов Contragenti.
+      Отчёт со снимками каждого шага сохраняется одним файлом.</p></div>
+    <div class="oops"><span class="h">Важно для приёмки</span>
+      <p>Проверка интерфейса <b>требует экрана</b> и не работает на сервере без рабочего
+      стола. Это цена настоящих перетаскиваний вместо их имитации: планируйте прогон на
+      обычном рабочем месте.</p></div>
+  </div>
+
+  <div class="lesson" id="cl">
+    <h3>Чек-лист: рабочее место готово</h3>
+    <ul class="cl">
+      <li>Программы установлены, ярлыки на рабочем столе присутствуют</li>
+      <li>Мастер настройки завершился с итогом «ошибок 0, замечаний 0»</li>
+      <li>Google Chrome установлен, пробный поиск на портале выполнен</li>
+      <li>В базе организаций есть стартовые записи</li>
+      <li>Вход в Demo CRM выполняется, пароль администратора изменён</li>
+      <li>Клиент из реестра заведён, повторный импорт отбит как дубликат</li>
+      <li>Заказ создан, проведён, остаток номенклатуры изменился</li>
+      <li>Отчёт выгружен в Excel и открывается</li>
+      <li>Язык интерфейса соответствует согласованному</li>
+      <li>Каталог данных включён в резервное копирование рабочих станций</li>
+    </ul>
+
+    <h3 style="margin-top:34px">Контрольные вопросы</h3>
+    <ol class="qa">
+      <li>Почему при поиске открывается окно браузера и можно ли это отключить?
+        <span class="a">Форма реестра защищена невидимой проверкой, которая срабатывает
+        только для настоящего браузера. Отключать нельзя: скрытый режим не даст пройти
+        проверку, когда она появится.</span></li>
+      <li>Где окажется база организаций, если программа установлена в Program Files?
+        <span class="a">В профиле пользователя, в каталоге данных приложения. Так у
+        администратора и обычного пользователя не будет разных баз.</span></li>
+      <li>По какому полю отсекаются дубли и почему не по названию?
+        <span class="a">По IDNO. Названия в реестре встречаются в разном написании,
+        регистре и с разной диакритикой.</span></li>
+      <li>Учётная система запустила поиск, но оператор закрыл окно. Это ошибка?
+        <span class="a">Нет. Файл карточки не создаётся, и это штатный отказ от выбора,
+        который вызывающая программа должна обработать отдельно.</span></li>
+      <li>Что делает кнопка «Провести» у заказа на производство?
+        <span class="a">Увеличивает остаток номенклатуры: изделие изготовлено. У продажи
+        остаток уменьшается, у услуги не меняется.</span></li>
+      <li>Почему в CRM нет всплывающих окон с сообщениями?
+        <span class="a">Модальное окно останавливает работу и делает невозможной проверку
+        без человека. Результат показывается строкой внизу, удаление подтверждается
+        повторным нажатием.</span></li>
+      <li>Установщик MSI выдал ошибку 1625. Что это и что делать?
+        <span class="a">Запрет политики домена на пакеты Windows Installer. Нужно
+        использовать setup.exe — он с Windows Installer не связан.</span></li>
+      <li>Сервер Oracle версии 11.2. Что обязательно подготовить заранее?
+        <span class="a">64-битный Oracle Instant Client: «тонкий» режим драйвера эту
+        версию не поддерживает.</span></li>
+    </ol>
+  </div>
+
+  <div class="lesson" id="gloss">
+    <h3>Словарь</h3>
+    <dl class="gloss">
+      <dt>IDNO</dt><dd>Идентификационный номер организации в Молдове, 13 цифр. Главный ключ
+        сверки: по нему отсекаются дубли и связываются записи между системами.</dd>
+      <dt>Карточка</dt><dd>Набор сведений об организации из реестра: название, юридическая
+        форма, адрес, руководители, учредители, задолженность. Передаётся между программами
+        в формате XML.</dd>
+      <dt>Дедупликация</dt><dd>Отсечение повторов. Работает на двух уровнях: проверкой
+        перед записью и ограничением в самой базе.</dd>
+      <dt>Мастер настройки</dt><dd>Программа, которая доводит рабочее место до готовности:
+        проверяет компьютер, обновляет компоненты, разворачивает стартовую базу и делает
+        самопроверку.</dd>
+      <dt>Самопроверка</dt><dd>Встроенный режим, который заканчивается кодом возврата.
+        Основной материал приёмки.</dd>
+      <dt>Хаб</dt><dd>Служба, собирающая базы с рабочих мест в один справочник. Приём и
+        импорт разделены, поэтому пакет не теряется при перезапуске.</dd>
+      <dt>Проведение</dt><dd>Действие над заказом, изменяющее остатки номенклатуры.
+        Выполняется один раз и только в статусе «Выполнен» или «Оплачен».</dd>
+      <dt>Стартовая база</dt><dd>Около 219 организаций, поставляемых вместе с программой,
+        чтобы работа была возможна с первого запуска и без интернета.</dd>
+    </dl>
+  </div>
+</section>
+
+<footer>
+  Методичка сопровождает документ «Руководство по внедрению» (<code>IMPLEMENTATION_ru.md</code>).
+  Исходные тексты, установщики и полная документация —
+  <a href="https://github.com/PavelTuhari/Contragenti">github.com/PavelTuhari/Contragenti</a>.
+  Данные об организациях — портал открытых данных Правительства Республики Молдова
+  (date.gov.md); программа работает с публичной формой штатным способом, как обычный
+  пользователь в браузере.
+</footer>
+</div>
