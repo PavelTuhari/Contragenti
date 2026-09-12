@@ -1,0 +1,508 @@
+<meta charset="utf-8">
+<title>Delphi, Oracle и C++ под управлением ИИ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=Public+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ink:#12222f; --ink-soft:#3d5162; --mute:#69808f;
+  --paper:#f6f7f5; --card:#ffffff; --rule:#d7dde0; --rule-soft:#e6eaec;
+  --accent:#0b6e5f; --accent-soft:#e3efec; --accent-line:#c9e0da;
+  --stamp:#a63a2b; --stamp-soft:#f6e7e4; --stamp-line:#e8ccc6;
+  --shadow:0 1px 2px rgba(18,34,47,.05),0 8px 22px rgba(18,34,47,.06);
+  --code-bg:#12222f; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e6edf1; --ink-soft:#b3c2cc; --mute:#8399a6;
+    --paper:#0e1a23; --card:#152532; --rule:#263a49; --rule-soft:#1d2f3c;
+    --accent:#4fc0aa; --accent-soft:#12332e; --accent-line:#1c4a42;
+    --stamp:#e08574; --stamp-soft:#3a201b; --stamp-line:#5a2e26;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.35);
+    --code-bg:#0a1620; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e6edf1; --ink-soft:#b3c2cc; --mute:#8399a6;
+  --paper:#0e1a23; --card:#152532; --rule:#263a49; --rule-soft:#1d2f3c;
+  --accent:#4fc0aa; --accent-soft:#12332e; --accent-line:#1c4a42;
+  --stamp:#e08574; --stamp-soft:#3a201b; --stamp-line:#5a2e26;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.35);
+  --code-bg:#0a1620; --code-fg:#cfe3de; --code-dim:#7f9aa4; --code-hi:#4fc0aa;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:840px;margin:0 auto;padding:0 24px 96px}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace}
+p{max-width:66ch}
+a{color:var(--accent)}
+header{padding:72px 0 38px;border-bottom:2px solid var(--ink)}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+  font-weight:700;margin:0 0 16px}
+h1{font-family:Spectral,Georgia,serif;font-weight:600;font-size:clamp(34px,5.6vw,54px);
+  line-height:1.05;margin:0;letter-spacing:-.015em;text-wrap:balance}
+.lede{font-family:Spectral,Georgia,serif;font-size:20px;line-height:1.5;color:var(--ink-soft);
+  margin:18px 0 0;max-width:60ch}
+.meta{display:flex;flex-wrap:wrap;gap:6px 26px;margin:26px 0 0;font-size:13px;color:var(--mute)}
+.meta b{color:var(--ink-soft);font-weight:500}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin:34px 0 0;border-radius:3px;overflow:hidden}
+.tile{background:var(--card);padding:16px 18px}
+.tile .k{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);
+  font-weight:700;margin:0 0 7px}
+.tile .v{font-family:Spectral,Georgia,serif;font-size:27px;font-weight:600;line-height:1;
+  margin:0;font-variant-numeric:tabular-nums}
+.tile .v.ok{color:var(--accent)}
+.tile .n{font-size:12px;color:var(--mute);margin:6px 0 0;line-height:1.4}
+section{padding:56px 0 0}
+h2{font-family:Spectral,Georgia,serif;font-weight:600;font-size:28px;margin:0 0 8px;
+  letter-spacing:-.01em;text-wrap:balance}
+h3{font-size:17px;font-weight:700;margin:34px 0 2px;letter-spacing:-.005em}
+h3 .tag{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;color:var(--stamp);
+  display:block;margin:0 0 6px;letter-spacing:0}
+.sub{color:var(--mute);font-size:15px;margin:0 0 26px;max-width:64ch}
+.note,.warn{border-radius:3px;padding:16px 20px;margin:22px 0 0;font-size:14.5px}
+.note{background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--ink-soft)}
+.warn{background:var(--stamp-soft);border:1px solid var(--stamp-line);color:var(--ink-soft)}
+.note b{color:var(--accent)} .warn b{color:var(--stamp)}
+.note p,.warn p{margin:0;max-width:none}
+pre{background:var(--code-bg);color:var(--code-fg);border-radius:3px;padding:15px 18px;
+  overflow-x:auto;font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.65;margin:16px 0 0}
+pre .c{color:var(--code-dim)} pre .g{color:var(--code-hi)}
+code.inl{background:var(--accent-soft);color:var(--accent);padding:1px 5px;border-radius:2px;font-size:12.5px}
+figure{margin:26px 0 0}
+figure svg{display:block;width:100%;height:auto}
+figcaption{font-size:12.5px;color:var(--mute);margin:10px 0 0}
+.tblwrap{overflow-x:auto;margin:18px 0 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--card)}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);font-weight:700}
+td.mono-c{font-family:"IBM Plex Mono",monospace;font-size:12.5px;white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+th.num{text-align:right}
+.badge{font-family:"IBM Plex Mono",monospace;font-size:11px;padding:2px 8px;border-radius:2px;
+  font-weight:700;white-space:nowrap}
+.badge.ok{background:var(--accent-soft);color:var(--accent)}
+.list{margin:18px 0 0;padding:0;list-style:none;display:grid;gap:1px;background:var(--rule);
+  border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.list li{background:var(--card);padding:13px 18px;font-size:14px;display:grid;
+  grid-template-columns:26px 1fr;gap:14px;align-items:baseline}
+.list li .i{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--accent);font-weight:500;
+  font-variant-numeric:tabular-nums}
+.list li b{font-weight:700}
+.list li span.t{color:var(--ink-soft);line-height:1.5}
+.stat{display:flex;flex-wrap:wrap;gap:10px 28px;margin:20px 0 0;font-size:13.5px;color:var(--ink-soft)}
+.stat b{font-family:Spectral,Georgia,serif;font-size:21px;font-weight:600;color:var(--accent);
+  font-variant-numeric:tabular-nums;margin-right:7px}
+footer{margin:64px 0 0;padding:22px 0 0;border-top:1px solid var(--rule);font-size:13px;color:var(--mute)}
+footer a{color:var(--accent)}
+@media (max-width:560px){header{padding:44px 0 28px}.list li{grid-template-columns:1fr;gap:4px}}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Delphi 10.2 · Oracle 11.2 · C++ · Swift</p>
+  <h1>Delphi, Oracle и C++ под управлением ИИ</h1>
+  <p class="lede">Считается, что агент полезен только на модном стеке. Разбор рабочего
+  репозитория, где всё оказалось наоборот: старый стек удобнее нового — но при одном
+  условии, которое стоит скопировать в свой проект.</p>
+  <div class="meta">
+    <span><b>Проект</b> Contragenti · Demo CRM · ERP una.md</span>
+    <span><b>Период</b> 27 августа — 12 сентября 2026</span>
+    <span><b>Исходники</b> github.com/PavelTuhari/Contragenti</span>
+  </div>
+  <div class="tiles">
+    <div class="tile"><p class="k">Коммитов</p><p class="v">46</p><p class="n">за 17 дней</p></div>
+    <div class="tile"><p class="k">Из них агентом</p><p class="v ok">35</p><p class="n">от правки до релиза</p></div>
+    <div class="tile"><p class="k">Delphi</p><p class="v">13&nbsp;808</p><p class="n">строк, формы кодом</p></div>
+    <div class="tile"><p class="k">Swift</p><p class="v">9&nbsp;292</p><p class="n">порт по постановке</p></div>
+  </div>
+</header>
+
+<section>
+  <h2>1. Что за проекты</h2>
+  <p class="sub">Одна задача: найти молдавскую организацию в государственном реестре
+  date.gov.md и положить её карточку в свою учётную систему — без ручного перенабора.</p>
+
+  <div class="tblwrap">
+  <table>
+    <tr><th>Компонент</th><th>Стек</th><th class="num">Объём</th><th>Роль</th></tr>
+    <tr><td><b>Contragenti</b></td><td>Python, Tkinter, Selenium, SQLite</td><td class="num">3 434</td>
+        <td>Утилита поиска: окно, база, локальный HTTP-API на порту 9393</td></tr>
+    <tr><td><b>Demo CRM</b></td><td>Delphi 10.2, VCL, FireDAC</td><td class="num">13 808</td>
+        <td>Эталонная интеграция «от кнопки до строки в БД»: канбан, Гант, календарь, диаграмма процесса, 6 отчётов</td></tr>
+    <tr><td><b>Demo CRM для macOS</b></td><td>Swift, AppKit</td><td class="num">9 292</td>
+        <td>Нативный порт того же приложения; сделан моделью на Mac по письменной постановке</td></tr>
+    <tr><td><b>Интеграция с ERP</b></td><td>Python + Oracle</td><td class="num">—</td>
+        <td>Запись организации в справочник una.md тремя связанными блоками</td></tr>
+    <tr><td><b>Обмен сотрудниками</b></td><td>PL/SQL + Python</td><td class="num">416</td>
+        <td>Двусторонняя синхронизация карточек через очереди на триггерах с обеих сторон</td></tr>
+    <tr><td><b>Хаб</b></td><td>FastAPI + SQLite + Oracle</td><td class="num">~870</td>
+        <td>Сбор баз с рабочих мест, очередь, асинхронный импорт в справочник</td></tr>
+    <tr><td><b>SDK</b></td><td>C++ (header-only), Python, Delphi</td><td class="num">—</td>
+        <td>Обёртки вызова для чужих приложений</td></tr>
+    <tr><td><b>Установщики и мастер</b></td><td>cx_Freeze, PyInstaller, MSI, pkg</td><td class="num">2 445</td>
+        <td>Установка на чистые Windows и macOS, обновление по манифесту с sha256</td></tr>
+  </table>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 800 246" role="img" aria-label="Схема: Demo CRM запускает Contragenti, тот обращается к реестрам; данные уходят через хаб в Oracle-справочник ERP">
+      <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.25" color="var(--mute)" marker-end="url(#a1)">
+        <path d="M216,62 L296,62"/><path d="M500,62 L580,62"/>
+        <path d="M398,106 L398,150"/><path d="M500,190 L580,190"/>
+      </g>
+      <g font-family="Public Sans,sans-serif" font-size="12.5">
+        <rect x="16" y="22" width="200" height="80" rx="3" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+        <text x="116" y="50" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="700">Demo CRM</text>
+        <text x="116" y="68" text-anchor="middle" fill="var(--mute)" font-size="10.5">Delphi/VCL · Swift/AppKit</text>
+        <text x="116" y="86" text-anchor="middle" fill="var(--mute)" font-family="IBM Plex Mono,monospace" font-size="10.5">clients.db</text>
+
+        <rect x="298" y="22" width="200" height="80" rx="3" fill="var(--card)" stroke="var(--rule)"/>
+        <text x="398" y="50" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">Contragenti</text>
+        <text x="398" y="68" text-anchor="middle" fill="var(--mute)" font-size="10.5">Chrome · SQLite</text>
+        <text x="398" y="86" text-anchor="middle" fill="var(--mute)" font-family="IBM Plex Mono,monospace" font-size="10.5">--pick --out card.xml</text>
+
+        <rect x="582" y="22" width="202" height="80" rx="3" fill="var(--card)" stroke="var(--rule)"/>
+        <text x="683" y="50" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">Реестры</text>
+        <text x="683" y="68" text-anchor="middle" fill="var(--mute)" font-size="10.5">date.gov.md · data2b.md</text>
+        <text x="683" y="86" text-anchor="middle" fill="var(--mute)" font-size="10.5">невидимая reCAPTCHA</text>
+
+        <rect x="298" y="150" width="200" height="80" rx="3" fill="var(--card)" stroke="var(--rule)"/>
+        <text x="398" y="178" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">Хаб</text>
+        <text x="398" y="196" text-anchor="middle" fill="var(--mute)" font-size="10.5">очередь, переживает перезапуск</text>
+        <text x="398" y="214" text-anchor="middle" fill="var(--mute)" font-family="IBM Plex Mono,monospace" font-size="10.5">POST /api/v1/batches</text>
+
+        <rect x="582" y="150" width="202" height="80" rx="3" fill="var(--stamp-soft)" stroke="var(--stamp-line)"/>
+        <text x="683" y="178" text-anchor="middle" fill="var(--stamp)" font-size="13" font-weight="700">ERP una.md</text>
+        <text x="683" y="196" text-anchor="middle" fill="var(--mute)" font-size="10.5">Oracle 11.2</text>
+        <text x="683" y="214" text-anchor="middle" fill="var(--mute)" font-family="IBM Plex Mono,monospace" font-size="10.5">TMS_UNIVERS · TMS_ORG</text>
+
+        <text x="256" y="52" text-anchor="middle" fill="var(--mute)" font-size="10.5">фильтр</text>
+        <text x="540" y="52" text-anchor="middle" fill="var(--mute)" font-size="10.5">Chrome</text>
+        <text x="410" y="134" fill="var(--mute)" font-size="10.5">gzip(sqlite)</text>
+        <text x="540" y="180" text-anchor="middle" fill="var(--mute)" font-size="10.5">импорт</text>
+      </g>
+    </svg>
+    <figcaption>CRM ничего не знает о капче, Selenium и структуре портала: вся эта работа
+    остаётся внутри Contragenti, наружу отдаётся простой XML-контракт.</figcaption>
+  </figure>
+
+  <div class="stat">
+    <span><b>46</b> коммитов за 17 дней</span>
+    <span><b>35</b> с пометкой <code class="inl">Co-Authored-By</code></span>
+    <span><b>3</b> языка интерфейса</span>
+  </div>
+</section>
+
+<section>
+  <h2>2. Почему «старый» стек оказался удобнее нового</h2>
+  <p class="sub">Меньше движущихся частей — больше пользы от модели: её контекст тратится
+  на задачу, а не на починку окружения.</p>
+
+  <h3><span class="tag">dcc32 · VCL · FireDAC</span>Delphi: одна команда — один бинарник</h3>
+  <pre>dcc32.exe -B --no-config -NU.\dcu -E.\ ContragentiCRM.dpr</pre>
+  <p>Всё. Ни <code class="inl">npm install</code> на четыреста мегабайт, ни конфликтов версий,
+  ни «у меня собирается, у тебя нет». Зависимости приложения — VCL, FireDAC,
+  <code class="inl">System.Zip</code> и HTTP-клиент из поставки. <b>Ни одного стороннего
+  компонента</b>: xlsx и PDF написаны руками — zip с XML внутри и шрифт CIDFontType2,
+  зашитый ради кириллицы.</p>
+  <p>Второе решение оказалось важнее первого: <b>в проекте нет ни одного <code
+  class="inl">.dfm</code></b> — все формы строятся кодом. Визуальный дизайнер удобен человеку,
+  но его файл почти не читается в <code class="inl">git diff</code> и не правится текстом.
+  Как только формы стали обычным кодом, правка интерфейса стала видна построчно: агент её
+  делает, человек проверяет.</p>
+  <p>Третье: <b>VCL стабилен четверть века</b>. Модель знает <code class="inl">TListView</code>
+  лучше, чем фреймворк, вышедший в прошлом квартале, — за ним двадцать лет неизменной
+  документации и примеров. Парадокс, но возраст API здесь работает на нас.</p>
+
+  <h3><span class="tag">python-oracledb · thick mode</span>Oracle: схема как контракт, который нельзя «случайно отрефакторить»</h3>
+  <p>Организация пишется в справочник тремя автономными блоками, каждый — своей транзакцией:
+  сбой на счетах не отменяет уже заведённую организацию.</p>
+  <div class="tblwrap">
+  <table>
+    <tr><th>Блок</th><th>Что содержит</th></tr>
+    <tr><td class="mono-c">TMS_UNIVERS</td><td>Справочная запись: название, оригинальное написание,
+      <code class="inl">CODVECHI</code> = IDNO, признак <code class="inl">GR1='E'</code>;
+      <code class="inl">COD</code> выдаёт триггер или последовательность</td></tr>
+    <tr><td class="mono-c">TMS_ORG</td><td>Реквизиты: фискальный код, юридический адрес, руководитель</td></tr>
+    <tr><td class="mono-c">TMS_ORG_ACCOUNTS</td><td>Банковские счета; банк определяется по буквенному
+      префиксу IBAN через тот же справочник</td></tr>
+  </table>
+  </div>
+  <div class="note"><p><b>Инвариант держит база, а не код.</b> Дедупликация защищена дважды:
+  проверкой перед вставкой и штатным триггером на уникальность фискального кода. Модель может
+  ошибиться в коде проверки; база второго контрагента с тем же кодом не заведёт. Правило простое —
+  то, что дорого нарушить, живёт в схеме.</p></div>
+  <p>Особенности старого сервера записаны явно, иначе их не угадать: Oracle 11.2 не поддерживается
+  тонким режимом драйвера, поэтому нужен 64-битный Instant Client, каталоги поиска перечислены
+  списком, инициализация однократная под блокировкой. Пароль в коде не лежит — параметры берутся
+  из конфига или переменных окружения, окружение имеет приоритет.</p>
+
+  <h3><span class="tag">header-only · WinAPI</span>C++: никакого пакетного менеджера</h3>
+  <p>SDK — один заголовок с единственной зависимостью WinAPI: конвертер UTF-8 ↔ UTF-16,
+  строковый разбор плоского XML и запуск процесса с таймаутом.</p>
+  <pre><span class="c">// подключается одним #include, компилируется вместе с проектом</span>
+ContragentiCard card;
+<span class="g">if</span> (PickCounterparty(L<span class="g">"Contragenti.exe"</span>, L<span class="g">"UNISIM"</span>, L<span class="g">"ru"</span>, 300000, card)) {
+    db.Insert(card.idno, card.denumire, card.adresa, card.formaJuridica);
+}</pre>
+  <p>Соблазн подключить готовую XML-библиотеку был, и он неправильный: любая внешняя зависимость
+  в C++ — это выбор менеджера пакетов, версии рантайма и разрядности, то есть три новых способа
+  не собраться у пользователя. Сто строк ручного парсера под известный формат надёжнее — и агент
+  пишет их без ошибок, потому что формат зафиксирован в документе контракта.</p>
+</section>
+
+<section>
+  <h2>3. Как устроен репозиторий, чтобы в нём мог работать агент</h2>
+  <p class="sub">Это главная часть. Стек сам по себе ничего не решает; решает то, может ли
+  модель проверить себя без человека.</p>
+
+  <h3>Машинно-проверяемый результат вместо «я проверил»</h3>
+  <p>В каждой программе есть режим, который заканчивается кодом возврата.</p>
+  <div class="tblwrap">
+  <table>
+    <tr><th>Команда</th><th>Что проверяет</th><th class="num">Объём</th></tr>
+    <tr><td class="mono-c">Contragenti --selftest</td><td>SQLite, три языка, экспорт XML, сеть,
+      HTML-парсеры, разбор обоих источников, настройки</td><td class="num"><span class="badge ok">8/8</span></td></tr>
+    <tr><td class="mono-c">CRM --selftest</td><td>Разбор карточки, добавление и дедупликация по IDNO</td>
+      <td class="num"><span class="badge ok">OK</span></td></tr>
+    <tr><td class="mono-c">CRM --dml-test</td><td>CRUD по всем таблицам во временной базе</td>
+      <td class="num">110</td></tr>
+    <tr><td class="mono-c">CRM --gui-test</td><td>Сценарий интерфейса со снимками и сводным отчётом</td>
+      <td class="num">80</td></tr>
+    <tr><td class="mono-c">Setup --check --offline</td><td>Все шаги мастера без окна</td>
+      <td class="num"><span class="badge ok">0 ошибок</span></td></tr>
+  </table>
+  </div>
+  <p>Разница принципиальная: агент не может закончить работу фразой «должно работать» — он обязан
+  предъявить код возврата и строку отчёта. Всё, что нельзя так проверить, в приёмку не входит.</p>
+  <p>Восемьдесят шагов интерфейсного самотеста включают вход с неверным паролем, переключение языка
+  с проверкой сохранения, импорт карточки и повторный импорт (дубликат), перетаскивание на канбане,
+  правку описания узла процесса, растягивание полосы на диаграмме Ганта, проведение заказа, все
+  выгрузки отчётов — <b>и настоящий вызов Contragenti</b>, а не заглушку.</p>
+
+  <h3>Эталоны лежат в git, а не в голове</h3>
+  <p>При переносе CRM на macOS выяснилось, что сверить демо-данные не с чем: эталонная база и лог
+  были в <code class="inl">.gitignore</code>. Теперь они в репозитории, и порт проверяется числами.</p>
+  <div class="tblwrap">
+  <table>
+    <tr><th>Клиенты</th><th class="num">Контакты</th><th class="num">Лиды</th><th class="num">Сделки</th>
+        <th class="num">Номенкл.</th><th class="num">Заказы</th><th class="num">Строки</th>
+        <th class="num">Задачи</th><th class="num">Проекты</th></tr>
+    <tr><td class="num">17</td><td class="num">20</td><td class="num">12</td><td class="num">22</td>
+        <td class="num">21</td><td class="num">23</td><td class="num">41</td><td class="num">124</td>
+        <td class="num">10</td></tr>
+  </table>
+  </div>
+  <p>Swift-версия на Mac выдала ровно эти счётчики. Не «похоже на правду», а совпадение по каждой
+  таблице.</p>
+
+  <h3>Никаких модальных окон</h3>
+  <p>В Demo CRM нет ни одного <code class="inl">MessageBox</code>. Сообщения — в цветную строку
+  внизу окна, удаление — повторным нажатием той же кнопки, редакторы — встроенные панели.
+  Началось это как требование автоматизации: модальный диалог намертво вешает прогон без человека,
+  и восьмидесятишаговый самотест был бы невозможен. Побочный эффект оказался приятнее причины —
+  интерфейс стал спокойнее.</p>
+
+  <h3>Постановка — это файл, а не переписка</h3>
+  <p>Самый сильный результат: документ на 546 строк для модели, запущенной на другой машине.
+  Не «перепиши CRM на Swift», а схема базы по таблицам со ссылками на <code class="inl">файл:строку</code>,
+  правила, которые нельзя нарушить, контракт вызова с точными флагами, ожидаемые счётчики и
+  <b>шесть фаз с исполняемыми критериями приёмки</b> — что запустить и какой код возврата считать успехом.</p>
+  <div class="note"><p><b>Результат.</b> 9 292 строки рабочего Swift за один прогон, со своим
+  интерфейсным самотестом и совпадением всех счётчиков. Модель на Mac ни разу не спросила автора:
+  всё, что ей было нужно, лежало в файле.</p></div>
+
+  <h3>Правила репозитория — тоже файл</h3>
+  <p>Отдельный документ держит то, что иначе приходится повторять каждый раз: порядок выпуска,
+  где лежат данные и почему, что проверить перед коммитом. Самый дорогой пункт появился после
+  реального промаха — пакет обновления не содержит замороженную утилиту, поэтому при изменении
+  её исходника нужна полная пересборка. Один раз потеряв на этом релиз, дешевле записать правило,
+  чем надеяться, что его вспомнят: человек или модель, неважно.</p>
+</section>
+
+<section>
+  <h2>4. Четыре приёма интеграции</h2>
+
+  <h3>4.1. Процесс вместо библиотеки</h3>
+  <pre>Contragenti.exe --pick --out card.xml --lang ru --q <span class="g">"UNISIM"</span> --no-server --no-tray</pre>
+  <p>Приложение открывает окно, пользователь выбирает компанию, процесс пишет XML и завершается.
+  Почему не DLL: подключение библиотеки к Delphi, к MSVC и к Python — это три разных рантайма,
+  две разрядности, свои соглашения о строках и вечный вопрос, чей менеджер памяти освобождает
+  буфер. Процесс, файл и UTF-8 работают отовсюду одинаково, включая 1С.</p>
+  <p>Три исхода обработаны явно: добавлено, дубликат по IDNO, отказ пользователя.
+  <b>Отсутствие файла — не ошибка</b>, а закрытое без выбора окно; таймаут ожидания пять минут,
+  после чего процесс снимается.</p>
+
+  <h3>4.2. Двусторонний обмен на триггерах — и C++ как документация</h3>
+  <p>Карточка сотрудника должна жить одинаково в CRM и в ERP, причём правка с любой стороны
+  попадает на другую. Сначала пришлось выяснить, <b>как в этой ERP вообще устроены пользователи</b>.
+  Документации нет; зато есть исходники клиента на C++. Из них выяснилось, что пользователь —
+  не строка таблицы, а <b>узел дерева настроек</b>: сам узел в одной таблице, свойства парами
+  ключ-значение в другой, кадровая карточка с почтой и телефонами в третьей.</p>
+  <div class="note"><p><b>Здесь старый стек отдаёт долг.</b> Исходники клиента на C++ оказались
+  точнее любой документации, а модель прочитала их и восстановила схему, которую никто не описывал.
+  Задача, на которую человек потратил бы день раскопок, решается чтением — то, что машина делает
+  хорошо.</p></div>
+
+  <figure>
+    <svg viewBox="0 0 800 226" role="img" aria-label="Схема обмена: обе стороны ставят правку в очередь триггером, хаб посередине разбирает очереди в обе стороны">
+      <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.25" color="var(--mute)" marker-end="url(#a2)">
+        <path d="M250,74 L300,74"/><path d="M500,74 L550,74"/>
+        <path d="M550,132 L500,132"/><path d="M300,132 L250,132"/>
+      </g>
+      <g font-family="Public Sans,sans-serif" font-size="12.5">
+        <rect x="14" y="40" width="236" height="126" rx="3" fill="var(--accent-soft)" stroke="var(--accent-line)"/>
+        <text x="132" y="66" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="700">Demo CRM · SQLite</text>
+        <text x="132" y="92" text-anchor="middle" fill="var(--mute)" font-size="10.5">триггеры на таблице людей</text>
+        <text x="132" y="118" text-anchor="middle" fill="var(--ink)" font-family="IBM Plex Mono,monospace" font-size="11">sync_log</text>
+        <text x="132" y="142" text-anchor="middle" fill="var(--mute)" font-size="10.5">очередь исходящих правок</text>
+
+        <rect x="302" y="40" width="196" height="126" rx="3" fill="var(--card)" stroke="var(--rule)"/>
+        <text x="400" y="66" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">Хаб</text>
+        <text x="400" y="92" text-anchor="middle" fill="var(--mute)" font-size="10.5">разбирает обе очереди</text>
+        <text x="400" y="118" text-anchor="middle" fill="var(--mute)" font-family="IBM Plex Mono,monospace" font-size="10.5">/api/v1/users</text>
+        <text x="400" y="142" text-anchor="middle" fill="var(--mute)" font-size="10.5">Oracle-драйвер в потоке</text>
+
+        <rect x="550" y="40" width="236" height="126" rx="3" fill="var(--stamp-soft)" stroke="var(--stamp-line)"/>
+        <text x="668" y="66" text-anchor="middle" fill="var(--stamp)" font-size="13" font-weight="700">ERP UNIAC · Oracle</text>
+        <text x="668" y="92" text-anchor="middle" fill="var(--mute)" font-size="10.5">триггеры на узле и свойствах</text>
+        <text x="668" y="118" text-anchor="middle" fill="var(--ink)" font-family="IBM Plex Mono,monospace" font-size="11">A$CRM_SYNC</text>
+        <text x="668" y="142" text-anchor="middle" fill="var(--mute)" font-size="10.5">очередь исходящих правок</text>
+
+        <text x="400" y="24" text-anchor="middle" fill="var(--mute)" font-family="IBM Plex Mono,monospace" font-size="10.5">POST — правка из CRM</text>
+        <text x="400" y="200" text-anchor="middle" fill="var(--mute)" font-family="IBM Plex Mono,monospace" font-size="10.5">GET — правка из ERP</text>
+        <text x="400" y="218" text-anchor="middle" fill="var(--accent)" font-size="10.5">на время приёма очередь молчит — правка не уезжает обратно</text>
+      </g>
+    </svg>
+    <figcaption>Обе стороны устроены одинаково: правку ставит в очередь триггер, а разбирает
+    очередь программа.</figcaption>
+  </figure>
+
+  <p>Три решения, которые стоит перенять:</p>
+  <ul class="list">
+    <li><span class="i">01</span><span class="t"><b>Защита от эха.</b> Принимая правку снаружи,
+      пакет глушит собственную очередь — иначе любая двусторонняя синхронизация зацикливается
+      на первой же записи.</span></li>
+    <li><span class="i">02</span><span class="t"><b>Составные триггеры против мутирующей таблицы.</b>
+      Строковая часть только собирает идентификаторы затронутых узлов, а работу с теми же
+      таблицами делает часть уровня оператора — иначе Oracle отвергает запись. Ловушка, которую
+      видно, только если знаешь её заранее.</span></li>
+    <li><span class="i">03</span><span class="t"><b>Пароли через обмен не ходят.</b> В CRM лежит
+      SHA-256, в ERP — собственное кодирование. Передаётся только признак «пароль стандартный,
+      надо сменить». Синхронизировать секреты между системами не нужно почти никогда —
+      достаточно синхронизировать состояние.</span></li>
+  </ul>
+
+  <h3>4.3. Хаб: приём и импорт разделены намеренно</h3>
+  <p>Рабочие места отправляют свои базы одним сжатым файлом, хаб отвечает сразу и импортирует
+  асинхронно. Разделение даёт то, ради чего делалось: <b>пакет переживает перезапуск и
+  недоступность Oracle</b>. Клиентская сторона снимает базу «на горячую», а при недоступности
+  хаба удваивает паузу до двух часов и продолжает попытки. Записи без IDNO пропускаются:
+  сравнивать их не по чему, и при каждом новом пакете они бы задваивались.</p>
+
+  <h3>4.4. Установщик, который не носит в себе программу</h3>
+  <p>Установщик был собран со встроенным архивом всей сборки — 52,8 МБ. На Windows Server 2022 он
+  стал жаловаться, что не может удалить свою временную папку. Причина: распаковав себя во временный
+  каталог, он читал пятидесятимегабайтный архив <b>изнутри этой же папки</b>. Лечение заодно решило
+  вторую задачу: теперь установщик содержит только окно, загрузчик и корни сертификатов, а полную
+  сборку скачивает по манифесту, сверяя sha256.</p>
+  <div class="stat">
+    <span><b>52,8 МБ</b> было</span>
+    <span><b>11,8 МБ</b> стало</span>
+    <span><b>0</b> предупреждений при установке</span>
+  </div>
+  <p>Это тот класс ошибок, где модель полезна не догадкой, а дисциплиной: она прошла по всем местам,
+  где открывается архив, и нашла единственное, которое живёт внутри временного каталога.</p>
+</section>
+
+<section>
+  <h2>5. Что реально изменил ИИ в процессе</h2>
+  <p><b>Агент ведёт релиз целиком.</b> Не «допиши функцию», а: поднять версию в восьми файлах,
+  пересобрать всё, посчитать sha256 в манифест, прогнать тихую установку во временный каталог,
+  запустить там самотесты, проверить, что ссылки отвечают, и запушить. Человек смотрит на итог,
+  а не на шаги.</p>
+  <p><b>Ошибки на стыках находятся чтением, а не гаданием.</b> Пользователь выключал источник
+  date.gov.md, но программа всё равно ходила на портал при повторных вызовах: поиск настройку
+  уважал, а дозагрузка деталей карточки — нет. Видно это, только если просмотреть все места,
+  где запускается браузер, и сверить с настройками — ровно та работа, где машина внимательнее человека.</p>
+  <p><b>Чужой legacy-код читается как документация.</b> Схему пользователей ERP восстановили по
+  исходникам клиента на C++. Это, пожалуй, самое недооценённое применение модели в корпоративной
+  разработке: не писать новое, а прочитать старое и рассказать, как оно устроено. Чем больше в
+  компании непрокомментированного кода двадцатилетней давности, тем эта способность ценнее.</p>
+  <p><b>Приложение обновляет само себя.</b> Запущенная из клона копия проверяет репозиторий при
+  старте и по кнопке в меню, подтягивает изменения и перезапускается — но только если рабочая
+  копия чистая, чтобы не затереть чужие правки.</p>
+  <p><b>Данные умеют разговаривать с моделью.</b> В самой утилите есть выгрузка карточки компании
+  в структурированный Markdown — отдельными таблицами по учредителям и задолженностям, — чтобы её
+  можно было отдать ИИ без предварительной чистки. Раз модель стала постоянным потребителем
+  данных, формат для неё делается наравне с CSV и Excel.</p>
+</section>
+
+<section>
+  <h2>6. Что скопировать к себе</h2>
+  <p class="sub">Чеклист, если хочется, чтобы агент работал в вашем проекте так же.</p>
+  <ul class="list">
+    <li><span class="i">01</span><span class="t"><b>Режим самопроверки с кодом возврата.</b>
+      Без него любая правка заканчивается словами вместо доказательства.</span></li>
+    <li><span class="i">02</span><span class="t"><b>Эталоны в репозитории</b> — база, лог, ожидаемые
+      числа. Тогда «работает» становится проверяемым утверждением.</span></li>
+    <li><span class="i">03</span><span class="t"><b>Никаких модальных окон</b> в том, что должно
+      тестироваться без человека.</span></li>
+    <li><span class="i">04</span><span class="t"><b>Формы кодом, не дизайнером</b>, если хотите
+      видеть правки интерфейса в дифе.</span></li>
+    <li><span class="i">05</span><span class="t"><b>Инварианты — в базу</b>: уникальные индексы и
+      триггеры переживут любую ошибку в коде.</span></li>
+    <li><span class="i">06</span><span class="t"><b>Интеграция процессом и файлом</b>, если по ту
+      сторону разные языки и компиляторы. DLL экономит миллисекунды и стоит недель поддержки.</span></li>
+    <li><span class="i">07</span><span class="t"><b>Двусторонний обмен — только с глушилкой эха</b>
+      и очередью на каждой стороне.</span></li>
+    <li><span class="i">08</span><span class="t"><b>Минимум зависимостей.</b> Каждая внешняя
+      библиотека — это контекст, потраченный не на задачу.</span></li>
+    <li><span class="i">09</span><span class="t"><b>Постановка файлом</b> со ссылками на
+      <code class="inl">файл:строку</code>, ожидаемыми числами и фазами приёмки. Переписка не
+      масштабируется, файл масштабируется.</span></li>
+    <li><span class="i">10</span><span class="t"><b>Правила проекта в отдельном документе</b>,
+      особенно те, что куплены ценой испорченного релиза.</span></li>
+    <li><span class="i">11</span><span class="t"><b>Детерминированная сборка</b> — иначе дифф тонет
+      в шуме и модель перестаёт видеть реальные изменения.</span></li>
+    <li><span class="i">12</span><span class="t"><b>Секреты в окружении</b> и проверка диффа перед
+      каждым пушем. В публичном репозитории это не паранойя, а гигиена.</span></li>
+    <li><span class="i">13</span><span class="t"><b>Версия одна на всё</b> и она в манифесте с
+      sha256 — тогда обновление становится проверяемой операцией, а не надеждой.</span></li>
+  </ul>
+</section>
+
+<section>
+  <h2>7. Чего ИИ не отменяет</h2>
+  <div class="warn"><p><b>Предметное знание.</b> Что в молдавских наименованиях тип предприятия и
+  юридическая форма — два независимых признака, что Oracle 11.2 требует толстого клиента, что портал
+  отвечает «нет данных» вместо пустого списка, — этого в обучающих данных нет. Модель напишет
+  красиво и неверно, если ей не сказать.</p></div>
+  <p><b>Капчу обходить нельзя.</b> Форма реестра защищена невидимой reCAPTCHA, и единственный
+  честный путь — управлять настоящим Chrome и дать человеку решить её, когда она появится.
+  Обходных путей в коде нет намеренно.</p>
+  <p><b>Секреты.</b> В истории проекта была утечка учётных данных в публичный репозиторий — отсюда
+  обязательная проверка диффа перед каждым пушем и список строк, которые не должны появиться снова.</p>
+  <p><b>Тесты интерфейса требуют экрана.</b> Прогон со снимками не работает без дисплея — это цена
+  настоящих перетаскиваний вместо имитации.</p>
+  <p>И главное: ни один самотест не заменяет того, кто решает, <b>что именно</b> строить. Модель
+  прекрасно доводит до конца задачу, у которой есть проверяемый критерий готовности. Сформулировать
+  этот критерий пока что работа человека.</p>
+</section>
+
+<footer>
+  Исходники, установщики и документация — <a href="https://github.com/PavelTuhari/Contragenti">github.com/PavelTuhari/Contragenti</a>.
+  Разбор интеграции для своего приложения — <code>INTEGRATION.md</code>, постановка для переноса на
+  другую платформу — <code>PORT_MACOS_ru.md</code>, правила репозитория — <code>AGENTS.md</code>.
+  Данные — портал открытых данных Правительства Республики Молдова (date.gov.md); Contragenti работает
+  с публичной формой штатным способом, как обычный пользователь в браузере.
+</footer>
+</div>
